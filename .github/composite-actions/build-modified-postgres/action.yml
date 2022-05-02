@@ -4,7 +4,7 @@ inputs:
   engine_branch:
     description: 'Engine Branch'
     required: no
-    default: 'BABEL_2_X_DEV__PG_14_2'
+    default: 'mvu-dev'
   install_dir:
     description: 'Engine install directory'
     required: no
