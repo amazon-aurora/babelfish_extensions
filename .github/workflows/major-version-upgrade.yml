@@ -8,7 +8,7 @@ jobs:
       NEW_INSTALL_DIR: postgres14
       ENGINE_VER_FROM: BABEL_1_X_DEV__PG_13_6
       EXTENSION_VER_FROM: BABEL_1_X_DEV
-      ENGINE_VER_TO: mvu-dev
+      ENGINE_VER_TO: BABEL-3171
       EXTENSION_VER_TO: mvu-dev
 
     runs-on: ubuntu-latest
@@ -23,10 +23,17 @@ jobs:
       - name: Build Modified Postgres using ${{env.ENGINE_VER_FROM}}
         id: build-modified-postgres-old
         if: always() && steps.install-dependencies.outcome == 'success'
-        uses: ./.github/composite-actions/build-modified-postgres
-        with:
-          engine_branch: ${{env.ENGINE_VER_FROM}}
-          install_dir: ${{env.OLD_INSTALL_DIR}}
+        run: |
+          cd ..
+          git clone --branch ${{env.ENGINE_VER_TO}} https://babelfish-for-postgresql/postgresql_modified_for_babelfish.git
+          cd postgresql_modified_for_babelfish
+          ./configure --prefix=$HOME/${{env.NEW_INSTALL_DIR}} --with-python PYTHON=/usr/bin/python2.7 --enable-debug CFLAGS="-ggdb" --with-libxml --with-uuid=ossp --with-icu
+          make clean
+          make -j 4 2>error.txt
+          make install
+          make check
+          cd contrib && make && sudo make install
+        shell: bash
       
       - name: Compile ANTLR
         id: compile-antlr
@@ -72,8 +79,6 @@ jobs:
           ~/${{env.OLD_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.OLD_INSTALL_DIR}}/data -l logfile13 restart
           cd ~/work/babelfish_extensions/babelfish_extensions/
           sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d postgres -U runner -v user="jdbc_user" -v db="jdbc_testdb" -f .github/scripts/create_extension.sql
-          sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';"
-          sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
           sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
         shell: bash
 
@@ -82,18 +87,10 @@ jobs:
       - name: Build Modified Postgres using ${{env.ENGINE_VER_TO}}
         id: build-modified-postgres-new
         if: always() && steps.install-extensions-old.outcome == 'success'
-        run: |
-          cd ..
-          rm -rf postgresql_modified_for_babelfish
-          git clone --branch ${{env.ENGINE_VER_TO}} https://github.com/amazon-aurora/postgresql_modified_for_babelfish.git
-          cd postgresql_modified_for_babelfish
-          ./configure --prefix=$HOME/${{env.NEW_INSTALL_DIR}} --with-python PYTHON=/usr/bin/python2.7 --enable-debug CFLAGS="-ggdb" --with-libxml --with-uuid=ossp --with-icu
-          make clean
-          make -j 4 2>error.txt
-          make install
-          make check
-          cd contrib && make && sudo make install
-        shell: bash
+        uses: ./.github/composite-actions/build-modified-postgres
+        with:
+          engine_branch: ${{env.ENGINE_VER_TO}}
+          install_dir: ${{env.NEW_INSTALL_DIR}}
 
       - name: Copy ANTLR
         run: cp "/usr/local/lib/libantlr4-runtime.so.4.9.3" ~/${{env.NEW_INSTALL_DIR}}/lib/
@@ -122,9 +119,7 @@ jobs:
         id: run-pg_upgrade
         if: always() && steps.setup-new-datadir.outcome == 'success'
         run: |
-          echo 'Running pre upgrade script!'
-          sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U jdbc_user -f .github/scripts/pre_upgrade.sql
-          echo 'Starting pg_upgrade'
+          echo 'Starting pg_upgrade...'
           cd ~
           mkdir upgrade
           cd upgrade
@@ -136,14 +131,33 @@ jobs:
           ~/${{env.NEW_INSTALL_DIR}}/bin/pg_upgrade -U runner -b ~/${{env.OLD_INSTALL_DIR}}/bin -B ~/${{env.NEW_INSTALL_DIR}}/bin \
           -d ~/${{env.OLD_INSTALL_DIR}}/data -D ~/${{env.NEW_INSTALL_DIR}}/data -p 5432 -P 5433 -j 4 --link --verbose
           echo 'pg_upgrade completed!'
+          echo 'Updating babelfish extensions...'
           cd ~/work/babelfish_extensions/babelfish_extensions/
-          echo 'Running post upgrade script!'
           ~/${{env.NEW_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.NEW_INSTALL_DIR}}/data -l ~/${{env.NEW_INSTALL_DIR}}/data/logfile14 start
-          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U jdbc_user -f .github/scripts/post_upgrade.sql
+          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER EXTENSION babelfishpg_common UPDATE; ALTER EXTENSION babelfishpg_tsql UPDATE;"
+          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "\dx"
+          echo 'Reset bbf database settings...'
+          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.database_name = 'jdbc_testdb';"
+          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
           export PATH=/opt/mssql-tools/bin:$PATH
           sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
         shell: bash
-      
+
+      - name: Run JDBC Tests
+        id: jdbc
+        timeout-minutes: 15
+        if: always() && steps.run-pg_upgrade.outcome == 'success'
+        run: |
+          cd test/JDBC/
+          mvn test
+     
+      - name: Upload Postgres log
+        if: always() && steps.jdbc.outcome == 'failure'
+        uses: actions/upload-artifact@v2
+        with:
+         name: postgres-log
+         path: ~/${{env.OLD_INSTALL_DIR}}/data/logfile14
+
       - name: Upload upgrade Log
         if: always() && steps.run-pg_upgrade.outcome == 'failure'
         uses: actions/upload-artifact@v2
@@ -151,3 +165,27 @@ jobs:
           name: upgrade-logs
           path: ~/upgrade/*.log
       
+      # The test summary files contain paths with ':' characters, which is not allowed with the upload-artifact actions
+      - name: Rename Test Summary Files
+        id: test-file-rename
+        if: always() && steps.jdbc.outcome == 'failure'
+        run: |
+          cd test/JDBC/Info
+          timestamp=`ls -Art | tail -n 1`
+          cd $timestamp
+          mv $timestamp.diff ../output-diff.diff
+          mv "$timestamp"_runSummary.log ../run-summary.log
+
+      - name: Upload Run Summary
+        if: always() && steps.test-file-rename.outcome == 'success'
+        uses: actions/upload-artifact@v2
+        with:
+          name: run-summary.log
+          path: test/JDBC/Info/run-summary.log
+
+      - name: Upload Output Diff
+        if: always() && steps.test-file-rename.outcome == 'failure'
+        uses: actions/upload-artifact@v2
+        with:
+          name: output-diff.diff
+          path: test/JDBC/Info/output-diff.diff
