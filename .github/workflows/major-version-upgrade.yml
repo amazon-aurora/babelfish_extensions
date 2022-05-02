@@ -184,7 +184,7 @@ jobs:
           path: test/JDBC/Info/run-summary.log
 
       - name: Upload Output Diff
-        if: always() && steps.test-file-rename.outcome == 'failure'
+        if: always() && steps.test-file-rename.outcome == 'success'
         uses: actions/upload-artifact@v2
         with:
           name: output-diff.diff
