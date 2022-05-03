@@ -41,13 +41,13 @@ bool pltsql_function_as_checker(const char *lang, List *as, char **prosrc_str_p,
 {
 	/*
 	 * This hook checks if it's pltsql language and if we have two AS
-	 * clauses (probin+prosrc). But we'll ignore the probin string because 
-	 * write_stored_proc_probin_hook will generate that in the 
-	 * function/procedure creation later.
+	 * clauses (probin+prosrc). We'll populate the probin and prosrc strings
+	 * with the AS clauses here and later we'll skip the generation of new
+	 * probin string in write_stored_proc_probin_hook function.
 	 */
 	if (strcmp(lang, "pltsql") == 0 && as->length == 2)
 	{
-		*probin_str_p = NULL;
+		*probin_str_p = strVal(linitial(as));
 		*prosrc_str_p = strVal(lsecond(as));
 		return true;
 	}
@@ -71,6 +71,10 @@ void pltsql_function_probin_writer(CreateFunctionStmt *stmt, Oid languageOid, ch
 	pg_language_tuple = (Form_pg_language) GETSTRUCT(tuple);
 	/* only writer probin when language is pltsql */
 	if(strcmp(NameStr(pg_language_tuple->lanname), "pltsql") != 0)
+		return;
+
+	/* skip if probin is already set */
+	if ((*probin_str_p) && (*probin_str_p)[0] == '{')
 		return;
 
 	jb = ProbinJsonbBuilder(stmt, probin_str_p);
