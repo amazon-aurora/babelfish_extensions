@@ -149,6 +149,8 @@ jobs:
         if: always() && steps.run-pg_upgrade.outcome == 'success'
         run: |
           cd test/JDBC/
+          # temporarily ignore test BABEL-2086
+          echo 'ignore#!#BABEL-2086' >> jdbc_schedule
           mvn test
      
       - name: Upload Postgres log
