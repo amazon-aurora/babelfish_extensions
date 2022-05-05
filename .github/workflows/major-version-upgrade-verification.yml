@@ -79,6 +79,8 @@ jobs:
           ~/${{env.OLD_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.OLD_INSTALL_DIR}}/data -l logfile13 restart
           cd ~/work/babelfish_extensions/babelfish_extensions/
           sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d postgres -U runner -v user="jdbc_user" -v db="jdbc_testdb" -f .github/scripts/create_extension.sql
+          sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';"
+          sudo ~/${{env.OLD_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
           sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
         shell: bash
 
@@ -151,6 +153,7 @@ jobs:
           sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "\dx"
           echo 'Reset bbf database settings...'
           sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.database_name = 'jdbc_testdb';"
+          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';"
           sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
           export PATH=/opt/mssql-tools/bin:$PATH
           sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
