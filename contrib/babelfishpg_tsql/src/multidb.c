@@ -1081,3 +1081,4 @@ truncate_tsql_identifier(char *ident)
 				PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
 
 }
+
