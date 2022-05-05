@@ -96,6 +96,7 @@ jobs:
           cd Info
           timestamp=`ls -Art | tail -n 1`
           cd $timestamp
+          mkdir -p ~/upgrade
           mv $timestamp.diff ~/upgrade/output-diff-preparation.diff
           mv "$timestamp"_runSummary.log ~/upgrade/run-summary-preparation.log
 
@@ -136,7 +137,7 @@ jobs:
         run: |
           echo 'Starting pg_upgrade...'
           cd ~
-          mkdir upgrade
+          mkdir -p upgrade
           cd upgrade
           ~/${{env.OLD_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.OLD_INSTALL_DIR}}/data stop
           export PATH="$HOME/${{env.NEW_INSTALL_DIR}}/bin:$HOME/${{env.OLD_INSTALL_DIR}}/bin:$PATH"
