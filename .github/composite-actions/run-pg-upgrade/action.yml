@@ -28,7 +28,7 @@ runs:
         sudo ~/postgres14/bin/psql -d jdbc_testdb -U runner -c "\dx"
         echo 'Reset bbf database settings...'
         sudo ~/postgres14/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.database_name = 'jdbc_testdb';"
-        sudo ~/postgres14/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.migration_mode = ${{inputs.migration_mode}};"
+        sudo ~/postgres14/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.migration_mode = '${{inputs.migration_mode}}';"
         sudo ~/postgres14/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
         export PATH=/opt/mssql-tools/bin:$PATH
         sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
