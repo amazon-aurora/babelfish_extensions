@@ -118,30 +118,7 @@ jobs:
       - name: Run pg_upgrade
         id: run-pg_upgrade
         if: always() && steps.setup-new-datadir.outcome == 'success'
-        run: |
-          echo 'Starting pg_upgrade...'
-          cd ~
-          mkdir upgrade
-          cd upgrade
-          ~/${{env.OLD_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.OLD_INSTALL_DIR}}/data stop
-          export PATH="$HOME/${{env.NEW_INSTALL_DIR}}/bin:$HOME/${{env.OLD_INSTALL_DIR}}/bin:$PATH"
-          echo $PATH
-          export LD_LIBRARY_PATH="$HOME/${{env.NEW_INSTALL_DIR}}/lib:$HOME/${{env.OLD_INSTALL_DIR}}/lib:$LD_LIBRARY_PATH"
-          echo $LD_LIBRARY_PATH
-          ~/${{env.NEW_INSTALL_DIR}}/bin/pg_upgrade -U runner -b ~/${{env.OLD_INSTALL_DIR}}/bin -B ~/${{env.NEW_INSTALL_DIR}}/bin \
-          -d ~/${{env.OLD_INSTALL_DIR}}/data -D ~/${{env.NEW_INSTALL_DIR}}/data -p 5432 -P 5433 -j 4 --link --verbose
-          echo 'pg_upgrade completed!'
-          echo 'Updating babelfish extensions...'
-          cd ~/work/babelfish_extensions/babelfish_extensions/
-          ~/${{env.NEW_INSTALL_DIR}}/bin/pg_ctl -D ~/${{env.NEW_INSTALL_DIR}}/data -l ~/${{env.NEW_INSTALL_DIR}}/data/logfile14 start
-          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER EXTENSION babelfishpg_common UPDATE; ALTER EXTENSION babelfishpg_tsql UPDATE;"
-          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "\dx"
-          echo 'Reset bbf database settings...'
-          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "ALTER SYSTEM SET babelfishpg_tsql.database_name = 'jdbc_testdb';"
-          sudo ~/${{env.NEW_INSTALL_DIR}}/bin/psql -d jdbc_testdb -U runner -c "SELECT pg_reload_conf();"
-          export PATH=/opt/mssql-tools/bin:$PATH
-          sqlcmd -S localhost -U jdbc_user -P 12345678 -Q "SELECT @@version GO"
-        shell: bash
+        uses: ./.github/composite-actions/run-pg-upgrade
 
       - name: Run JDBC Tests
         id: jdbc
