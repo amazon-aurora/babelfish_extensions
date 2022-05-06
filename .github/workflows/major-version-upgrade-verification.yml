@@ -8,7 +8,7 @@ jobs:
       NEW_INSTALL_DIR: postgres14
       ENGINE_VER_FROM: BABEL_1_X_DEV__PG_13_6
       EXTENSION_VER_FROM: BABEL_1_X_DEV
-      ENGINE_VER_TO: mvu-dev
+      ENGINE_VER_TO: jira-babel-3192
       EXTENSION_VER_TO: mvu-dev
 
     runs-on: ubuntu-latest
