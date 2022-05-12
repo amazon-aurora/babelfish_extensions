@@ -4127,7 +4127,7 @@ pltsql_validator(PG_FUNCTION_ARGS)
 			}
 
 			/* Test-compile the function */
-			if (is_itvf)
+			if (is_itvf && !babelfish_dump_restore)
 			{
 				PLtsql_stmt_return_query *returnQueryStmt;
 				/*
