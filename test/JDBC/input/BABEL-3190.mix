@@ -1,0 +1,20 @@
+-- psql
+show babelfishpg_tsql.restore_tsql_datetime2;
+go
+set babelfishpg_tsql.restore_tsql_datetime2 to on;
+go
+drop table if exists babel_3190_t1;
+go
+CREATE TABLE babel_3190_t1(
+    a sys.datetime2(6) without time zone,
+    b sys.datetime,
+    c sys.smalldatetime(0) without time zone
+);
+go
+select pg_catalog.format_type(oid, 3) from
+    (select oid from pg_type where typname in ('datetime2', 'smalldatetime')) a;
+go
+reset babelfishpg_tsql.restore_tsql_datetime2;
+go
+drop table if exists babel_3190_t1;
+go

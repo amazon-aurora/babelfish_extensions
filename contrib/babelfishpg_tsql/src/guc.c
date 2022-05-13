@@ -992,6 +992,15 @@ define_custom_variables(void)
 				 PGC_USERSET,
 				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 				 NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("babelfishpg_tsql.restore_tsql_datetime2",
+				 gettext_noop("Shows that if datetime2 and smalldatetime need a special handling during restore"),
+				 NULL,
+				 &restore_tsql_datetime2,
+				 false,
+				 PGC_USERSET,
+				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+				 NULL, NULL, NULL);
 }
 
 int escape_hatch_storage_options = EH_IGNORE;
