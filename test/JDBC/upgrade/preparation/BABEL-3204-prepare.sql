@@ -32,7 +32,7 @@ SELECT babel_3204_complex_func('abc def', ' ');
 go
 
 -- create ITVF which returns table with text column
-CREATE FUNCTION babel_2514_text()
+CREATE FUNCTION babel_3204_text()
 RETURNS TABLE
 AS RETURN
 (
@@ -40,11 +40,11 @@ AS RETURN
 );
 go
 
-SELECT babel_2514_text();
+SELECT babel_3204_text();
 go
 
 -- create ITVF which returns table with ntext column
-CREATE FUNCTION babel_2514_ntext()
+CREATE FUNCTION babel_3204_ntext()
 RETURNS TABLE
 AS RETURN
 (
@@ -52,11 +52,11 @@ AS RETURN
 );
 go
 
-SELECT babel_2514_ntext();
+SELECT babel_3204_ntext();
 go
 
 -- create ITVF which returns table with image column
-CREATE FUNCTION babel_2514_image()
+CREATE FUNCTION babel_3204_image()
 RETURNS TABLE
 AS RETURN
 (
@@ -64,5 +64,5 @@ AS RETURN
 );
 go
 
-SELECT babel_2514_image();
+SELECT babel_3204_image();
 go
