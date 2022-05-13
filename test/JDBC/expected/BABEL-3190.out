@@ -41,16 +41,20 @@ go
 CREATE TABLE babel_3190_t3(
     a sys.datetime2(6) without time zone,
     b sys.datetime,
-    c sys.smalldatetime(0) without time zone
+    c sys.smalldatetime(0) without time zone,
+    d time(0) without time zone,
+    e sys.datetimeoffset(7) with time zone
 );
 go
 select pg_catalog.format_type(oid, 3) from
-    (select oid from pg_type where typname in ('datetime2', 'smalldatetime')) a;
+    (select oid from pg_type where typname in ('datetime2', 'smalldatetime', 'time', 'datetimeoffset')) a order by 1;
 go
 ~~START~~
 text
 sys.datetime2(3)
+sys.datetimeoffset(3)
 sys.smalldatetime(3)
+time(3) without time zone
 ~~END~~
 
 reset babelfishpg_tsql.restore_tsql_datetime2;
