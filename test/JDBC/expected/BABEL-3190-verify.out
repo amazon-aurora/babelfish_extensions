@@ -17,6 +17,16 @@ c6#!#5#!#15#!#6
 drop table t1;
 GO
 
+select * from v1;
+go
+~~START~~
+datetime2
+1999-12-04 00:00:00.000000
+~~END~~
+
+drop view v1;
+go
+
 USE master;
 go
 

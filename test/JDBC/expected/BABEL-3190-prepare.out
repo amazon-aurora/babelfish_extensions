@@ -23,3 +23,13 @@ c5#!#3#!#8#!#0
 c6#!#5#!#15#!#6
 ~~END~~
 
+
+CREATE VIEW v1 as SELECT CAST('12-04-1999' as datetime2);
+go
+select * from v1;
+go
+~~START~~
+datetime2
+1999-12-04 00:00:00.000000
+~~END~~
+

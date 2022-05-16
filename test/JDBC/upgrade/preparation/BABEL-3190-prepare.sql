@@ -13,3 +13,8 @@ CREATE TABLE t1(c1 datetime2(0)
 
 select name,max_length,precision,scale from sys.columns where object_id = OBJECT_ID('t1') order by name;
 GO
+
+CREATE VIEW v1 as SELECT CAST('12-04-1999' as datetime2);
+go
+select * from v1;
+go

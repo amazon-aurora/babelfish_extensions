@@ -7,6 +7,11 @@ GO
 drop table t1;
 GO
 
+select * from v1;
+go
+drop view v1;
+go
+
 USE master;
 go
 

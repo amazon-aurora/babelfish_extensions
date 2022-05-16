@@ -1,5 +1,5 @@
 -- psql
-show babelfishpg_tsql.restore_tsql_datetime2;
+show babelfishpg_tsql.dump_restore;
 go
 drop table if exists babel_3190_t1;
 go
@@ -13,7 +13,7 @@ CREATE TABLE babel_3190_t1(
     c sys.smalldatetime(0) without time zone
 );
 go
-set babelfishpg_tsql.restore_tsql_datetime2 to on;
+set babelfishpg_tsql.dump_restore to on;
 go
 CREATE TABLE babel_3190_t2(
     a sys.datetime2(6) without time zone,
@@ -32,7 +32,7 @@ go
 select pg_catalog.format_type(oid, 3) from
     (select oid from pg_type where typname in ('datetime2', 'smalldatetime', 'time', 'datetimeoffset')) a order by 1;
 go
-reset babelfishpg_tsql.restore_tsql_datetime2;
+reset babelfishpg_tsql.dump_restore;
 go
 drop table if exists babel_3190_t1;
 go
