@@ -1339,7 +1339,7 @@ LANGUAGE sql IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION sys.GETUTCDATE() RETURNS sys.DATETIME AS
 $BODY$
-SELECT CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS sys.DATETIME);
+SELECT CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::pg_catalog.text AS sys.DATETIME);
 $BODY$
 LANGUAGE SQL PARALLEL SAFE;
 
@@ -1971,6 +1971,79 @@ CREATE OR REPLACE FUNCTION sys.json_query(json_string text, path text default '$
 RETURNS sys.NVARCHAR
 AS 'babelfishpg_tsql', 'tsql_json_query' LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION sys.openjson_object(json_string text)
+RETURNS TABLE
+(
+    key sys.NVARCHAR(4000),
+    value sys.NVARCHAR,
+    type INTEGER
+)
+AS
+$BODY$
+SELECT  key,
+        CASE json_typeof(value) WHEN 'null'     THEN NULL
+                                ELSE            TRIM (BOTH '"' FROM value::TEXT)
+        END,
+        CASE json_typeof(value) WHEN 'null'     THEN 0
+                                WHEN 'string'   THEN 1
+                                WHEN 'number'   THEN 2
+                                WHEN 'boolean'  THEN 3
+                                WHEN 'array'    THEN 4
+                                WHEN 'object'   THEN 5
+        END
+    FROM json_each(json_string::JSON)
+$BODY$
+LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION sys.openjson_array(json_string text)
+RETURNS TABLE
+(
+    key sys.NVARCHAR(4000),
+    value sys.NVARCHAR,
+    type INTEGER
+)
+AS
+$BODY$
+SELECT  (row_number() over ())-1,
+        CASE json_typeof(value) WHEN 'null'     THEN NULL
+                                ELSE            TRIM (BOTH '"' FROM value::TEXT)
+        END,
+        CASE json_typeof(value) WHEN 'null'     THEN 0
+                                WHEN 'string'   THEN 1
+                                WHEN 'number'   THEN 2
+                                WHEN 'boolean'  THEN 3
+                                WHEN 'array'    THEN 4
+                                WHEN 'object'   THEN 5
+        END
+    FROM json_array_elements(json_string::JSON) AS value
+$BODY$
+LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION sys.openjson_simple(json_string text, path text default '$')
+RETURNS TABLE
+(
+    key sys.NVARCHAR(4000),
+    value sys.NVARCHAR,
+    type INTEGER
+)
+AS
+$BODY$
+DECLARE
+    sub_json text := sys.json_query(json_string, path);
+BEGIN
+    IF json_typeof(sub_json::JSON) = 'array' THEN
+        RETURN QUERY SELECT * FROM sys.openjson_array(sub_json);
+    ELSE
+        RETURN QUERY SELECT * FROM sys.openjson_object(sub_json);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sys.openjson_with(json_string text, path text, VARIADIC column_paths text[])
+RETURNS SETOF RECORD
+AS 'babelfishpg_tsql', 'tsql_openjson_with' LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
 CREATE OR REPLACE FUNCTION sys.sp_datatype_info_helper(
     IN odbcVer smallint,
     IN is_100 bool,
@@ -2002,6 +2075,38 @@ CREATE OR REPLACE FUNCTION sys.sp_datatype_info_helper(
 RETURNS SETOF RECORD
 AS 'babelfishpg_tsql', 'sp_datatype_info_helper'
 LANGUAGE C IMMUTABLE STRICT;
+
+-- Role member functions
+CREATE OR REPLACE FUNCTION sys.is_rolemember_internal(
+	IN role sys.SYSNAME,
+	IN database_principal sys.SYSNAME
+)
+RETURNS INT AS 'babelfishpg_tsql', 'is_rolemember'
+LANGUAGE C STABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION sys.is_member(IN role sys.SYSNAME)
+RETURNS INT AS
+$$
+	SELECT sys.is_rolemember_internal(role, NULL);
+$$
+LANGUAGE SQL STRICT STABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION sys.is_rolemember(IN role sys.SYSNAME)
+RETURNS INT AS
+$$
+	SELECT sys.is_rolemember_internal(role, NULL);
+$$
+LANGUAGE SQL STRICT STABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION sys.is_rolemember(
+	IN role sys.SYSNAME, 
+	IN database_principal sys.SYSNAME
+)
+RETURNS INT AS
+$$
+	SELECT sys.is_rolemember_internal(role, database_principal);
+$$
+LANGUAGE SQL STRICT STABLE PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION OBJECTPROPERTY(IN object_id INT, IN property sys.varchar)
 RETURNS INT AS
