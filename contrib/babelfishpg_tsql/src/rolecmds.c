@@ -1266,6 +1266,9 @@ Datum drop_all_users(PG_FUNCTION_ARGS)
 	 * cannot be an option because other user-defined procedures
 	 * are able to refer this function as well.
 	 */
+	ereport(WARNING,
+			(errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+			 errmsg("This function has been deprecated and will no longer drop all users.")));
 	PG_RETURN_INT32(0);
 }
 
