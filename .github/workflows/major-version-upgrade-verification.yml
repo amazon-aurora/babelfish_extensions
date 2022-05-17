@@ -159,5 +159,4 @@ jobs:
           path: |
             ~/upgrade/*.log
             ~/upgrade/*.diff
-            ~/upgrade/*.custom
             ~/${{env.OLD_INSTALL_DIR}}/data/logfile14
