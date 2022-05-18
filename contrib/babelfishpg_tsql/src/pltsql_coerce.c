@@ -480,7 +480,6 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
     void                    *value;
     tsql_cast_info_key_t    *key;
     tsql_cast_info_entry_t  *entry;
-    bool                    need_next_scan = false;
     Oid                     sys_nspoid = get_namespace_oid("sys", true);
 
     TSQLInstrumentation(INSTR_TSQL_INIT_TSQL_COERCE_HASH_TAB);
@@ -519,6 +518,9 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
                                         &hashCtl,
                                         HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
     }
+
+	/* mark the hash table initialised */
+	inited_ht_tsql_cast_info = true;
 
     for (int i=0;i<TOTAL_TSQL_CAST_COUNT;i++)
     {
@@ -559,7 +561,7 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
                     else
 					{
                         /* function is not loaded. wait for next scan */
-						need_next_scan = true;
+						inited_ht_tsql_cast_info = false;
                         continue;
 					}
                     break;
@@ -571,7 +573,7 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
                     if (!OidIsValid(entry->castfunc))
 					{
                         /* function is not loaded. wait for next scan */
-						need_next_scan = true;
+						inited_ht_tsql_cast_info = false;
                         continue;
 					}
                     break;
@@ -592,10 +594,6 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
             *(tsql_cast_info_entry_t*)value = *entry;
         }
     }
-
-	/* If all the hash table entries are initialised then mark it completed */
-	if (!need_next_scan)
-		inited_ht_tsql_cast_info = true;
 
     PG_RETURN_INT32(0);
 }
@@ -1041,6 +1039,9 @@ init_tsql_datatype_precedence_hash_tab(PG_FUNCTION_ARGS)
 										HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 	}
 
+	/* mark the hash table initialised */
+	inited_ht_tsql_datatype_precedence_info = true;
+
 	for (int i = 0; i < TOTAL_TSQL_PRECEDENCE_COUNT; i++)
 	{
 		nspoid = strcmp(tsql_precedence_infos[i].nsp, "sys") == 0 ? sys_nspoid : PG_CATALOG_NAMESPACE;
@@ -1053,10 +1054,12 @@ init_tsql_datatype_precedence_hash_tab(PG_FUNCTION_ARGS)
 			value->typ = typoid;
 			value->precedence = tsql_precedence_infos[i].precedence;
         }
+		else
+		{
+			/* type is not loaded. wait for next scan */
+			inited_ht_tsql_datatype_precedence_info = false;
+		}
 	}
-
-	/* Mark initialisation complete */
-	inited_ht_tsql_datatype_precedence_info = true;
 
 	PG_RETURN_INT32(0);
 }
