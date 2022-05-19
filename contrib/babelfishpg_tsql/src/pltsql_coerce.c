@@ -559,11 +559,11 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
                         ReleaseSysCache(tuple);
                     }
                     else
-					{
+                    {
                         /* function is not loaded. wait for next scan */
-						inited_ht_tsql_cast_info = false;
+                        inited_ht_tsql_cast_info = false;
                         continue;
-					}
+                    }
                     break;
                 case TSQL_CAST_ENTRY:
                     entry->castfunc = GetSysCacheOid3(PROCNAMEARGSNSP, Anum_pg_proc_oid,
@@ -571,11 +571,11 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
                                 PointerGetDatum(buildoidvector(&castsource, 1)),
                                 ObjectIdGetDatum(sys_nspoid));
                     if (!OidIsValid(entry->castfunc))
-					{
+                    {
                         /* function is not loaded. wait for next scan */
-						inited_ht_tsql_cast_info = false;
+                        inited_ht_tsql_cast_info = false;
                         continue;
-					}
+                    }
                     break;
                 case TSQL_CAST_WITHOUT_FUNC_ENTRY:
                     entry->castfunc = 0;
@@ -1054,11 +1054,11 @@ init_tsql_datatype_precedence_hash_tab(PG_FUNCTION_ARGS)
 			value->typ = typoid;
 			value->precedence = tsql_precedence_infos[i].precedence;
         }
-		else
-		{
+        else
+        {
 			/* type is not loaded. wait for next scan */
 			inited_ht_tsql_datatype_precedence_info = false;
-		}
+        }
 	}
 
 	PG_RETURN_INT32(0);
