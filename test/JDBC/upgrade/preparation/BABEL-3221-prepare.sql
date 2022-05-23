@@ -24,3 +24,14 @@ go
 
 SELECT * FROM babel_3221_view;
 go
+
+-- test '=' operator between datatypes sys.bit and integer
+CREATE VIEW babel_3221_view_2
+AS
+	SELECT CASE CAST(1 AS sys.bit)
+			WHEN 1 THEN 'Y'
+			ELSE 'N' END AS result;
+go
+
+SELECT * FROM babel_3221_view_2;
+go

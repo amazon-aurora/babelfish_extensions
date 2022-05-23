@@ -33,3 +33,19 @@ int#!#uniqueidentifier#!#money
 1#!#0E984725-C51C-4BF4-9960-E1C80E27ABA0#!#2.0000
 ~~END~~
 
+
+-- test '=' operator between datatypes sys.bit and integer
+CREATE VIEW babel_3221_view_2
+AS
+	SELECT CASE CAST(1 AS sys.bit)
+			WHEN 1 THEN 'Y'
+			ELSE 'N' END AS result;
+go
+
+SELECT * FROM babel_3221_view_2;
+go
+~~START~~
+text
+Y
+~~END~~
+
