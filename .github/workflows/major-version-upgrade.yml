@@ -89,7 +89,6 @@ jobs:
         if: always() && steps.install-extensions-old.outcome == 'success'
         uses: ./.github/composite-actions/build-modified-postgres
         with:
-          engine_branch: ${{env.ENGINE_VER_TO}}
           install_dir: ${{env.NEW_INSTALL_DIR}}
 
       - name: Copy ANTLR

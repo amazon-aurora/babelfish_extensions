@@ -105,7 +105,6 @@ jobs:
         if: always() && steps.run-preparation-test.outcome == 'success'
         uses: ./.github/composite-actions/build-modified-postgres
         with:
-          engine_branch: ${{env.ENGINE_VER_TO}}
           install_dir: ${{env.NEW_INSTALL_DIR}}
 
       - name: Copy ANTLR
