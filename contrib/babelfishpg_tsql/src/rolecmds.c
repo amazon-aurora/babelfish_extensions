@@ -719,7 +719,7 @@ Datum drop_all_logins(PG_FUNCTION_ARGS)
 		 * Remove SA from authid_login_ext now but do not add it to the list
 		 * because we don't want to remove the corresponding PG role.
 		 */
-		if (role_is_sa(get_role_oid(rolname, false)))
+		if (role_is_sa(get_role_oid(rolname, false)) || (strcmp(rolname, "sysadmin") == 0))
 			CatalogTupleDelete(bbf_authid_login_ext_rel, &tuple->t_self);
 		else
 			rolname_list = lcons(rolname, rolname_list);
@@ -991,9 +991,8 @@ add_existing_users_to_catalog(PG_FUNCTION_ARGS)
 			dbo_list = lappend(dbo_list, rolspec);
 			add_to_bbf_authid_user_ext(dbo_role, "dbo", db_name, "dbo", NULL, false);
 		}
-		/* TODO: change it into role */
 		if (db_owner_role)
-			add_to_bbf_authid_user_ext(db_owner_role, "db_owner", db_name, NULL, NULL, false);
+			add_to_bbf_authid_user_ext(db_owner_role, "db_owner", db_name, NULL, NULL, true);
 		if (guest)
 			add_to_bbf_authid_user_ext(guest, "guest", db_name, NULL, NULL, false);
 
