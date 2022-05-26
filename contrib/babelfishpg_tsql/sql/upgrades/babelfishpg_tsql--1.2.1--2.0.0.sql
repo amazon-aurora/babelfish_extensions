@@ -2174,8 +2174,8 @@ LANGUAGE plpgsql
 VOLATILE;
 
 -- Rename function for dependencies
-ALTER FUNCTION sys.tsql_stat_get_activity(text) RENAME TO tsql_stat_get_activity_deprecated;
-ALTER FUNCTION sys.sp_datatype_info_helper(smallint, bool) RENAME TO sp_datatype_info_helper_deprecated;
+ALTER FUNCTION sys.tsql_stat_get_activity(text) RENAME TO tsql_stat_get_activity_deprecated_2_0;
+ALTER FUNCTION sys.sp_datatype_info_helper(smallint, bool) RENAME TO sp_datatype_info_helper_deprecated_2_0;
 
 -- Re-create the renamed functions
 CREATE OR REPLACE FUNCTION sys.tsql_stat_get_activity(
@@ -2429,8 +2429,8 @@ FROM pg_catalog.pg_class t1
 GRANT SELECT ON sys.sp_special_columns_view TO PUBLIC;
 
 -- === DROP deprecated functions (if exists)
-CALL sys.babelfish_drop_deprecated_function('sys', 'tsql_stat_get_activity_deprecated');
-CALL sys.babelfish_drop_deprecated_function('sys', 'sp_datatype_info_helper_deprecated');
+CALL sys.babelfish_drop_deprecated_function('sys', 'tsql_stat_get_activity_deprecated_2_0');
+CALL sys.babelfish_drop_deprecated_function('sys', 'sp_datatype_info_helper_deprecated_2_0');
 
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
