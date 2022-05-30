@@ -1568,6 +1568,8 @@ typedef struct PLtsql_protocol_plugin
 
 	const char* (*pltsql_get_logical_schema_name) (const char *physical_schema_name, bool missingOk);
 
+	bool *pltsql_is_fmtonly_stmt;
+
 } PLtsql_protocol_plugin;
 
 /*
