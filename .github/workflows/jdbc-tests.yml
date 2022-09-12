@@ -47,6 +47,13 @@ jobs:
         run: |
           sudo ~/postgres/bin/psql -d postgres -U runner -v user="jdbc_user" -v db="jdbc_testdb" -f .github/scripts/cleanup_babelfish_database.sql
 
+      - name: Generate code coverage HTML report
+        id: code-coverage
+        if: always()
+        run: |
+          cd ../../contrib/babelfishpg_tsql
+          make coverage-html
+
       - name: Upload Log
         if: always() && steps.jdbc.outcome == 'failure'
         uses: actions/upload-artifact@v2
@@ -78,3 +85,10 @@ jobs:
         with:
           name: output-diff.diff
           path: test/JDBC/Info/output-diff.diff
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: contrib/babelfishpg_tsql/coverage/
