@@ -51,7 +51,7 @@ jobs:
         id: code-coverage
         if: always()
         run: |
-          cd ../../contrib/babelfishpg_tsql
+          cd contrib/babelfishpg_tsql
           make coverage-html
 
       - name: Upload Log
