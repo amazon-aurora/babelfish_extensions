@@ -51,6 +51,9 @@ jobs:
         id: code-coverage
         if: always()
         run: |
+          export PG_CONFIG=~/postgres/bin/pg_config
+          export PG_SRC=~/work/babelfish_extensions/postgresql_modified_for_babelfish
+          export cmake=$(which cmake)
           cd contrib/babelfishpg_tsql
           make coverage-html
         shell: bash
