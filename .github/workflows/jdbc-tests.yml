@@ -53,6 +53,7 @@ jobs:
         run: |
           cd contrib/babelfishpg_tsql
           make coverage-html
+        shell: bash
 
       - name: Upload Log
         if: always() && steps.jdbc.outcome == 'failure'
