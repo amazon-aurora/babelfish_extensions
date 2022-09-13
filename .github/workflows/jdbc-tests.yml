@@ -100,26 +100,26 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: coverage
+          name: coverage_tsql
           path: contrib/babelfishpg_tsql/coverage/
 
       - name: Upload Coverage Report for babelfishpg_tds extension
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: coverage
+          name: coverage_tds
           path: contrib/babelfishpg_tds/coverage/
 
       - name: Upload Coverage Report for babelfishpg_common extension
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: coverage
+          name: coverage_common
           path: contrib/babelfishpg_common/coverage/
 
       - name: Upload Coverage Report for babelfishpg_money extension
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: coverage
+          name: coverage_money
           path: contrib/babelfishpg_money/coverage/
