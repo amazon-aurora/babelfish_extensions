@@ -56,6 +56,12 @@ jobs:
           export cmake=$(which cmake)
           cd contrib/babelfishpg_tsql
           make coverage-html
+          cd ../babelfishpg_tds
+          make coverage-html
+          cd ../babelfishpg_common
+          make coverage-html
+          cd ../babelfishpg_money
+          make coverage-html
         shell: bash
 
       - name: Upload Log
@@ -90,9 +96,30 @@ jobs:
           name: output-diff.diff
           path: test/JDBC/Info/output-diff.diff
 
-      - name: Upload Coverage Report
+      - name: Upload Coverage Report for babelfishpg_tsql extension
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: coverage
           path: contrib/babelfishpg_tsql/coverage/
+
+      - name: Upload Coverage Report for babelfishpg_tds extension
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: contrib/babelfishpg_tds/coverage/
+
+      - name: Upload Coverage Report for babelfishpg_common extension
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: contrib/babelfishpg_common/coverage/
+
+      - name: Upload Coverage Report for babelfishpg_money extension
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: contrib/babelfishpg_money/coverage/
