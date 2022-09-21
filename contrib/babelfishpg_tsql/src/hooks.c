@@ -50,6 +50,7 @@
 #include "utils/syscache.h"
 #include "utils/numeric.h"
 #include <math.h>
+#include "executor/nodeFunctionscan.h"
 
 #include "pltsql.h"
 #include "backend_parser/scanner.h"
@@ -102,6 +103,7 @@ static void resolve_target_list_unknowns(ParseState *pstate, List *targetlist);
 static inline bool is_identifier_char(char c);
 static int find_attr_by_name_from_relation(Relation rd, const char *attname, bool sysColOK);
 static void modify_insert_stmt(InsertStmt *stmt, Oid relid);
+static void modify_RangeTblFunction_tupdesc(Node *expr, TupleDesc *tupdesc);
 
 /*****************************************
  * 			Commands Hooks
@@ -177,7 +179,7 @@ static insert_pltsql_function_defaults_hook_type prev_insert_pltsql_function_def
 static print_pltsql_function_arguments_hook_type prev_print_pltsql_function_arguments_hook = NULL;
 static planner_hook_type prev_planner_hook = NULL;
 static transform_check_constraint_expr_hook_type prev_transform_check_constraint_expr_hook = NULL;
-
+static modify_RangeTblFunction_tupdesc_hook_type prev_modify_RangeTblFunction_tupdesc_hook = NULL;
 /*****************************************
  * 			Install / Uninstall
  *****************************************/
@@ -275,6 +277,9 @@ InstallExtendedHooks(void)
 	planner_hook = pltsql_planner_hook;
 	prev_transform_check_constraint_expr_hook = transform_check_constraint_expr_hook;
 	transform_check_constraint_expr_hook = transform_like_in_add_constraint;
+	
+	prev_modify_RangeTblFunction_tupdesc_hook = modify_RangeTblFunction_tupdesc_hook;
+	modify_RangeTblFunction_tupdesc_hook = modify_RangeTblFunction_tupdesc;
 }
 
 void
@@ -314,6 +319,8 @@ UninstallExtendedHooks(void)
 	print_pltsql_function_arguments_hook = prev_print_pltsql_function_arguments_hook;
 	planner_hook = prev_planner_hook;
 	transform_check_constraint_expr_hook = prev_transform_check_constraint_expr_hook;
+	
+	modify_RangeTblFunction_tupdesc_hook = prev_modify_RangeTblFunction_tupdesc_hook;
 }
 
 /*****************************************
@@ -2985,4 +2992,28 @@ transform_like_in_add_constraint (Node* node)
 	PG_END_TRY();
 	
 	return pltsql_predicate_transformer(node);
+}
+
+static void 
+modify_RangeTblFunction_tupdesc(Node *expr, TupleDesc *tupdesc)
+{
+	char* linked_server;
+	char* query;
+	ListCell* lc;
+
+	FuncExpr *funcexpr = (FuncExpr*) expr;
+	List* arg_list = funcexpr->args;
+
+	Assert(list_length(funcexpr->args) == 2);
+
+	foreach(lc, arg_list)
+	{
+		Node *arg = lfirst(lc);
+		NodeTag type = nodeTag(arg);
+	}
+
+	linked_server = TextDatumGetCString(((Const*)linitial(arg_list))->constvalue);
+	query = TextDatumGetCString(((Const*)lsecond(arg_list))->constvalue);
+
+	getOpenqueryTupdesc(linked_server, query, tupdesc);
 }

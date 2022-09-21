@@ -177,7 +177,7 @@ protected:
 		antlrcpp::Any visitFunction_call(TSqlParser::Function_callContext *ctx) override;
 		antlrcpp::Any visitAggregate_windowed_function(TSqlParser::Aggregate_windowed_functionContext *ctx) override;
 		antlrcpp::Any visitRowset_function(TSqlParser::Rowset_functionContext *ctx) override {
-			if (!ctx->open_json()) {
+			if (!ctx->open_json() && !ctx->open_query()) {
 				handle(INSTR_UNSUPPORTED_TSQL_ROWSET_FUNCTION, "rowset function", getLineAndPos(ctx));
 			}
 			return visitChildren(ctx);
@@ -1510,7 +1510,6 @@ const char *unsupported_sp_procedures[] = {
 	"sp_renamedb",
 	"sp_resetstatus",
 	"sp_sequence_get_range",
-	"sp_serveroption",
 	"sp_set_session_context",
 	"sp_setnetname",
 	"sp_settriggerorder",
@@ -1525,8 +1524,6 @@ const char *unsupported_sp_procedures[] = {
 	/* Security */
 	"sp_add_trusted_assembly",
 	"sp_addapprole",
-	"sp_addlinkedserver",
-	"sp_addlinkedsrvlogin",
 	"sp_addlogin",
 	"sp_addremotelogin",
 	"sp_addserver",
@@ -1549,7 +1546,6 @@ const char *unsupported_sp_procedures[] = {
 	"sp_droplinkedsrvlogin",
 	"sp_droplogin",
 	"sp_dropremotelogin",
-	"sp_dropserver",
 	"sp_dropsrvrolemember",
 	"sp_dropuser",
 	"sp_generate_database_ledger_digest",
@@ -1570,7 +1566,6 @@ const char *unsupported_sp_procedures[] = {
 	"sp_revokelogin",
 	"sp_setapprole",
 	"sp_srvrolepermission",
-	"sp_testlinkedserver",
 	"sp_unsetapprole",
 	"sp_validatelogins",
 	"sp_verify_database_ledger",

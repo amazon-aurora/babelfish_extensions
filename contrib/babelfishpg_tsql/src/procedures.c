@@ -13,6 +13,7 @@
 #include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "commands/prepare.h"
 #include "common/string.h"
 #include "executor/spi.h"
@@ -51,6 +52,11 @@ PG_FUNCTION_INFO_V1(sp_addrole);
 PG_FUNCTION_INFO_V1(sp_droprole);
 PG_FUNCTION_INFO_V1(sp_addrolemember);
 PG_FUNCTION_INFO_V1(sp_droprolemember);
+PG_FUNCTION_INFO_V1(sp_addlinkedserver_internal);
+PG_FUNCTION_INFO_V1(sp_addlinkedsrvlogin_internal);
+PG_FUNCTION_INFO_V1(sp_dropserver_internal);
+PG_FUNCTION_INFO_V1(sp_serveroption_internal);
+PG_FUNCTION_INFO_V1(create_linked_server_procs_in_master_dbo_internal);
 
 extern void delete_cached_batch(int handle);
 extern InlineCodeBlockArgs *create_args(int numargs);
@@ -2047,4 +2053,185 @@ gen_sp_droprolemember_subcmds(const char *user, const char *member)
 
 	rewrite_object_refs(stmt);
 	return res;
+}
+
+Datum
+sp_addlinkedserver_internal(PG_FUNCTION_ARGS)
+{
+	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+	CreateForeignServerStmt *stmt = makeNode(CreateForeignServerStmt);
+	List *options = NIL;
+
+	stmt->servername = servername;
+	stmt->fdwname = "tds_fdw";
+	stmt->if_not_exists = false;
+
+	/* Add the relevant options */
+	options = lappend(options, makeDefElem("servername", (Node *) makeString(text_to_cstring(PG_GETARG_TEXT_P(3))), -1));
+	options = lappend(options, makeDefElem("database", (Node *) makeString(text_to_cstring(PG_GETARG_TEXT_P(6))), -1));
+
+	stmt->options = options;
+
+	CreateForeignServer(stmt);
+
+	return (Datum) 0;
+}
+
+Datum
+sp_serveroption_internal(PG_FUNCTION_ARGS)
+{
+	return (Datum) 0;
+}
+
+Datum
+sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
+{
+	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
+	RoleSpec *user = makeNode(RoleSpec);
+	List *options = NIL;
+	char *str = NULL;
+
+	stmt->servername = servername;
+	stmt->if_not_exists = false;
+
+	user->roletype = ROLESPEC_CURRENT_USER;
+	user->location = -1;
+	stmt->user = user;
+
+	/* We do not support login using user's self credentials */
+	str = text_to_cstring(PG_GETARG_TEXT_P(1));
+	if (str == NULL || (strcmp(downcase_identifier(str, strlen(str), false, false), "false") != 0))
+		elog(ERROR, "Only @useself = FALSE is supported");
+
+	/* Add the relevant options */
+	options = lappend(options, makeDefElem("username", (Node *) makeString(text_to_cstring(PG_GETARG_TEXT_P(3))), -1));
+	options = lappend(options, makeDefElem("password", (Node *) makeString(text_to_cstring(PG_GETARG_TEXT_P(4))), -1));
+
+	stmt->options = options;
+
+	CreateUserMapping(stmt);
+
+	return (Datum) 0;
+}
+
+Datum
+sp_dropserver_internal(PG_FUNCTION_ARGS)
+{
+	char *linked_srv = text_to_cstring(PG_GETARG_TEXT_P(0));
+	char *droplogins = text_to_cstring(PG_GETARG_TEXT_P(1));
+
+	DropStmt *stmt = makeNode(DropStmt);
+
+	List *objects = list_make1(makeString(linked_srv));
+	stmt->objects = objects;
+
+	stmt->removeType = OBJECT_FOREIGN_SERVER;
+	stmt->missing_ok = false;
+	stmt->concurrent = false;
+
+	if (droplogins == NULL)
+	{
+		stmt->behavior = DROP_RESTRICT;
+	}
+	else
+	{
+		if (strncmp(droplogins, "droplogins", 10) == 0)
+			stmt->behavior = DROP_CASCADE;
+		else
+			elog(ERROR, "invalid parameter specified for procedure 'sys.sp_dropserver', acceptable values are 'droplogins' or NULL.");
+	}
+
+	RemoveObjects(stmt);
+
+	return (Datum) 0;
+}
+
+/*
+ * Internal function to create the following procedures related to T-SQL linked
+ * servers in master.dbo schema:
+ *   - sp_addlinkedserver
+ *   - sp_addlinkedsrvlogin
+ *   - sp_dropserver
+ *   - sp_serveroption
+ * Some applications invoke this referencing master.dbo.<one of the above stored procedures>
+ */
+Datum 
+create_linked_server_procs_in_master_dbo_internal(PG_FUNCTION_ARGS)
+{	
+	char *query = NULL;
+	char *query2 = NULL;
+	char *query3 = NULL;
+	char *query4 = NULL;
+
+	int rc = -1;
+
+	char *tempq = "CREATE OR REPLACE PROCEDURE %s.sp_addlinkedserver( IN \"@server\" sys.sysname,"
+						"IN \"@srvproduct\" sys.nvarchar(128) DEFAULT NULL," 
+						"IN \"@provider\" sys.nvarchar(128) DEFAULT NULL,"
+						"IN \"@datasrc\" sys.nvarchar(4000) DEFAULT NULL,"
+						"IN \"@location\" sys.nvarchar(4000) DEFAULT NULL,"
+						"IN \"@provstr\" sys.nvarchar(4000) DEFAULT NULL,"
+						"IN \"@catalog\" sys.sysname DEFAULT NULL)"
+						"AS \'babelfishpg_tsql\', \'sp_addlinkedserver_internal\'"
+					"LANGUAGE C";
+
+	char *tempq2 = "CREATE OR REPLACE PROCEDURE %s.sp_addlinkedsrvlogin( IN \"@rmtsrvname\" sys.sysname,"
+						"IN \"@useself\" sys.varchar(8) DEFAULT 'TRUE',"
+						"IN \"@locallogin\" sys.sysname DEFAULT NULL,"
+						"IN \"@rmtuser\" sys.sysname DEFAULT NULL,"
+						"IN \"@rmtpassword\" sys.sysname DEFAULT NULL)"
+						"AS \'babelfishpg_tsql\', \'sp_addlinkedsrvlogin_internal\'"
+					"LANGUAGE C";
+	
+	char *tempq3 = "CREATE OR REPLACE PROCEDURE %s.sp_dropserver( IN \"@server\" sys.sysname,"
+						"IN \"@droplogins\" char(10) DEFAULT NULL)"
+						"AS \'babelfishpg_tsql\', \'sp_dropserver_internal\'"
+					"LANGUAGE C;";
+
+	char *tempq4 = "CREATE OR REPLACE PROCEDURE %s.sp_serveroption( IN \"@server\" sys.sysname,"
+						"IN \"@optname\" varchar(35),"
+						"IN \"@optvalue\" varchar(10))"
+						"AS \'babelfishpg_tsql\', \'sp_serveroption_internal\'"
+					"LANGUAGE C;";
+
+	const char  *dbo_scm = get_dbo_schema_name("master");
+	if (dbo_scm == NULL) 
+		elog(ERROR, "Failed to retrieve dbo schema name");
+
+	query = psprintf(tempq, dbo_scm);
+	query2 = psprintf(tempq2, dbo_scm);
+	query3 = psprintf(tempq3, dbo_scm);
+	query4 = psprintf(tempq4, dbo_scm);
+
+	PG_TRY();
+	{
+		if ((rc = SPI_connect()) != SPI_OK_CONNECT)
+			elog(ERROR, "SPI_connect failed: %s", SPI_result_code_string(rc));
+
+		if ((rc = SPI_execute(query, false, 1)) < 0)
+			elog(ERROR, "SPI_execute failed: %s", SPI_result_code_string(rc));
+
+		if ((rc = SPI_execute(query2, false, 1)) < 0)
+			elog(ERROR, "SPI_execute failed: %s", SPI_result_code_string(rc));
+
+		if ((rc = SPI_execute(query3, false, 1)) < 0)
+			elog(ERROR, "SPI_execute failed: %s", SPI_result_code_string(rc));
+
+		if ((rc = SPI_execute(query4, false, 1)) < 0)
+			elog(ERROR, "SPI_execute failed: %s", SPI_result_code_string(rc));
+
+		if ((rc = SPI_finish()) != SPI_OK_FINISH)
+			elog(ERROR, "SPI_finish failed: %s", SPI_result_code_string(rc));
+	}
+	PG_CATCH();
+	{
+		SPI_finish();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	PG_RETURN_INT32(0);
 }
