@@ -54,6 +54,7 @@ PG_FUNCTION_INFO_V1(sp_addrolemember);
 PG_FUNCTION_INFO_V1(sp_droprolemember);
 PG_FUNCTION_INFO_V1(sp_addlinkedserver_internal);
 PG_FUNCTION_INFO_V1(sp_addlinkedsrvlogin_internal);
+PG_FUNCTION_INFO_V1(sp_droplinkedsrvlogin_internal);
 PG_FUNCTION_INFO_V1(sp_dropserver_internal);
 PG_FUNCTION_INFO_V1(sp_serveroption_internal);
 PG_FUNCTION_INFO_V1(create_linked_server_procs_in_master_dbo_internal);
@@ -2113,6 +2114,27 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	stmt->options = options;
 
 	CreateUserMapping(stmt);
+
+	return (Datum) 0;
+}
+
+Datum
+sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
+{
+	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
+
+	DropUserMappingStmt *stmt = makeNode(DropUserMappingStmt);
+	RoleSpec *user = makeNode(RoleSpec);
+	List *options = NIL;
+	char *str = NULL;
+
+	stmt->servername = servername;
+
+	user->roletype = ROLESPEC_CURRENT_USER;
+	user->location = -1;
+	stmt->user = user;
+	
+	RemoveUserMapping(stmt);
 
 	return (Datum) 0;
 }
