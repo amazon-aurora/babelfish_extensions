@@ -2090,19 +2090,25 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 {
 	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
 	char *locallogin = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
-	if (locallogin != NULL)
-		elog(ERROR, "Only @locallogin = NULL is supported");
-	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
 	RoleSpec *user = makeNode(RoleSpec);
+	if (locallogin != NULL){
+		// elog(ERROR, "Only @locallogin = NULL is supported");
+		user->roletype = ROLESPEC_CSTRING;
+		user->location = -1;
+		user->rolename = pstrdup(locallogin);
+	}
+	else {
+		user->roletype = ROLESPEC_CURRENT_USER;
+		user->location = -1;
+	}
+	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
 	List *options = NIL;
 	char *str = NULL;
-
+	stmt->user = user;
 	stmt->servername = servername;
 	stmt->if_not_exists = false;
 
-	user->roletype = ROLESPEC_CURRENT_USER;
-	user->location = -1;
-	stmt->user = user;
+	
 
 	/* We do not support login using user's self credentials */
 	str = text_to_cstring(PG_GETARG_TEXT_P(1));
