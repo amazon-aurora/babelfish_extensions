@@ -237,7 +237,7 @@ GRANT EXECUTE ON PROCEDURE sys.sp_addlinkedsrvlogin(IN sys.sysname,
 TO PUBLIC;
 
 CREATE OR REPLACE PROCEDURE sys.sp_droplinkedsrvlogin( IN "@rmtsrvname" sys.sysname,
-                                                      IN "@locallogin" sys.sysname DEFAULT NULL)
+                                                      IN "@locallogin" sys.sysname)
 AS 'babelfishpg_tsql', 'sp_droplinkedsrvlogin_internal'
 LANGUAGE C;
 

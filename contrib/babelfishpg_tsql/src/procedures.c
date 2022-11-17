@@ -2089,7 +2089,9 @@ Datum
 sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 {
 	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
-
+	char *locallogin = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
+	if (locallogin != NULL)
+		elog(ERROR, "Only @locallogin = NULL is supported");
 	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
 	RoleSpec *user = makeNode(RoleSpec);
 	List *options = NIL;
@@ -2122,6 +2124,9 @@ Datum
 sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 {
 	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
+	char *locallogin = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(1));
+	if (locallogin != NULL)
+		elog(ERROR, "Only @locallogin = NULL is supported");
 
 	DropUserMappingStmt *stmt = makeNode(DropUserMappingStmt);
 	RoleSpec *user = makeNode(RoleSpec);
