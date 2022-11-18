@@ -230,7 +230,6 @@ sys-sql_modules-dep
 sys-system_sql_modules-dep
 sys-triggers-dep
 sys-proc_param_helper-dep
-sys-has_perms_by_name-dep
 BABEL-2877
 sys-sp_pkeys
 sys-sp_statistics
@@ -288,6 +287,7 @@ sys-fulltext_catalogs
 sys-fulltext_index_columns
 sys-fulltext_languages
 sys-fulltext_stoplists
+sys-has_perms_by_name
 sys-identity_columns
 sys-index_columns
 sys-indexes
