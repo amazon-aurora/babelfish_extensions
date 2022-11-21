@@ -2097,7 +2097,7 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 		user->rolename = pstrdup(locallogin);
 	}
 	else {
-		user->roletype = ROLESPEC_CURRENT_USER;
+		user->roletype = ROLESPEC_PUBLIC;
 		user->location = -1;
 	}
 	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
@@ -2140,7 +2140,7 @@ sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 		user->rolename = pstrdup(locallogin);
 	}
 	else {
-		user->roletype = ROLESPEC_CURRENT_USER;
+		user->roletype = ROLESPEC_PUBLIC;
 		user->location = -1;
 	}
 

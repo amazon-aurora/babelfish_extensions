@@ -1563,7 +1563,7 @@ openquery_imp(PG_FUNCTION_ARGS)
 
 	/* Get the foreign server and user mapping */
 	ForeignServer *server = GetForeignServerByName(text_to_cstring(PG_GETARG_TEXT_PP(0)), false);
-	UserMapping *mapping = GetUserMapping(GetUserId(), server->serverid);
+	UserMapping *mapping = GetUserMapping(GetSessionUserId(), server->serverid);
 
 	dbinit();
 
@@ -1745,7 +1745,7 @@ getOpenqueryTupdesc(char* linked_server, char* query, TupleDesc *tupdesc)
 
 	/* Get the foreign server and user mapping */
 	ForeignServer *server = GetForeignServerByName(linked_server, false);
-	UserMapping *mapping = GetUserMapping(GetUserId(), server->serverid);
+	UserMapping *mapping = GetUserMapping(GetSessionUserId(), server->serverid);
 
 	dbinit();
 
