@@ -13,6 +13,7 @@
 #include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_user_mapping.h"
 #include "commands/defrem.h"
 #include "commands/prepare.h"
 #include "common/string.h"
@@ -27,6 +28,7 @@
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "pltsql_instr.h"
 #include "parser/parser.h"
 #include "parser/parse_target.h"
@@ -34,6 +36,7 @@
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
 #include "tsearch/ts_locale.h"
+#include "foreign/foreign.h"
 
 #include "catalog.h"
 #include "multidb.h"
@@ -2091,14 +2094,33 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	char *servername = text_to_cstring(PG_GETARG_TEXT_P(0));
 	char *locallogin = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
 	RoleSpec *user = makeNode(RoleSpec);
+	Oid			useId;
+	Oid			umId;
+	ForeignServer *srv;
+	/* Check that the server exists. */
+	srv = GetForeignServerByName(servername, false);
 	if (locallogin != NULL){
 		user->roletype = ROLESPEC_CSTRING;
 		user->location = -1;
 		user->rolename = pstrdup(locallogin);
+		useId = get_rolespec_oid(user, false);
 	}
 	else {
+		useId = ACL_ID_PUBLIC;
 		user->roletype = ROLESPEC_PUBLIC;
 		user->location = -1;
+	}
+	/*
+	 * Check that the user mapping is unique within server.
+	 */
+	umId = GetSysCacheOid2(USERMAPPINGUSERSERVER, Anum_pg_user_mapping_oid,
+						   ObjectIdGetDatum(useId),
+						   ObjectIdGetDatum(srv->serverid));
+	if (OidIsValid(umId)){
+		DropUserMappingStmt *stmt_del = makeNode(DropUserMappingStmt);
+		stmt_del->servername = servername;
+		stmt_del->user = user;
+		RemoveUserMapping(stmt_del);
 	}
 	CreateUserMappingStmt *stmt = makeNode(CreateUserMappingStmt);
 	List *options = NIL;
@@ -2106,8 +2128,6 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	stmt->user = user;
 	stmt->servername = servername;
 	stmt->if_not_exists = false;
-
-	
 
 	/* We do not support login using user's self credentials */
 	str = text_to_cstring(PG_GETARG_TEXT_P(1));
