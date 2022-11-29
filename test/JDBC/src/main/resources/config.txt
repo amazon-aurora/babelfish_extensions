@@ -43,4 +43,4 @@ testFileRoot = ./
 isUpgradeTestMode = false
 
 # Default SLA in milliseconds
-defaultSLA = 100000
+defaultSLA = 30000
