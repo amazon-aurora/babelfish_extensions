@@ -6,3 +6,11 @@ varchar#!#varchar#!#varchar#!#nvarchar#!#nvarchar#!#varchar#!#bit
 mssql_server#!#SQL Server#!#tds_fdw#!#localhost#!#<NULL>#!#master#!#1
 ~~END~~
 
+
+SELECT s.name as linked_srv_name, l.remote_name as username FROM sys.servers as s INNER JOIN sys.linked_logins as l on s.server_id = l.server_id
+GO
+~~START~~
+varchar#!#varchar
+mssql_server#!#jdbc_user
+~~END~~
+

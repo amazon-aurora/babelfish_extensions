@@ -21,6 +21,14 @@ GO
 EXEC sp_addlinkedserver  @server = N'mssql_server', @srvproduct=N'', @provider=N'tds_fdw', @datasrc=N'localhost', @catalog=N'master'
 GO
 
+-- Create a linked server login with @useself = TRUE (Should throw error)
+EXEC sp_addlinkedsrvlogin @rmtsrvname = 'mssql_server', @useself = 'TRUE', @rmtuser = 'jdbc_user', @rmtpassword = '12345678'
+GO
+
+-- Create a linked server login with @useself = FALSE
+EXEC sp_addlinkedsrvlogin @rmtsrvname = 'mssql_server', @useself = 'FALSE', @rmtuser = 'jdbc_user', @rmtpassword = '12345678'
+GO
+
 -- Creating a simple login which has lesser privilege than sysadmin role
 create login linked_server_login_861 with password = 'password_861'
 GO
