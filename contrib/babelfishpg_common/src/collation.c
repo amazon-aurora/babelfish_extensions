@@ -2,6 +2,7 @@
 
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
+#include "utils/pg_locale.h"
 #include "utils/syscache.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
@@ -1318,15 +1319,14 @@ void BabelfishPreCreateCollation_hook(
 	int32 collencoding,
 	const char **pCollcollate,
 	const char **pCollctype,
-	const char *collversion
+	const char **pColliculocale,
+	const char **pCollversion
 	)
 {
 	const char *collcollate = *pCollcollate;
 	const char *collctype = *pCollctype;
-
-	/* This hook should only be called when dialect is tsql. */
-	if (sql_dialect != SQL_DIALECT_TSQL)
-		return;
+	const char *colliculocale = *pColliculocale;
+	const char *collversion = *pCollversion;
 
 	if (NULL != prev_PreCreateCollation_hook)
 	{
@@ -1335,9 +1335,12 @@ void BabelfishPreCreateCollation_hook(
 										collencoding,
 										&collcollate,
 										&collctype,
-										collversion);
+										&pColliculocale,
+										&collversion);
 		*pCollcollate = collcollate;
 		*pCollctype = collctype;
+		*pColliculocale = colliculocale;
+		*pCollversion = collversion;
 	}
 
 	init_default_locale();
@@ -1351,7 +1354,7 @@ void BabelfishPreCreateCollation_hook(
 		 * cannot modify the initial string, but we can modify
 		 * the pointer to point somewhere else.
 		 */
-		if (collcollate[0] == '@')
+		if (collcollate && collcollate[0] == '@')
 		{
 			char *catcollcollate = palloc0(strlen(bbf_default_locale) +
 										   strlen(collcollate) + 1);
@@ -1361,15 +1364,29 @@ void BabelfishPreCreateCollation_hook(
 			*pCollcollate = catcollcollate;
 		}
 
-		if (collctype[0] == '@')
+		if (collctype && collctype[0] == '@')
 		{
 			char *catcollctype = palloc0(strlen(bbf_default_locale) +
 										 strlen(collctype) + 1);
 
 			memcpy(catcollctype, bbf_default_locale, strlen(bbf_default_locale));
-			strncat(catcollctype, collcollate, strlen(collcollate));
+			strncat(catcollctype, collctype, strlen(collctype));
 			*pCollctype = catcollctype;
 		}
+
+		if (colliculocale && colliculocale[0] == '@')
+		{
+			char *catcolliculocale = palloc0(strlen(bbf_default_locale) +
+										 strlen(colliculocale) + 1);
+
+			memcpy(catcolliculocale, bbf_default_locale, strlen(bbf_default_locale));
+			strncat(catcolliculocale, colliculocale, strlen(colliculocale));
+			*pColliculocale = catcolliculocale;
+		}
+
+		char *newColversion = get_collation_actual_version(collprovider, collprovider == COLLPROVIDER_ICU ? *pColliculocale : *pCollcollate);
+		if (collversion && newColversion && strcmp(newColversion, *pCollversion) != 0)
+			*pCollversion = newColversion;
 	}
 }
 

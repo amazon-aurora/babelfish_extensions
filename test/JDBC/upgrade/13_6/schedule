@@ -286,3 +286,4 @@ BABEL-CHECK-CONSTRAINT-before-14_6
 BABEL-3640
 sys_server_principals_dep_for_13_x
 sys_database_principals_dep_for_13_x
+BABEL-COLLATION

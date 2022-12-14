@@ -290,3 +290,4 @@ BABEL-CHECK-CONSTRAINT-before-14_6
 BABEL-3640
 sys_server_principals_dep
 sys_database_principals_dep
+BABEL-COLLATION

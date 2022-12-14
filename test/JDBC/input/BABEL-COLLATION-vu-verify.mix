@@ -1,0 +1,3 @@
+-- Verify that all collations picked the correct locale is picked up correctly
+SELECT collname, colliculocale FROM pg_collation WHERE collname LIKE 'bbf_unicode_%%' ORDER BY collname;
+GO

@@ -140,7 +140,8 @@ BabelfishPreCreateCollation_hook(
 	int32 collencoding,
 	const char **collcollate,
 	const char **collctype,
-	const char *collversion);
+	const char **colliculocale,
+	const char **collversion);
 
 extern TranslateCollation_hook_type prev_TranslateCollation_hook;
 extern PreCreateCollation_hook_type prev_PreCreateCollation_hook;

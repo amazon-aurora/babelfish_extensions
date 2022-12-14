@@ -9,6 +9,11 @@ GRANT USAGE ON SCHEMA sys TO PUBLIC;
 
 SELECT set_config('search_path', 'sys, '||current_setting('search_path'), false);
 
+/*
+ * Load all hooks and GUCs before creating extension objects.
+ */
+LOAD 'babelfishpg_common';
+
 #include "money/fixeddecimal--1.1.0_base_parallel.sql"
 #include "money/fixeddecimal--parallelaggs.sql"
 #include "money/fixeddecimal--brin.sql"
