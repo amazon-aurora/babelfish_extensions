@@ -1347,7 +1347,7 @@ antlrcpp::Any TsqlUnsupportedFeatureHandlerImpl::visitFunc_proc_name_server_data
 {
 	if (ctx->DOT().size() >= 3 && ctx->server) /* server.db.schema.funcname */{
 		if(throw_error){
-			throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, format_errmsg("Remote object reference with 4-part object name is not currently supported in Babelfish"), getLineAndPos(ctx));
+			throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, format_errmsg("%s is not currently supported in Babelfish", "Remote object reference with 4-part object name"), getLineAndPos(ctx));
 		}
 	}
 
@@ -1364,7 +1364,7 @@ antlrcpp::Any TsqlUnsupportedFeatureHandlerImpl::visitFull_object_name(TSqlParse
 {
 	if (ctx->DOT().size() >= 3 && ctx->server) /* server.db.schema.funcname */{
 		if(throw_error){
-			throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, format_errmsg("Remote object reference with 4-part object name is not currently supported in Babelfish"), getLineAndPos(ctx));
+			throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, format_errmsg("%s is not currently supported in Babelfish", "Remote object reference with 4-part object name"), getLineAndPos(ctx));
 		}
 	}
 
