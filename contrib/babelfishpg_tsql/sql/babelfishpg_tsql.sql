@@ -126,7 +126,7 @@ BEGIN
   CAST(created AS sys.nvarchar(11)),
   CAST(status AS sys.nvarchar(600)),
   CAST(compatibility_level AS sys.tinyint)
-  FROM sys.babelfish_helpdb("@dbname");
+  FROM sys.babelfish_helpdb(@dbname);
 
   SELECT
   CAST(NULL AS sys.nchar(128)) AS name,
@@ -152,7 +152,7 @@ AUTO_INCREMENT INT, LOCAL_TYPE_NAME VARCHAR(20),
 MINIMUM_SCALE INT, MAXIMUM_SCALE INT, SQL_DATA_TYPE INT,
 SQL_DATETIME_SUB INT, NUM_PREC_RADIX INT, INTERVAL_PRECISION INT,
 USERTYPE INT, LENGTH INT, SS_DATA_TYPE SYS.TINYINT, 
--- below column is added in order to join PG's information_schema.columns for sys.sp_columns_100_view
+-- below column is added in order to join information_schema.columns of PG for sys.sp_columns_100_view
 PG_TYPE_NAME VARCHAR(20)
 );
 GRANT SELECT ON sys.spt_datatype_info_table TO PUBLIC;
@@ -369,8 +369,8 @@ CREATE OR REPLACE VIEW sys.sp_columns_100_view AS
      JOIN sys.pg_namespace_ext t2 ON t1.relnamespace = t2.oid
      JOIN pg_catalog.pg_roles t3 ON t1.relowner = t3.oid
      LEFT OUTER JOIN sys.babelfish_namespace_ext ext on t2.nspname = ext.nspname
-     JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" AND ext.orig_name = t4."TABLE_SCHEMA")
-     LEFT JOIN pg_attribute a on a.attrelid = t1.oid AND a.attname = t4."COLUMN_NAME"
+     JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" COLLATE sys.database_default AND ext.orig_name = t4."TABLE_SCHEMA")
+     LEFT JOIN pg_attribute a on a.attrelid = t1.oid AND a.attname = t4."COLUMN_NAME" COLLATE sys.database_default
      LEFT JOIN pg_type t ON t.oid = a.atttypid
      LEFT JOIN sys.columns t6 ON
      (
@@ -379,7 +379,7 @@ CREATE OR REPLACE VIEW sys.sp_columns_100_view AS
      )
      , sys.translate_pg_type_to_tsql(a.atttypid) AS tsql_type_name
      , sys.spt_datatype_info_table AS t5
-  WHERE (t4."DATA_TYPE" = t5.TYPE_NAME)
+  WHERE (t4."DATA_TYPE" = t5.TYPE_NAME COLLATE sys.database_default)
     AND ext.dbid = cast(sys.db_id() as oid);
 
 GRANT SELECT on sys.sp_columns_100_view TO PUBLIC;
@@ -467,9 +467,9 @@ begin
 				ss_data_type
 		from sys.sp_columns_100_view
 	    where lower(table_name) similar to lower(in_table_name) COLLATE "C" -- TBD - this should be changed to ci_as
-	      and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner like in_table_owner collate sys.bbf_unicode_general_ci_as)
-	      and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier like in_table_qualifier collate sys.bbf_unicode_general_ci_as)
-	      and ((SELECT coalesce(in_column_name,'')) = '' or column_name like in_column_name collate sys.bbf_unicode_general_ci_as)
+	      and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner like in_table_owner collate sys.database_default)
+	      and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier like in_table_qualifier collate sys.database_default)
+	      and ((SELECT coalesce(in_column_name,'')) = '' or column_name like in_column_name collate sys.database_default)
 		order by table_qualifier,
 		         table_owner,
 			 table_name,
@@ -478,9 +478,9 @@ begin
 		return query
 	    select table_qualifier, precision from sys.sp_columns_100_view
 	      where in_table_name = table_name collate sys.bbf_unicode_general_ci_as
-	      and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner = in_table_owner collate sys.bbf_unicode_general_ci_as)
-	      and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier = in_table_qualifier collate sys.bbf_unicode_general_ci_as)
-	      and ((SELECT coalesce(in_column_name,'')) = '' or column_name = in_column_name collate sys.bbf_unicode_general_ci_as)
+	      and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner = in_table_owner collate sys.database_default)
+	      and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier = in_table_qualifier collate sys.database_default)
+	      and ((SELECT coalesce(in_column_name,'')) = '' or column_name = in_column_name collate sys.database_default)
 		order by table_qualifier,
 		         table_owner,
 			 table_name,
@@ -637,6 +637,7 @@ BEGIN
 		WHEN 'datetime2' THEN tds_id = 42;
 		WHEN 'sql_variant' THEN tds_id = 98;
 		WHEN 'datetimeoffset' THEN tds_id = 43;
+		WHEN 'timestamp' THEN tds_id = 173;
 		ELSE tds_id = 0;
 	END CASE;
 	RETURN tds_id;
@@ -711,7 +712,7 @@ CREATE OR REPLACE VIEW sys.spt_tablecollations_view AS
         o.schema_id         AS schema_id,
         c.column_id         AS colid,
         CASE WHEN p.attoptions[1] LIKE 'bbf_original_name=%' THEN split_part(p.attoptions[1], '=', 2)
-            ELSE c.name END AS name,
+		ELSE c.name COLLATE sys.database_default END AS name,
         CAST(CollationProperty(c.collation_name,'tdscollation') AS binary(5)) AS tds_collation_28,
         CAST(CollationProperty(c.collation_name,'tdscollation') AS binary(5)) AS tds_collation_90,
         CAST(CollationProperty(c.collation_name,'tdscollation') AS binary(5)) AS tds_collation_100,
@@ -721,7 +722,7 @@ CREATE OR REPLACE VIEW sys.spt_tablecollations_view AS
     FROM
         sys.all_columns c INNER JOIN
         sys.all_objects o ON (c.object_id = o.object_id) JOIN
-        pg_attribute p ON (c.name = p.attname AND c.object_id = p.attrelid)
+        pg_attribute p ON (c.name = p.attname COLLATE sys.database_default AND c.object_id = p.attrelid)
     WHERE
         c.is_sparse = 0 AND p.attnum >= 0;
 GRANT SELECT ON sys.spt_tablecollations_view TO PUBLIC;
@@ -998,11 +999,10 @@ CREATE OR REPLACE FUNCTION sys.sp_tables_internal(
 		DECLARE opt_view sys.varchar(16) = '';
 		DECLARE cs_as_in_table_type varchar COLLATE "C" = in_table_type;
 	BEGIN
-	   
-		IF (SELECT count(*) FROM unnest(string_to_array(cs_as_in_table_type, ',')) WHERE upper(trim(unnest)) = 'TABLE' OR upper(trim(unnest)) = '''TABLE''') >= 1 THEN
+		IF (SELECT count(*) FROM unnest(string_to_array(cs_as_in_table_type, ',')) WHERE upper(trim(unnest)) = '''TABLE''' OR upper(trim(unnest)) = '''''''TABLE''''''') >= 1 THEN
 			opt_table = 'TABLE';
 		END IF;
-		IF (SELECT count(*) from unnest(string_to_array(cs_as_in_table_type, ',')) WHERE upper(trim(unnest)) = 'VIEW' OR upper(trim(unnest)) = '''VIEW''') >= 1 THEN
+		IF (SELECT count(*) from unnest(string_to_array(cs_as_in_table_type, ',')) WHERE upper(trim(unnest)) = '''VIEW''' OR upper(trim(unnest)) = '''''''VIEW''''''') >= 1 THEN
 			opt_view = 'VIEW';
 		END IF;
 		IF in_fusepattern = 1 THEN
@@ -1014,12 +1014,12 @@ CREATE OR REPLACE FUNCTION sys.sp_tables_internal(
 			CAST(table_type AS sys.varchar(32)) AS TABLE_TYPE,
 			CAST(remarks AS sys.varchar(254)) AS REMARKS
 			FROM sys.sp_tables_view
-			WHERE ((SELECT coalesce(in_table_name,'')) = '' OR table_name LIKE in_table_name collate sys.bbf_unicode_general_ci_as)
-			AND ((SELECT coalesce(in_table_owner,'')) = '' OR table_owner LIKE in_table_owner collate sys.bbf_unicode_general_ci_as)
-			AND ((SELECT coalesce(in_table_qualifier,'')) = '' OR table_qualifier LIKE in_table_qualifier collate sys.bbf_unicode_general_ci_as)
+			WHERE ((SELECT coalesce(in_table_name,'')) = '' OR table_name LIKE in_table_name collate sys.database_default)
+			AND ((SELECT coalesce(in_table_owner,'')) = '' OR table_owner LIKE in_table_owner collate sys.database_default)
+			AND ((SELECT coalesce(in_table_qualifier,'')) = '' OR table_qualifier LIKE in_table_qualifier collate sys.database_default)
 			AND ((SELECT coalesce(cs_as_in_table_type,'')) = ''
-			    OR table_type collate sys.bbf_unicode_general_ci_as = opt_table
-			    OR table_type collate sys.bbf_unicode_general_ci_as= opt_view)
+			    OR table_type = opt_table
+			    OR table_type = opt_view)
 			ORDER BY table_qualifier, table_owner, table_name;
 		ELSE 
 			RETURN query
@@ -1030,9 +1030,9 @@ CREATE OR REPLACE FUNCTION sys.sp_tables_internal(
 			CAST(table_type AS sys.varchar(32)) AS TABLE_TYPE,
 			CAST(remarks AS sys.varchar(254)) AS REMARKS
 			FROM sys.sp_tables_view
-			WHERE ((SELECT coalesce(in_table_name,'')) = '' OR table_name = in_table_name collate sys.bbf_unicode_general_ci_as)
-			AND ((SELECT coalesce(in_table_owner,'')) = '' OR table_owner = in_table_owner collate sys.bbf_unicode_general_ci_as)
-			AND ((SELECT coalesce(in_table_qualifier,'')) = '' OR table_qualifier = in_table_qualifier collate sys.bbf_unicode_general_ci_as)
+			WHERE ((SELECT coalesce(in_table_name,'')) = '' OR table_name = in_table_name collate sys.database_default)
+			AND ((SELECT coalesce(in_table_owner,'')) = '' OR table_owner = in_table_owner collate sys.database_default)
+			AND ((SELECT coalesce(in_table_qualifier,'')) = '' OR table_qualifier = in_table_qualifier collate sys.database_default)
 			AND ((SELECT coalesce(cs_as_in_table_type,'')) = ''
 			    OR table_type = opt_table
 			    OR table_type = opt_view)
@@ -1081,7 +1081,7 @@ GRANT ALL on FUNCTION sys.fn_mapped_system_error_list TO PUBLIC;
 -- are accessible through a database gateway
 DROP VIEW IF EXISTS sys.sp_databases_view CASCADE;
 
-CREATE OR REPLACE VIEW sys.sp_databases_view AS
+CREATE VIEW sys.sp_databases_view AS
 	SELECT CAST(database_name AS sys.SYSNAME),
 	-- DATABASE_SIZE returns a NULL value for databases larger than 2.15 TB
 	CASE WHEN (sum(table_size)/1024.0) > 2.15 * 1024.0 * 1024.0 * 1024.0 THEN NULL
@@ -1125,7 +1125,7 @@ FROM pg_catalog.pg_class t1
 	JOIN sys.pg_namespace_ext t2 ON t1.relnamespace = t2.oid
 	JOIN pg_catalog.pg_roles t3 ON t1.relowner = t3.oid
   LEFT OUTER JOIN sys.babelfish_namespace_ext ext on t2.nspname = ext.nspname
-	JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" AND ext.orig_name = t4."TABLE_SCHEMA")
+	JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" COLLATE sys.database_default AND ext.orig_name = t4."TABLE_SCHEMA" )
 	JOIN pg_constraint t5 ON t1.oid = t5.conrelid
 	, generate_series(1,16) seq -- SQL server has max 16 columns per primary key
 WHERE t5.contype = 'p'
@@ -1153,11 +1153,11 @@ as $$
 begin
 	return query
 	select * from sys.sp_pkeys_view
-	where table_name = in_table_name collate sys.bbf_unicode_general_ci_as
-		and table_owner = coalesce(in_table_owner,'dbo') collate sys.bbf_unicode_general_ci_as
+	where table_name = in_table_name
+		and table_owner = coalesce(in_table_owner,'dbo') 
 		and ((SELECT
 		         coalesce(in_table_qualifier,'')) = '' or
-		         table_qualifier = in_table_qualifier collate sys.bbf_unicode_general_ci_as)
+		         table_qualifier = in_table_qualifier )
 	order by table_qualifier,
 	         table_owner,
 		 table_name,
@@ -1185,7 +1185,7 @@ $$
 LANGUAGE 'pltsql';
 GRANT ALL on PROCEDURE sys.sp_pkeys TO PUBLIC;
 
-CREATE VIEW sys.sp_statistics_view AS
+CREATE OR REPLACE VIEW sys.sp_statistics_view AS
 SELECT
 CAST(t3."TABLE_CATALOG" AS sys.sysname) AS TABLE_QUALIFIER,
 CAST(t3."TABLE_SCHEMA" AS sys.sysname) AS TABLE_OWNER,
@@ -1202,7 +1202,7 @@ CAST(t1.relpages AS int) AS PAGES,
 CAST(NULL AS sys.varchar(128)) AS FILTER_CONDITION
 FROM pg_catalog.pg_class t1
     JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
-    JOIN information_schema_tsql.columns t3 ON (t1.relname = t3."TABLE_NAME" AND s1.name = t3."TABLE_SCHEMA")
+    JOIN information_schema_tsql.columns t3 ON (t1.relname = t3."TABLE_NAME" COLLATE sys.database_default AND s1.name = t3."TABLE_SCHEMA")
     , generate_series(0,31) seq -- SQL server has max 32 columns per index
 UNION
 SELECT
@@ -1221,26 +1221,23 @@ WHEN t8.oid > 0 THEN CAST(t6.relname AS sys.sysname)
 ELSE CAST(SUBSTRING(t6.relname,1,LENGTH(t6.relname)-32-LENGTH(t1.relname)) AS sys.sysname) 
 END AS INDEX_NAME,
 CASE
-WHEN t7.starelid > 0 THEN CAST(0 AS smallint)
-ELSE
-	CASE
-	WHEN t5.indisclustered = 't' THEN CAST(1 AS smallint)
-	ELSE CAST(3 AS smallint)
-	END
+WHEN t5.indisclustered = 't' THEN CAST(1 AS smallint)
+ELSE CAST(3 AS smallint)
 END AS TYPE,
 CAST(seq + 1 AS smallint) AS SEQ_IN_INDEX,
 CAST(t4."COLUMN_NAME" AS sys.sysname) AS COLUMN_NAME,
 CAST('A' AS sys.varchar(1)) AS COLLATION,
-CAST(t7.stadistinct AS int) AS CARDINALITY,
+CAST(t7.n_distinct AS int) AS CARDINALITY,
 CAST(0 AS int) AS PAGES, --not supported
 CAST(NULL AS sys.varchar(128)) AS FILTER_CONDITION
 FROM pg_catalog.pg_class t1
     JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
     JOIN pg_catalog.pg_roles t3 ON t1.relowner = t3.oid
-    JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" AND s1.name = t4."TABLE_SCHEMA")
+    JOIN information_schema_tsql.columns t4 ON (t1.relname = t4."TABLE_NAME" COLLATE sys.database_default AND s1.name = t4."TABLE_SCHEMA")
 	JOIN (pg_catalog.pg_index t5 JOIN
 		pg_catalog.pg_class t6 ON t5.indexrelid = t6.oid) ON t1.oid = t5.indrelid
-	LEFT JOIN pg_catalog.pg_statistic t7 ON t1.oid = t7.starelid
+	JOIN pg_catalog.pg_namespace nsp ON (t1.relnamespace = nsp.oid)
+	LEFT JOIN pg_catalog.pg_stats t7 ON (t1.relname = t7.tablename AND t7.schemaname = nsp.nspname)
 	LEFT JOIN pg_catalog.pg_constraint t8 ON t5.indexrelid = t8.conindid
     , generate_series(0,31) seq -- SQL server has max 32 columns per index
 WHERE CAST(t4."ORDINAL_POSITION" AS smallint) = ANY (t5.indkey)
@@ -1274,10 +1271,10 @@ as $$
 begin
     return query
     select * from sys.sp_statistics_view
-    where in_table_name = table_name COLLATE sys.bbf_unicode_general_ci_as
-        and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner = in_table_owner  COLLATE sys.bbf_unicode_general_ci_as)
-        and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier = in_table_qualifier COLLATE sys.bbf_unicode_general_ci_as)
-        and ((SELECT coalesce(in_index_name,'')) = '' or index_name like in_index_name COLLATE sys.bbf_unicode_general_ci_as)
+    where in_table_name = table_name
+        and ((SELECT coalesce(in_table_owner,'')) = '' or table_owner = in_table_owner )
+        and ((SELECT coalesce(in_table_qualifier,'')) = '' or table_qualifier = in_table_qualifier )
+        and ((SELECT coalesce(in_index_name,'')) = '' or index_name like in_index_name )
         and ((UPPER(in_is_unique) = 'Y' and (non_unique IS NULL or non_unique = 0)) or (UPPER(in_is_unique) = 'N'))
     order by non_unique, type, index_name, seq_in_index;
 end;
@@ -1415,10 +1412,10 @@ CAST(t2.dbname AS sys.sysname) AS TABLE_QUALIFIER,
 CAST(s1.name AS sys.sysname) AS TABLE_OWNER,
 CAST(t1.relname AS sys.sysname) AS TABLE_NAME,
 CAST(COALESCE(SPLIT_PART(t6.attoptions[1], '=', 2), t5.column_name) AS sys.sysname) AS COLUMN_NAME,
-CAST((select orig_username from sys.babelfish_authid_user_ext where rolname = t5.grantor) AS sys.sysname) AS GRANTOR,
-CAST((select orig_username from sys.babelfish_authid_user_ext where rolname = t5.grantee) AS sys.sysname) AS GRANTEE,
-CAST(t5.privilege_type AS sys.varchar(32)) AS PRIVILEGE,
-CAST(t5.is_grantable AS sys.varchar(3)) AS IS_GRANTABLE
+CAST((select orig_username from sys.babelfish_authid_user_ext where rolname = t5.grantor::name) AS sys.sysname) AS GRANTOR,
+CAST((select orig_username from sys.babelfish_authid_user_ext where rolname = t5.grantee::name) AS sys.sysname) AS GRANTEE,
+CAST(t5.privilege_type AS sys.varchar(32)) COLLATE sys.database_default AS PRIVILEGE,
+CAST(t5.is_grantable AS sys.varchar(3)) COLLATE sys.database_default AS IS_GRANTABLE
 FROM pg_catalog.pg_class t1 
 	JOIN sys.pg_namespace_ext t2 ON t1.relnamespace = t2.oid
 	JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
@@ -1586,10 +1583,10 @@ CREATE OR REPLACE FUNCTION sys.sp_special_columns_precision_helper(IN type TEXT,
 AS $$
 SELECT
 	CASE
-		WHEN type in ('real','float') THEN sp_columns_max_length * 2 - 1
-		WHEN type in ('char','varchar','binary','varbinary') THEN sp_columns_max_length
-		WHEN type in ('nchar','nvarchar') THEN sp_columns_max_length / 2
-		WHEN type in ('sysname','uniqueidentifier') THEN sp_datatype_info_precision
+		WHEN type COLLATE sys.database_default in ('real','float') THEN sp_columns_max_length * 2 - 1
+		WHEN type COLLATE sys.database_default in ('char','varchar','binary','varbinary') THEN sp_columns_max_length
+		WHEN type COLLATE sys.database_default in ('nchar','nvarchar') THEN sp_columns_max_length / 2
+		WHEN type COLLATE sys.database_default in ('sysname','uniqueidentifier') THEN sp_datatype_info_precision
 		ELSE sp_columns_precision
 	END;
 $$ LANGUAGE SQL IMMUTABLE;
@@ -1598,11 +1595,11 @@ CREATE OR REPLACE FUNCTION sys.sp_special_columns_length_helper(IN type TEXT, IN
 AS $$
 SELECT
 	CASE
-		WHEN type in ('decimal','numeric','money','smallmoney') THEN sp_columns_precision + 2
-		WHEN type in ('time','date','datetime2','datetimeoffset') THEN sp_columns_precision * 2
-		WHEN type in ('smalldatetime') THEN sp_columns_precision
-		WHEN type in ('datetime') THEN sp_columns_max_length * 2
-		WHEN type in ('sql_variant') THEN sp_datatype_info_precision
+		WHEN type COLLATE sys.database_default in ('decimal','numeric','money','smallmoney') THEN sp_columns_precision + 2
+		WHEN type COLLATE sys.database_default in ('time','date','datetime2','datetimeoffset') THEN sp_columns_precision * 2
+		WHEN type COLLATE sys.database_default in ('smalldatetime') THEN sp_columns_precision
+		WHEN type COLLATE sys.database_default in ('datetime') THEN sp_columns_max_length * 2
+		WHEN type COLLATE sys.database_default in ('sql_variant') THEN sp_datatype_info_precision
 		ELSE sp_columns_max_length
 	END;
 $$ LANGUAGE SQL IMMUTABLE;
@@ -1611,7 +1608,7 @@ CREATE OR REPLACE FUNCTION sys.sp_special_columns_scale_helper(IN type TEXT, IN 
 AS $$
 SELECT
 	CASE
-		WHEN type in ('bit','real','float','char','varchar','nchar','nvarchar','time','date','datetime2','datetimeoffset','varbinary','binary','sql_variant','sysname','uniqueidentifier') THEN NULL
+		WHEN type COLLATE sys.database_default in ('bit','real','float','char','varchar','nchar','nvarchar','time','date','datetime2','datetimeoffset','varbinary','binary','sql_variant','sysname','uniqueidentifier') THEN NULL
 		ELSE sp_columns_scale
 	END;
 $$ LANGUAGE SQL IMMUTABLE;
@@ -1620,7 +1617,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 CREATE OR REPLACE VIEW sys.sp_special_columns_view AS
 SELECT DISTINCT 
 CAST(1 as smallint) AS SCOPE,
-CAST(coalesce (split_part(pa.attoptions[1], '=', 2) ,c1.name) AS sys.sysname) AS COLUMN_NAME, -- get original column name if exists
+CAST(coalesce (split_part(pa.attoptions[1] collate "C", '=', 2) ,c1.name) AS sys.sysname) AS COLUMN_NAME, -- get original column name if exists
 CAST(t6.data_type AS smallint) AS DATA_TYPE,
 
 CASE -- cases for when they are of type identity. 
@@ -1653,17 +1650,17 @@ FROM pg_catalog.pg_class t1
 	JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
 	LEFT JOIN sys.indexes idx ON idx.object_id = t1.oid
 	INNER JOIN pg_catalog.pg_attribute i2 ON idx.index_id = i2.attrelid
-	INNER JOIN sys.columns c1 ON c1.object_id = idx.object_id AND i2.attname = c1.name
+	INNER JOIN sys.columns c1 ON c1.object_id = idx.object_id AND cast(i2.attname as sys.sysname) = c1.name collate sys.database_default
 
 	JOIN pg_catalog.pg_type AS t7 ON t7.oid = c1.system_type_id
 	JOIN sys.types AS t8 ON c1.user_type_id = t8.user_type_id 
 	LEFT JOIN sys.sp_datatype_info_helper(2::smallint, false) AS t6 ON t7.typname = t6.pg_type_name OR t7.typname = t6.type_name --need in order to get accurate DATA_TYPE value
-	LEFT JOIN pg_catalog.pg_attribute AS pa ON t1.oid = pa.attrelid AND c1.name = pa.attname
+	LEFT JOIN pg_catalog.pg_attribute AS pa ON t1.oid = pa.attrelid AND c1.name = pa.attname collate sys.database_default
 	, sys.translate_pg_type_to_tsql(t8.user_type_id) AS tsql_type_name
 	, sys.translate_pg_type_to_tsql(t8.system_type_id) AS tsql_base_type_name
 	WHERE has_schema_privilege(s1.schema_id, 'USAGE');
   
-GRANT SELECT ON sys.sp_special_columns_view TO PUBLIC;
+GRANT SELECT ON sys.sp_special_columns_view TO PUBLIC; 
 
 
 CREATE OR REPLACE PROCEDURE sys.sp_special_columns(
@@ -1888,15 +1885,15 @@ CREATE OR REPLACE VIEW sys.sp_fkeys_view AS
 SELECT
 -- primary key info
 CAST(t2.dbname AS sys.sysname) AS PKTABLE_QUALIFIER,
-CAST((select orig_name from sys.babelfish_namespace_ext where dbid = sys.db_id() and nspname = ref.table_schema) AS sys.sysname) AS PKTABLE_OWNER,
+CAST((select orig_name from sys.babelfish_namespace_ext where dbid = sys.db_id() and nspname COLLATE sys.database_default = ref.table_schema) AS sys.sysname) AS PKTABLE_OWNER,
 CAST(ref.table_name AS sys.sysname) AS PKTABLE_NAME,
-CAST(coalesce(split_part(pkname_table.attoptions[1], '=', 2), ref.column_name) AS sys.sysname) AS PKCOLUMN_NAME,
+CAST(coalesce(split_part(pkname_table.attoptions[1] COLLATE "C", '=', 2), ref.column_name) AS sys.sysname) AS PKCOLUMN_NAME,
 
 -- foreign key info
 CAST(t2.dbname AS sys.sysname) AS FKTABLE_QUALIFIER,
-CAST((select orig_name from sys.babelfish_namespace_ext where dbid = sys.db_id() and nspname = fk.table_schema) AS sys.sysname) AS FKTABLE_OWNER,
+CAST((select orig_name from sys.babelfish_namespace_ext where dbid = sys.db_id() and nspname COLLATE sys.database_default = fk.table_schema) AS sys.sysname) AS FKTABLE_OWNER,
 CAST(fk.table_name AS sys.sysname) AS FKTABLE_NAME,
-CAST(coalesce(split_part(fkname_table.attoptions[1], '=', 2), fk.column_name) AS sys.sysname) AS FKCOLUMN_NAME,
+CAST(coalesce(split_part(fkname_table.attoptions[1] COLLATE "C", '=', 2), fk.column_name) AS sys.sysname) AS FKCOLUMN_NAME,
 
 CAST(seq AS smallint) AS KEY_SEQ,
 CASE
@@ -1919,7 +1916,7 @@ FROM information_schema.referential_constraints AS map
 
 -- join unique constraints (e.g. PKs constraints) to ref columns info
 INNER JOIN information_schema.key_column_usage AS ref
-	JOIN pg_catalog.pg_class p1 -- Need to join this in order to get oid for pkey's original bbf name
+	JOIN pg_catalog.pg_class p1 -- Need to join this in order to get oid for original bbf name of pkey
     JOIN sys.pg_namespace_ext p2 ON p1.relnamespace = p2.oid
     JOIN information_schema.columns p4 ON p1.relname = p4.table_name AND p1.relnamespace::regnamespace::text = p4.table_schema
     JOIN pg_constraint p5 ON p1.oid = p5.conrelid
@@ -1942,11 +1939,11 @@ INNER JOIN pg_catalog.pg_class t1
     JOIN pg_constraint t5 ON t1.oid = t5.conrelid
     ON (t1.relname=fk.table_name AND t4.column_name=fk.column_name AND fk.table_schema = t2.nspname AND fk.table_schema = t4.table_schema)
     
--- get foreign key's original bbf name
+-- get original bbf name for foreign key
 JOIN pg_catalog.pg_attribute fkname_table
 	ON (t1.oid = fkname_table.attrelid) AND (fk.column_name = fkname_table.attname)
 
--- get primary key's original bbf name
+-- get original bbf name for primary key
 JOIN pg_catalog.pg_attribute pkname_table
 	ON (p1.oid = pkname_table.attrelid) AND (ref.column_name = pkname_table.attname)
 	
@@ -2009,7 +2006,7 @@ GRANT EXECUTE ON PROCEDURE sys.sp_fkeys TO PUBLIC;
 
 CREATE OR REPLACE VIEW sys.sp_stored_procedures_view AS
 SELECT 
-CAST(d.name AS sys.sysname) AS PROCEDURE_QUALIFIER,
+CAST(d.name AS sys.sysname) COLLATE sys.database_default AS PROCEDURE_QUALIFIER,
 CAST(s1.name AS sys.sysname) AS PROCEDURE_OWNER, 
 
 CASE 
@@ -2020,7 +2017,7 @@ END AS PROCEDURE_NAME,
 -1 AS NUM_INPUT_PARAMS,
 -1 AS NUM_OUTPUT_PARAMS,
 -1 AS NUM_RESULT_SETS,
-CAST(NULL AS varchar(254)) AS REMARKS,
+CAST(NULL AS varchar(254)) COLLATE sys.database_default AS REMARKS,
 cast(2 AS smallint) AS PROCEDURE_TYPE
 
 FROM pg_catalog.pg_proc p 
@@ -2031,7 +2028,7 @@ WHERE has_schema_privilege(s1.schema_id, 'USAGE')
 
 UNION 
 
-SELECT CAST((SELECT sys.db_name()) AS sys.sysname) AS PROCEDURE_QUALIFIER,
+SELECT CAST((SELECT sys.db_name()) AS sys.sysname) COLLATE sys.database_default AS PROCEDURE_QUALIFIER,
 CAST(nspname AS sys.sysname) AS PROCEDURE_OWNER,
 
 CASE 
@@ -2042,7 +2039,7 @@ END AS PROCEDURE_NAME,
 -1 AS NUM_INPUT_PARAMS,
 -1 AS NUM_OUTPUT_PARAMS,
 -1 AS NUM_RESULT_SETS,
-CAST(NULL AS varchar(254)) AS REMARKS,
+CAST(NULL AS varchar(254)) COLLATE sys.database_default AS REMARKS,
 cast(2 AS smallint) AS PROCEDURE_TYPE
 
 FROM    pg_catalog.pg_namespace n 
@@ -2278,6 +2275,7 @@ BEGIN
 			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
 			   CAST(Base1.oid AS INT) AS 'UserID',
 			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
+					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
 					ELSE CAST(Base3.oid AS INT) END
 					AS SYS.VARBINARY(85)) AS 'SID'
 		FROM sys.babelfish_authid_user_ext AS Ext1
@@ -2347,6 +2345,7 @@ BEGIN
 			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
 			   CAST(Base1.oid AS INT) AS 'UserID',
 			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
+					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
 					ELSE CAST(Base3.oid AS INT) END
 					AS SYS.VARBINARY(85)) AS 'SID'
 		FROM sys.babelfish_authid_user_ext AS Ext1
@@ -2485,11 +2484,16 @@ BEGIN
 		ORDER BY ServerRole, MemberName;
 	END
 	-- If a valid server role is specified, return its member info
+	-- If the role is a SQL server predefined role (i.e. serveradmin), 
+	-- do not raise an error even if it does not exist
 	ELSE IF EXISTS (SELECT 1
 					FROM sys.babelfish_authid_login_ext
-					WHERE (rolname = @srvrolename
-					OR lower(rolname) = lower(@srvrolename))
+					WHERE (rolname = RTRIM(@srvrolename)
+					OR lower(rolname) = lower(RTRIM(@srvrolename)))
 					AND type = 'R')
+					OR lower(RTRIM(@srvrolename)) IN (
+					'serveradmin', 'setupadmin', 'securityadmin', 'processadmin',
+					'dbcreator', 'diskadmin', 'bulkadmin')
 	BEGIN
 		SELECT CAST(Ext1.rolname AS sys.SYSNAME) AS 'ServerRole',
 			   CAST(Ext2.rolname AS sys.SYSNAME) AS 'MemberName',
@@ -2500,7 +2504,7 @@ BEGIN
 		INNER JOIN sys.babelfish_authid_login_ext AS Ext1 ON Base1.rolname = Ext1.rolname
 		INNER JOIN sys.babelfish_authid_login_ext AS Ext2 ON Base2.rolname = Ext2.rolname
 		WHERE Ext1.type = 'R'
-		AND (Ext1.rolname = @srvrolename OR lower(Ext1.rolname) = lower(@srvrolename))
+		AND (Ext1.rolname = RTRIM(@srvrolename) OR lower(Ext1.rolname) = lower(RTRIM(@srvrolename)))
 		ORDER BY ServerRole, MemberName;
 	END
 	-- If the specified server role is not valid
@@ -2511,300 +2515,285 @@ $$
 LANGUAGE 'pltsql';
 GRANT EXECUTE ON PROCEDURE sys.sp_helpsrvrolemember TO PUBLIC;
 
-CREATE OR REPLACE VIEW sys.sp_sproc_columns_view AS
--- Get parameters (if any) for a user-defined stored procedure/function
-(SELECT 
-	CAST(d.name AS sys.sysname) AS PROCEDURE_QUALIFIER,
-	CAST(ext.orig_name AS sys.sysname) AS PROCEDURE_OWNER,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(CONCAT(proc.routine_name, ';1') AS sys.nvarchar(134)) 
-		ELSE CAST(CONCAT(proc.routine_name, ';0') AS sys.nvarchar(134)) 
-	END AS PROCEDURE_NAME,
-	
-	CAST(coalesce(args.parameter_name, '') AS sys.sysname) AS COLUMN_NAME,
-	CAST(1 AS smallint) AS COLUMN_TYPE,
-	CAST(t5.data_type AS smallint) AS DATA_TYPE,
-	CAST(coalesce(t6.name, '') AS sys.sysname) AS TYPE_NAME,
-	CAST(t6.precision AS int) AS PRECISION,
-	CAST(t6.max_length AS int) AS LENGTH,
-	CAST(t6.scale AS smallint) AS SCALE,
-	CAST(t5.num_prec_radix AS smallint) AS RADIX,
-	CAST(t6.is_nullable AS smallint) AS NULLABLE,
-	CAST(NULL AS varchar(254)) AS REMARKS,
-	CAST(NULL AS sys.nvarchar(4000)) AS COLUMN_DEF,
-	CAST(t5.sql_data_type AS smallint) AS SQL_DATA_TYPE,
-	CAST(t5.sql_datetime_sub AS smallint) AS SQL_DATETIME_SUB,
-	CAST(NULL AS int) AS CHAR_OCTET_LENGTH,
-	CAST(args.ordinal_position AS int) AS ORDINAL_POSITION,
-	CAST('YES' AS varchar(254)) AS IS_NULLABLE,
-	CAST(t5.ss_data_type AS sys.tinyint) AS SS_DATA_TYPE,
-	CAST(proc.routine_name AS sys.nvarchar(134)) AS original_procedure_name
-	
-	FROM information_schema.routines proc
-	JOIN information_schema.parameters args
-		ON proc.specific_schema = args.specific_schema AND proc.specific_name = args.specific_name
-	INNER JOIN sys.babelfish_namespace_ext ext ON proc.specific_schema = ext.nspname
-	INNER JOIN sys.databases d ON d.database_id =ext.dbid
-	INNER JOIN sys.spt_datatype_info_table AS t5 
-		JOIN sys.types t6
-		JOIN sys.types t7 ON t6.system_type_id = t7.user_type_id
-			ON t7.name = t5.type_name
-		ON (args.data_type != 'USER-DEFINED' AND args.udt_name = t5.pg_type_name AND t6.name = t7.name)
-		OR (args.data_type='USER-DEFINED' AND args.udt_name = t6.name)
-	WHERE coalesce(args.parameter_name, '') LIKE '@%'
-		AND ext.dbid = sys.db_id()
-		AND has_schema_privilege(proc.specific_schema, 'USAGE')
+CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NULL) AS
+$$
+BEGIN
+	-- Returns a list of the fixed database roles. 
+	-- Only fixed role present in babelfish is db_owner.
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = 'db_owner'
+	BEGIN
+		SELECT CAST('db_owner' AS sys.SYSNAME) AS DbFixedRole, CAST('DB Owners' AS sys.nvarchar(70)) AS Description;
+	END
+	ELSE IF LOWER(RTRIM(@rolename)) IN (
+			'db_accessadmin','db_securityadmin','db_ddladmin', 'db_backupoperator', 
+			'db_datareader', 'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+	BEGIN
+		-- Return an empty result set instead of raising an error
+		SELECT CAST(NULL AS sys.SYSNAME) AS DbFixedRole, CAST(NULL AS sys.nvarchar(70)) AS Description
+		WHERE 1=0;	
+	END
+	ELSE
+		RAISERROR('''%s'' is not a known fixed role.', 16, 1, @rolename);
+END
+$$
+LANGUAGE 'pltsql';
+GRANT EXECUTE ON PROCEDURE sys.sp_helpdbfixedrole TO PUBLIC;
 
-UNION ALL
+CREATE OR REPLACE VIEW sys.sp_sproc_columns_view
+AS
+SELECT
+CAST(sys.db_name() AS sys.sysname) AS PROCEDURE_QUALIFIER -- This will always be objects in current database
+, CAST(ss.schema_name AS sys.sysname) AS PROCEDURE_OWNER
+, CAST(
+CASE
+  WHEN ss.prokind = 'p' THEN CONCAT(ss.proname, ';1')
+  ELSE CONCAT(ss.proname, ';0')
+END
+AS sys.nvarchar(134)) AS PROCEDURE_NAME
+, CAST(
+CASE 
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.proretset THEN '@TABLE_RETURN_VALUE'
+    ELSE '@RETURN_VALUE'
+  END 
+ELSE COALESCE(ss.proargnames[n], '')
+END
+AS sys.SYSNAME) AS COLUMN_NAME
+, CAST(
+CASE
+WHEN ss.n IS NULL THEN
+  CASE 
+    WHEN ss.proretset THEN 3
+    ELSE 5
+  END
+WHEN ss.proargmodes[n] in ('o', 'b') THEN 2
+ELSE 1
+END
+AS smallint) AS COLUMN_TYPE
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.prokind = 'p' THEN (SELECT data_type FROM sys.spt_datatype_info_table  WHERE type_name = 'int')
+    WHEN ss.proretset THEN NULL
+    ELSE sdit.data_type 
+    END
+  WHEN st.is_table_type = 1 THEN -153
+  ELSE sdit.data_type 
+END
+AS smallint) AS DATA_TYPE
+, CAST(
+CASE 
+  WHEN ss.n IS NULL THEN
+    CASE 
+      WHEN ss.proretset THEN 'table' 
+      WHEN ss.prokind = 'p' THEN 'int'
+      ELSE st.name
+    END
+  ELSE st.name
+END
+AS sys.sysname) AS TYPE_NAME
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE 
+      WHEN ss.proretset THEN 0 
+    WHEN ss.prokind = 'p' THEN (SELECT precision FROM sys.types WHERE name = 'int')
+    ELSE st.precision
+  END
+  WHEN st.is_table_type = 1 THEN 0
+  ELSE st.precision 
+END 
+AS sys.int) AS PRECISION
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.proretset THEN 0
+    WHEN ss.prokind = 'p' THEN (SELECT max_length FROM sys.types WHERE name = 'int')
+    ELSE st.max_length
+  END
+  WHEN st.is_table_type = 1 THEN 2147483647
+  ELSE st.max_length 
+END
+AS sys.int) AS LENGTH
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN 
+    CASE
+      WHEN ss.proretset THEN 0 
+      WHEN ss.prokind = 'p' THEN (SELECT scale FROM sys.types WHERE name = 'int')
+      ELSE st.scale
+    END
+  WHEN st.is_table_type = 1 THEN NULL
+  ELSE st.scale
+END
+AS smallint) AS SCALE
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.proretset THEN 0
+    WHEN ss.prokind = 'p' THEN (SELECT num_prec_radix FROM sys.spt_datatype_info_table WHERE type_name = 'int')
+    ELSE sdit.num_prec_radix
+  END
+  WHEN st.is_table_type = 1 THEN NULL
+  ELSE sdit.num_prec_radix
+END
+AS smallint) AS RADIX
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE 
+      WHEN ss.proretset OR ss.prokind = 'p' THEN 0
+      ELSE sdit.nullable 
+    END
+  WHEN st.is_table_type = 1 THEN 1
+  ELSE sdit.nullable 
+END
+AS smallint) AS NULLABLE
+, CAST(
+CASE 
+  WHEN ss.n IS NULL AND ss.proretset THEN 'Result table returned by table valued function'
+  ELSE NULL
+END
+AS sys.varchar(254)) COLLATE sys.database_default AS REMARKS
+, CAST(NULL AS sys.nvarchar(4000)) AS COLUMN_DEF
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.proretset THEN NULL
+      WHEN ss.prokind = 'p' THEN (SELECT sql_data_type FROM sys.spt_datatype_info_table WHERE type_name = 'int')
+      ELSE sdit.sql_data_type
+    END
+  WHEN st.is_table_type = 1 THEN -153
+  ELSE sdit.sql_data_type 
+END
+AS smallint) AS SQL_DATA_TYPE
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE 
+      WHEN ss.proretset THEN 0
+      WHEN ss.prokind = 'p' THEN (SELECT sql_datetime_sub FROM sys.spt_datatype_info_table WHERE type_name = 'int')
+      ELSE sdit.sql_datetime_sub
+    END
+  ELSE sdit.sql_datetime_sub 
+END 
+AS smallint) AS SQL_DATETIME_SUB
+, CAST(
+CASE
+  WHEN ss.n IS NOT NULL AND st.is_table_type = 1 THEN 2147483647
+  ELSE NULL
+END
+AS sys.int) AS CHAR_OCTET_LENGTH
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN 0
+  ELSE n 
+END 
+AS sys.int) AS ORDINAL_POSITION
+, CAST(
+CASE
+  WHEN ss.n IS NULL AND ss.proretset THEN 'NO'
+  WHEN st.is_table_type = 1 THEN 'YES'
+  WHEN sdit.nullable = 1 THEN 'YES'
+  ELSE 'NO'
+END
+AS sys.varchar(254)) COLLATE sys.database_default AS IS_NULLABLE
+, CAST(
+CASE
+  WHEN ss.n IS NULL THEN
+    CASE
+      WHEN ss.proretset THEN 0
+      WHEN ss.prokind = 'p' THEN 56
+      ELSE sdit.ss_data_type
+    END
+  WHEN st.is_table_type = 1 THEN 0
+  ELSE sdit.ss_data_type
+END
+AS sys.tinyint) AS SS_DATA_TYPE
+, CAST(ss.proname AS sys.sysname) AS original_procedure_name
+FROM 
+( 
+  -- CTE to query procedures related to bbf
+  WITH bbf_proc AS (
+    SELECT
+      p.proname as proname,
+      p.proargnames as proargnames,
+      p.proargmodes as proargmodes,
+      p.prokind as prokind,
+      p.proretset as proretset,
+      p.prorettype as prorettype,
+      p.proallargtypes as proallargtypes,
+      p.proargtypes as proargtypes,
+      s.name as schema_name
+    FROM 
+      pg_proc p
+    INNER JOIN (
+      SELECT name as name, schema_id as id  FROM sys.schemas 
+      UNION ALL 
+      SELECT CAST(nspname as sys.sysname) as name, CAST(oid as int) as id 
+        from pg_namespace WHERE nspname in ('sys', 'information_schema')
+    ) as s ON p.pronamespace = s.id
+    WHERE (
+      (pg_has_role(p.proowner, 'USAGE') OR has_function_privilege(p.oid, 'EXECUTE'))
+      AND (s.name != 'sys' 
+        OR p.proname like 'sp\_%' -- filter out internal babelfish-specific procs in sys schema
+        OR p.proname like 'xp\_%'
+        OR p.proname like 'dm\_%'
+        OR p.proname like 'fn\_%'))
+  )
 
--- Create row describing return type for a user-defined stored procedure/function
-SELECT 
-	CAST(d.name AS sys.sysname) AS PROCEDURE_QUALIFIER,
-	CAST(ext.orig_name AS sys.sysname) AS PROCEDURE_OWNER,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(CONCAT(proc.routine_name, ';1') AS sys.nvarchar(134)) 
-		ELSE CAST(CONCAT(proc.routine_name, ';0') AS sys.nvarchar(134)) 
-	END AS PROCEDURE_NAME,
-	
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN cast('@TABLE_RETURN_VALUE' AS sys.sysname)
-		ELSE cast('@RETURN_VALUE' AS sys.sysname)
- 	END AS COLUMN_NAME,
-	 
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(3 AS smallint)
-		ELSE CAST(5 as smallint) 
-	END AS COLUMN_TYPE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN cast((SELECT data_type FROM sys.spt_datatype_info_table WHERE type_name = 'int') AS smallint)
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN cast(null AS smallint)
-		ELSE CAST(t5.data_type AS smallint)
-	END AS DATA_TYPE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST('int' AS sys.sysname) 
-		WHEN pg_function_result_type like '%TABLE%' then CAST('table' AS sys.sysname)
-		ELSE CAST(coalesce(t6.name, '') AS sys.sysname) 
-	END AS TYPE_NAME,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(10 AS int) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS int) 
-		ELSE CAST(t6.precision AS int) 
-	END AS PRECISION,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(4 AS int) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS int) 
-		ELSE CAST(t6.max_length AS int) 
-	END AS LENGTH,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(0 AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint) 
-		ELSE CAST(t6.scale AS smallint) 
-	END AS SCALE,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(10 AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint) 
-		ELSE CAST(t5.num_prec_radix AS smallint) 
-	END AS RADIX,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(0 AS smallint)
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint)
-		ELSE CAST(t6.is_nullable AS smallint)
-	END AS NULLABLE,
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST('Result table returned by table valued function' AS varchar(254)) 
-		ELSE CAST(NULL AS varchar(254)) 
-	END AS REMARKS,
-	
-	CAST(NULL AS sys.nvarchar(4000)) AS COLUMN_DEF,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST((SELECT sql_data_type FROM sys.spt_datatype_info_table WHERE type_name = 'int') AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(null AS smallint) 
-		ELSE CAST(t5.sql_data_type AS smallint) 
-	END AS SQL_DATA_TYPE,
-	
-	CAST(null AS smallint) AS SQL_DATETIME_SUB,
-	CAST(null AS int) AS CHAR_OCTET_LENGTH,
-	CAST(0 AS int) AS ORDINAL_POSITION,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST('NO' AS varchar(254)) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST('NO' AS varchar(254))
-		ELSE CAST('YES' AS varchar(254)) 
-	END AS IS_NULLABLE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(56 AS sys.tinyint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS sys.tinyint) 
-		ELSE CAST(t5.ss_data_type AS sys.tinyint) 
-	END AS SS_DATA_TYPE,
-	CAST(proc.routine_name AS sys.nvarchar(134)) AS original_procedure_name
+  SELECT *
+  FROM ( 
+    SELECT -- Selects all parameters (input and output), but NOT return values
+    p.proname as proname,
+    p.proargnames as proargnames,
+    p.proargmodes as proargmodes,
+    p.prokind as prokind,
+    p.proretset as proretset,
+    p.prorettype as prorettype,
+    p.schema_name as schema_name,
+    (information_schema._pg_expandarray(
+    COALESCE(p.proallargtypes,
+      CASE 
+        WHEN p.prokind = 'f' THEN (CAST(p.proargtypes AS oid[]))
+        ELSE CAST(p.proargtypes AS oid[])
+      END
+    ))).x AS x,
+    (information_schema._pg_expandarray(
+    COALESCE(p.proallargtypes,
+      CASE 
+        WHEN p.prokind = 'f' THEN (CAST(p.proargtypes AS oid[]))
+        ELSE CAST(p.proargtypes AS oid[])
+      END
+    ))).n AS n
+    FROM bbf_proc p) AS t
+  WHERE (t.proargmodes[t.n] in ('i', 'o', 'b') OR t.proargmodes is NULL)
 
-	FROM information_schema.routines proc
-	INNER JOIN sys.babelfish_namespace_ext ext ON proc.specific_schema = ext.nspname
-	INNER JOIN sys.databases d ON d.database_id = ext.dbid
-	INNER JOIN pg_catalog.pg_proc p ON proc.specific_name = p.proname || '_' || p.oid
-	LEFT JOIN sys.spt_datatype_info_table AS t5 
-		JOIN sys.types t6
-		JOIN sys.types t7 ON t6.system_type_id = t7.user_type_id
-		ON t7.name = t5.type_name
-	ON (proc.data_type != 'USER-DEFINED' 
-			AND proc.type_udt_name = t5.pg_type_name 
-			AND t6.name = t7.name)
-		OR (proc.data_type = 'USER-DEFINED' 
-			AND proc.type_udt_name = t6.name),
-	pg_get_function_result(p.oid) AS pg_function_result_type
-	WHERE ext.dbid = sys.db_id() AND has_schema_privilege(proc.specific_schema, 'USAGE'))
+  UNION ALL
 
-UNION ALL 
-
--- Get parameters (if any) for a system stored procedure/function
-(SELECT 
-	CAST((SELECT sys.db_name()) AS sys.sysname) AS PROCEDURE_QUALIFIER,
-	CAST(args.specific_schema AS sys.sysname) AS PROCEDURE_OWNER,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' then CAST(CONCAT(proc.routine_name, ';1') AS sys.nvarchar(134)) 
-		ELSE CAST(CONCAT(proc.routine_name, ';0') AS sys.nvarchar(134)) 
-	END AS PROCEDURE_NAME,
-	
-	CAST(coalesce(args.parameter_name, '') AS sys.sysname) AS COLUMN_NAME,
-	CAST(1 as smallint) AS COLUMN_TYPE,
-	CAST(t5.data_type AS smallint) AS DATA_TYPE,
-	CAST(coalesce(t6.name, '') as sys.sysname) as TYPE_NAME,
-	CAST(t6.precision as int) as PRECISION,
-	CAST(t6.max_length as int) as LENGTH,
-	CAST(t6.scale AS smallint) AS SCALE,
-	CAST(t5.num_prec_radix AS smallint) AS RADIX,
-	CAST(t6.is_nullable as smallint) AS NULLABLE,
-	CAST(NULL AS varchar(254)) AS REMARKS,
-	CAST(NULL AS sys.nvarchar(4000)) AS COLUMN_DEF,
-	CAST(t5.sql_data_type AS smallint) AS SQL_DATA_TYPE,
-	CAST(t5.sql_datetime_sub AS smallint) AS SQL_DATETIME_SUB,
-	CAST(NULL AS int) AS CHAR_OCTET_LENGTH,
-	CAST(args.ordinal_position AS int) AS ORDINAL_POSITION,
-	CAST('YES' AS varchar(254)) AS IS_NULLABLE,
-	CAST(t5.ss_data_type AS sys.tinyint) AS SS_DATA_TYPE,
-	CAST(proc.routine_name AS sys.nvarchar(134)) AS original_procedure_name
-	
-	FROM information_schema.routines proc
-	JOIN information_schema.parameters args
-		on proc.specific_schema = args.specific_schema
-		and proc.specific_name = args.specific_name 
-	LEFT JOIN sys.spt_datatype_info_table AS t5 
-		LEFT JOIN sys.types t6 ON t6.name = t5.type_name
-		ON args.udt_name = t5.pg_type_name OR args.udt_name = t5.type_name
-	WHERE args.specific_schema ='sys' 
-		AND coalesce(args.parameter_name, '') LIKE '@%' 
-		AND (args.specific_name LIKE 'sp\_%' 
-			OR args.specific_name LIKE 'xp\_%'
-			OR args.specific_name LIKE 'dm\_%'
-			OR  args.specific_name LIKE 'fn\_%')
-		AND has_schema_privilege(proc.specific_schema, 'USAGE')
-		
-UNION ALL
-
--- Create row describing return type for a system stored procedure/function
-SELECT 
-	CAST((SELECT sys.db_name()) AS sys.sysname) AS PROCEDURE_QUALIFIER,
-	CAST(proc.specific_schema AS sys.sysname) AS PROCEDURE_OWNER,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' then CAST(CONCAT(proc.routine_name, ';1') AS sys.nvarchar(134)) 
-		ELSE CAST(CONCAT(proc.routine_name, ';0') AS sys.nvarchar(134)) 
-	END AS PROCEDURE_NAME,
-	
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN cast('@TABLE_RETURN_VALUE' AS sys.sysname)
-		ELSE cast('@RETURN_VALUE' AS sys.sysname)
- 	END AS COLUMN_NAME,
-	 
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(3 AS smallint)
-		ELSE CAST(5 AS smallint) 
-	END AS COLUMN_TYPE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN cast((SELECT sql_data_type FROM sys.spt_datatype_info_table WHERE type_name = 'int') AS smallint)
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN cast(null AS smallint)
-		ELSE CAST(t5.data_type AS smallint)
-	END AS DATA_TYPE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST('int' AS sys.sysname) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST('table' AS sys.sysname)
-		ELSE CAST(coalesce(t6.name, '') AS sys.sysname) 
-	END AS TYPE_NAME,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(10 AS int) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS int) 
-		ELSE CAST(t6.precision AS int) 
-	END AS PRECISION,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(4 AS int) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS int) 
-		ELSE CAST(t6.max_length AS int) 
-	END AS LENGTH,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(0 AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint) 
-		ELSE CAST(t6.scale AS smallint) 
-	END AS SCALE,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(10 AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint) 
-		ELSE CAST(t5.num_prec_radix AS smallint) 
-	END AS RADIX,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(0 AS smallint)
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS smallint)
-		ELSE CAST(t6.is_nullable AS smallint)
-	END AS NULLABLE,
-	
-	CASE 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST('Result table returned by table valued function' AS varchar(254)) 
-		ELSE CAST(NULL AS varchar(254)) 
-	END AS REMARKS,
-	
-	CAST(NULL AS sys.nvarchar(4000)) AS COLUMN_DEF,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST((SELECT sql_data_type FROM sys.spt_datatype_info_table WHERE type_name = 'int') AS smallint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(null AS smallint) 
-		ELSE CAST(t5.sql_data_type AS smallint) 
-	END AS SQL_DATA_TYPE,
-	
-	CAST(null AS smallint) AS SQL_DATETIME_SUB,
-	CAST(null AS int) AS CHAR_OCTET_LENGTH,
-	CAST(0 AS int) AS ORDINAL_POSITION,
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST('NO' AS varchar(254)) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST('NO' AS varchar(254))
-		ELSE CAST('YES' AS varchar(254)) 
-	END AS IS_NULLABLE,
-	
-	CASE 
-		WHEN proc.routine_type='PROCEDURE' THEN CAST(56 AS sys.tinyint) 
-		WHEN pg_function_result_type LIKE '%TABLE%' THEN CAST(0 AS sys.tinyint) 
-		ELSE CAST(t5.ss_data_type AS sys.tinyint) 
-	END AS SS_DATA_TYPE,
-	CAST(proc.routine_name AS sys.nvarchar(134)) AS original_procedure_name
-	
-	FROM information_schema.routines proc
-	INNER JOIN pg_catalog.pg_proc p ON proc.specific_name = p.proname || '_' || p.oid
-	LEFT JOIN sys.spt_datatype_info_table AS t5
-		LEFT JOIN sys.types t6 ON t6.name = t5.type_name
-	ON proc.type_udt_name = t5.pg_type_name OR proc.type_udt_name = t5.type_name, 
-	pg_get_function_result(p.oid) AS pg_function_result_type
-	WHERE proc.specific_schema = 'sys' 
-		AND (proc.specific_name LIKE 'sp\_%' 
-			OR proc.specific_name LIKE 'xp\_%' 
-			OR proc.specific_name LIKE 'dm\_%'
-			OR  proc.specific_name LIKE 'fn\_%')
-		AND has_schema_privilege(proc.specific_schema, 'USAGE')
-	);	
+  SELECT -- Selects all return values (this is because inline-table functions could cause duplicate outputs)
+  p.proname as proname,
+  p.proargnames as proargnames,
+  p.proargmodes as proargmodes,
+  p.prokind as prokind,
+  p.proretset as proretset,
+  p.prorettype as prorettype,
+  p.schema_name as schema_name,
+  p.prorettype AS x, 
+  NULL AS n -- null value indicates that we are retrieving the return values of the proc/func
+  FROM bbf_proc p
+) ss
+LEFT JOIN sys.types st ON ss.x = st.user_type_id -- left joined because return type of table-valued functions may not have an entry in sys.types
+-- Because spt_datatype_info_table does contain user-defind types and their names,
+-- the join below allows us to retrieve the name of the base type of the user-defined type
+LEFT JOIN sys.spt_datatype_info_table sdit ON sdit.type_name = sys.translate_pg_type_to_tsql(st.system_type_id);
 GRANT SELECT ON sys.sp_sproc_columns_view TO PUBLIC;
+
 
 CREATE OR REPLACE PROCEDURE sys.sp_sproc_columns(
 	"@procedure_name" sys.nvarchar(390) = '%',
@@ -2818,7 +2807,7 @@ AS $$
 	SELECT @procedure_name = LOWER(COALESCE(@procedure_name, ''))
 	SELECT @procedure_owner = LOWER(COALESCE(@procedure_owner, ''))
 	SELECT @procedure_qualifier = LOWER(COALESCE(@procedure_qualifier, ''))
-	SELECT @column_name = LOWER(COALESCE(@column_Name, ''))
+	SELECT @column_name = LOWER(COALESCE(@column_name, ''))
 BEGIN 
 	IF (@procedure_qualifier != '' AND (SELECT LOWER(sys.db_name())) != @procedure_qualifier)
 		BEGIN
@@ -2849,7 +2838,7 @@ BEGIN
 			FROM sys.sp_sproc_columns_view
 			WHERE (@procedure_name = '' OR original_procedure_name LIKE @procedure_name)
 				AND (@procedure_owner = '' OR procedure_owner LIKE @procedure_owner)
-				AND (@column_name = '' OR column_name  LIKE @column_name)
+				AND (@column_name = '' OR column_name LIKE @column_name)
 				AND (@procedure_qualifier = '' OR procedure_qualifier = @procedure_qualifier)
 			ORDER BY procedure_qualifier, procedure_owner, procedure_name, ordinal_position;
 		END

@@ -24,7 +24,7 @@
 #define DATABASE_DEFAULT "database_default"
 #define CATALOG_DEFAULT "catalog_default"
 
-collation_callbacks collation_callbacks_var = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+collation_callbacks collation_callbacks_var = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 /* Cached values derived from server_collation_name */
 static int server_collation_collidx = NOT_FOUND;
@@ -36,7 +36,7 @@ static bool db_collation_is_CI_AS = true;
  * and babelfishpg_tsql.default_locale.
  * We only need to lookup and store once because they can not be changed once babelfish db is initialised.
  */
-static const char *server_collation_name = NULL;
+static char *server_collation_name = NULL;
 static const char *default_locale = NULL;
 
 /* Hash tables to help backward searching (from OID to Persist ID) */
@@ -455,10 +455,6 @@ init_server_collation_name(void)
 			MemoryContextSwitchTo(oldContext);
 		}
 	}
-
-	/* babelfishpg_tsql.server_collation_name should not be changed once babelfish db is initialised. */
-	Assert(!server_collation_name || strcmp(server_collation_name, GetConfigOption("babelfishpg_tsql.server_collation_name", true, false)) == 0);
-
 	return;
 }
 
@@ -543,38 +539,21 @@ find_any_collation(const char *collation_name, bool check_for_server_collation_n
 }
 
 /*
- * translate_collation - Returns index of babelfish collation corresponding to supplied collation_name
+ * translate_collation_utility - utility to find index of babelfish collation corresponding to supplied collation_name
  * by looking into coll_translations array or returns NOT_FOUND.
  */
-int
-translate_collation(const char *collname, bool check_for_server_collation_name_guc)
+static int
+translate_collation_utility(const char *collname)
 {
 	int first = 0;
 	int last = TOTAL_COLL_TRANSLATION_COUNT - 1;
 	int middle = 25; /* optimization: usually it's the default collation (first + last) / 2; */
-	int compare;
-	char *collation_name = NULL;
 	int idx = NOT_FOUND;
-
-	/* Special case handling for database_default and catalog_default collations which should be translated to server_collation_name. */
-	if (!check_for_server_collation_name_guc && (pg_strcasecmp(collname, DATABASE_DEFAULT) == 0 || pg_strcasecmp(collname, CATALOG_DEFAULT) == 0))
-	{
-		init_server_collation_name();
-		if (server_collation_name)
-			collation_name = pstrdup(server_collation_name);
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("invalid setting detected for babelfishpg_tsql.server_collation_name")));
-	}
-	else
-	{
-		collation_name = pstrdup(collname);
-	}
+	int compare;
 
 	while (first <= last)
 	{
-		compare = pg_strcasecmp(coll_translations[middle].from_collname, collation_name);
+		compare = pg_strcasecmp(coll_translations[middle].from_collname, collname);
 		if (compare < 0)
 			first = middle + 1;
 		else if (compare == 0)
@@ -587,10 +566,38 @@ translate_collation(const char *collname, bool check_for_server_collation_name_g
 
 		middle = (first + last) / 2;
 	}
-
-	if (collation_name)
-		pfree(collation_name);
-
+	return idx;
+}
+/*
+ * translate_collation - Returns index of babelfish collation corresponding to supplied collation_name
+ * by looking into coll_translations array or returns NOT_FOUND.
+ * Here, we handle DATABASE_DEFAULT and CATALOG_DEFAULT somewhat differently. If we encounter such collation
+ * then we have to return index of server_collation_name setting either by translating server_collation_name to
+ * actual collation or by looking into coll_infos table through find_collation().
+ */
+int
+translate_collation(const char *collname, bool check_for_server_collation_name_guc)
+{
+	int idx = NOT_FOUND;
+	/* Special case handling for database_default and catalog_default collations which should be translated to server_collation_name. */
+	if (!check_for_server_collation_name_guc && (pg_strcasecmp(collname, DATABASE_DEFAULT) == 0 || pg_strcasecmp(collname, CATALOG_DEFAULT) == 0))
+	{
+		init_server_collation_name();
+		if (server_collation_name)
+		{
+			idx = translate_collation_utility(server_collation_name);
+			if (idx == NOT_FOUND)
+				idx = find_collation(server_collation_name);
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("invalid setting detected for babelfishpg_tsql.server_collation_name")));
+	}
+	else
+	{
+		idx = translate_collation_utility(collname);
+	}
 	return idx;
 }
 
@@ -701,8 +708,8 @@ init_collid_trans_tab_internal(void)
 		if (0 == strncmp(coll_infos[i].collname, "bbf_unicode_general", strlen("bbf_unicode_general")))
 		{
 			init_default_locale();
-
 			locale = pstrdup(default_locale);
+
 			atsign = strstr(locale, "@");
 			if (atsign != NULL)
 				*atsign = '\0';
@@ -718,7 +725,6 @@ init_collid_trans_tab_internal(void)
 			if (locale)
 				pfree(locale);
 		}
-
 		if (OidIsValid(coll_infos[i].oid))
 		{
 			entry = hash_search(ht_oid2collid, &coll_infos[i].oid, HASH_ENTER, NULL);
@@ -870,9 +876,18 @@ lookup_collation_table(Oid coll_oid)
 	 */
 	if (!found)
 	{
+		int collidx;
+
 		coll_info invalid;
 		invalid.oid = InvalidOid;
-		invalid.enc = PG_UTF8;
+
+		collidx = get_server_collation_collidx();
+		if (collidx == NOT_FOUND)
+			ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("Encoding corresponding to default server collation could not be found.")));
+		else
+			invalid.enc = coll_infos[collidx].enc;
 		elog(DEBUG2, "collation oid %d not found, using default collation", coll_oid);
 		return invalid;
 	}
@@ -1004,12 +1019,44 @@ collation_list_internal(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 }
 
+static Oid
+get_collation_oid_internal(char *collation_name)
+{
+	Oid nspoid;
+	Oid collation_oid;
+	int collidx;
+	const char *collname;
+
+	if (!collation_name)
+		return DEFAULT_COLLATION_OID;
+
+	/* The collation_name is permitted to be the name of a sql
+	 * or windows collation that is translated into a bbf collation.
+	 * If that's what it is then get the translated name.
+	 */
+	if (NOT_FOUND != (collidx = translate_collation(collation_name, false)))
+		collname = coll_infos[collidx].collname;
+	else
+		collname = collation_name;
+
+	nspoid = get_namespace_oid("sys", false);
+	collation_oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
+					 PointerGetDatum(collname),
+					 Int32GetDatum(-1),
+					 ObjectIdGetDatum(nspoid));
+
+	if (!OidIsValid(collation_oid))
+		collation_oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
+								PointerGetDatum(collname),
+								Int32GetDatum(COLL_DEFAULT_ENCODING),
+								ObjectIdGetDatum(nspoid));
+
+	return collation_oid;
+}
+
 Oid
 get_server_collation_oid_internal(bool missingOk)
 {
-	Oid nspoid;
-	int collidx;
-	const char *collname = NULL;
 
 	if (OidIsValid(server_collation_oid))
 		return server_collation_oid;
@@ -1019,26 +1066,7 @@ get_server_collation_oid_internal(bool missingOk)
 	if (server_collation_name == NULL)
 		return DEFAULT_COLLATION_OID;
 
-	/* The server_collation_name is permitted to be the name of a sql
-	 * or windows collation that is translated into a bbf collation.
-	 * If that's what it is then get the translated name.
-	 */
-	if (NOT_FOUND != (collidx = translate_collation(server_collation_name, false)))
-		collname = coll_infos[collidx].collname;
-	else
-		collname = server_collation_name;
-
-	nspoid = get_namespace_oid("sys", false);
-	server_collation_oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
-					 PointerGetDatum(collname),
-					 Int32GetDatum(-1),
-					 ObjectIdGetDatum(nspoid));
-
-	if (!OidIsValid(server_collation_oid))
-		server_collation_oid = GetSysCacheOid3(COLLNAMEENCNSP, Anum_pg_collation_oid,
-								PointerGetDatum(collname),
-								Int32GetDatum(COLL_DEFAULT_ENCODING),
-								ObjectIdGetDatum(nspoid));
+	server_collation_oid = get_collation_oid_internal(server_collation_name);
 
 	if (!OidIsValid(server_collation_oid))
 	{
@@ -1065,7 +1093,6 @@ get_server_collation_oid_internal(bool missingOk)
 
 Oid BABELFISH_CLUSTER_COLLATION_OID()
 {
-
 	if (sql_dialect == SQL_DIALECT_TSQL)
 	{
 		get_server_collation_oid_internal(false); /* set and cache server_collation_oid */
@@ -1113,6 +1140,22 @@ bool collation_is_CI_AS(Oid colloid)
 		return true;
 
 	return false;
+}
+
+bool has_ilike_node(Node *expr)
+{	
+	OpExpr	 *op;
+	Assert(IsA(expr, OpExpr));
+	
+	op = (OpExpr *) expr;
+	for(int i = 0; i < TOTAL_LIKE_OP_COUNT; i++)
+	{
+		if(strcmp(get_opname(op->opno), like_ilike_table[i].ilike_op_name) == 0)
+		{
+			return true;
+		}
+	}
+	return false;	
 }
 
 Datum
@@ -1213,11 +1256,12 @@ tdscollationproperty_helper(const char *collationname, const char *property)
 			 *	Below code converts ret into 5 bytes
 			 */
 			int maxlen = 5;
-			bytea *bytea_data = (bytea *) palloc(maxlen + VARHDRSZ);
-			SET_VARSIZE(bytea_data, maxlen + VARHDRSZ);
-			char *rp = VARDATA(bytea_data);
+			char *rp;
 			bytea        *result;
 			svhdr_3B_t   *svhdr;
+			bytea *bytea_data = (bytea *) palloc(maxlen + VARHDRSZ);
+			SET_VARSIZE(bytea_data, maxlen + VARHDRSZ);
+			rp = VARDATA(bytea_data);
 
 			memcpy(rp, (char *) &ret , maxlen);
 
@@ -1275,13 +1319,13 @@ void BabelfishPreCreateCollation_hook(
 	const char *collversion
 	)
 {
+	const char *collcollate = *pCollcollate;
+	const char *collctype = *pCollctype;
+	
 	/* This hook should only be called when dialect is tsql. */
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
-
-	const char *collcollate = *pCollcollate;
-	const char *collctype = *pCollctype;
-
+	
 	if (NULL != prev_PreCreateCollation_hook)
 	{
 		(*prev_PreCreateCollation_hook)(collprovider,
@@ -1351,10 +1395,81 @@ get_collation_callbacks(void)
 		collation_callbacks_var.is_server_collation_CI_AS = &is_server_collation_CI_AS;
 		collation_callbacks_var.is_valid_server_collation_name = &is_valid_server_collation_name;
 		collation_callbacks_var.find_locale = &find_locale;
-		collation_callbacks_var.EncodingConversion = &server_to_any;
+		collation_callbacks_var.EncodingConversion = &encoding_conv_util;
 		collation_callbacks_var.get_oid_from_collidx_internal = &get_oid_from_collidx;
 		collation_callbacks_var.find_cs_as_collation_internal = &find_cs_as_collation;
 		collation_callbacks_var.find_collation_internal = &find_collation;
+		collation_callbacks_var.has_ilike_node = &has_ilike_node;
 	}
 	return &collation_callbacks_var;
+}
+
+/*
+ * babelfish_define_type_default_collation - would be used to update default collation of Babelfish data types
+ * to correct tsql collation.
+ */
+Oid
+babelfish_define_type_default_collation(Oid typeNamespace)
+{
+	const char *babelfish_dump_restore = GetConfigOption("babelfishpg_tsql.dump_restore", true, false);
+
+	/* We should only override the default collation for Babelfish data types. */
+	if (strcmp(get_namespace_name(typeNamespace), "sys") != 0)
+		return DEFAULT_COLLATION_OID;
+
+	/* 
+	 * If upgrade is going on then we should use oid corresponding to 
+	 * babelfishpg_tsql.restored_server_collation_name.
+	 */
+	if ((babelfish_dump_restore && 
+		 strncmp(babelfish_dump_restore, "on", 2) == 0) &&
+		 babelfish_restored_server_collation_name)
+		return get_collation_oid_internal(babelfish_restored_server_collation_name);
+
+	get_server_collation_oid_internal(false); /* set and cache server_collation_oid */
+
+	Assert(OidIsValid(server_collation_oid));
+
+	return server_collation_oid;
+}
+
+PG_FUNCTION_INFO_V1(get_babel_server_collation_oid);
+
+Datum
+get_babel_server_collation_oid(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_OID(get_server_collation_oid_internal(false));
+}
+
+PG_FUNCTION_INFO_V1(babelfish_update_server_collation_name);
+
+/*
+ * babelfish_update_server_collation_name - corresponding to sys.babelfish_update_server_collation_name() function
+ * which would be available and strictly be used during 1.x to 2.3 upgrade.
+ */
+Datum
+babelfish_update_server_collation_name(PG_FUNCTION_ARGS)
+{
+	MemoryContext oldContext;
+	/* If babelfish_restored_server_collation_name is set then use it. */
+	if (babelfish_restored_server_collation_name == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("Invalid use of function babelfish_update_server_collation_name is detected.")));
+	}
+
+	if (!is_valid_server_collation_name(babelfish_restored_server_collation_name))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("Invalid value of babelfishpg_tsql.restored_server_collation_name GUC is detected.")));
+	}
+
+	oldContext = MemoryContextSwitchTo(TopMemoryContext);
+	if (server_collation_name)
+		pfree(server_collation_name);
+	server_collation_name = pstrdup(babelfish_restored_server_collation_name);
+	MemoryContextSwitchTo(oldContext);
+	PG_RETURN_VOID();
 }

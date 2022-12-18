@@ -445,6 +445,11 @@ SetTvpRowData(ParameterToken temp, const StringInfo message, uint64_t *offset)
 								 errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
 									 "Table-valued parameter %d (\"%s\"), row %d, column %d: Data type 0x%02X has an invalid data length or metadata length.",
 									 temp->paramOrdinal + 1, temp->paramMeta.colName.data, temp->tvpInfo->rowCount, i + 1, colmetadata[i].columnTdsType)));
+
+					/* Check if rowData->columnValues[i].data has enough length allocated. */
+					if (rowData->columnValues[i].len > rowData->columnValues[i].maxlen)
+						enlargeStringInfo(&rowData->columnValues[i], rowData->columnValues[i].len);
+
 					memcpy(rowData->columnValues[i].data, &messageData[*offset], rowData->columnValues[i].len);
 					*offset += rowData->columnValues[i].len;
 				}
@@ -462,6 +467,7 @@ SetTvpRowData(ParameterToken temp, const StringInfo message, uint64_t *offset)
 					 temp->paramOrdinal + 1, temp->paramMeta.colName.data, temp->tvpInfo->rowCount, temp->tvpInfo->colCount, temp->type)));
 	(*offset)++;
 }
+
 static inline void
 SetColMetadataForTvp(ParameterToken temp,const StringInfo message, uint64_t *offset)
 {
@@ -471,8 +477,9 @@ SetColMetadataForTvp(ParameterToken temp,const StringInfo message, uint64_t *off
 	char *tempString;
 	int i = 0;
 	char *messageData = message->data;
+	char *db_name =  pltsql_plugin_handler_ptr->get_cur_db_name();
+	char *physical_schema = NULL;
 	StringInfo tempStringInfo = palloc( sizeof(StringInfoData));
-	temp->tvpInfo->tvpTypeName = " ";
 
 	/* Database-Name.Schema-Name.TableType-Name */
 	for(; i < 3; i++)
@@ -497,8 +504,19 @@ SetColMetadataForTvp(ParameterToken temp,const StringInfo message, uint64_t *off
 
 			*offset +=  len * 2;
 			temp->len += len;
+			
+			if(i==1)
+				physical_schema = pltsql_plugin_handler_ptr->get_physical_schema_name(db_name,tempStringInfo->data);
+			/* if schema name is specified */
+			else if(physical_schema)
+			{
+				temp->tvpInfo->tvpTypeName = psprintf("%s.%s", physical_schema, tempStringInfo->data);
+				pfree(physical_schema);
+			}
+			/* if schema name not specified */
+			else
+				temp->tvpInfo->tvpTypeName = tempStringInfo->data;
 
-			temp->tvpInfo->tvpTypeName = psprintf("%s.%s", temp->tvpInfo->tvpTypeName, tempStringInfo->data);
 		}
 		else if (i == 2)
 		{
@@ -510,10 +528,10 @@ SetColMetadataForTvp(ParameterToken temp,const StringInfo message, uint64_t *off
 						 temp->paramOrdinal + 1)));
 		}
 	}
+	pfree(db_name);
+
 	temp->tvpInfo->tableName = tempStringInfo->data;
 	i = 0;
-
-	temp->tvpInfo->tvpTypeName += 2;
 
 	memcpy(&isTvpNull, &messageData[*offset], sizeof(uint16));
 	if (isTvpNull != TVP_NULL_TOKEN)

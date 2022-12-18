@@ -1,3 +1,4 @@
+-- sla 170000
 -- psql
 ALTER SYSTEM SET babelfishpg_tsql.allow_antlr_to_unsupported_grammar_for_testing = true;
 SELECT pg_reload_conf();
@@ -16,7 +17,13 @@ go
 
 -- psql
 DROP USER IF EXISTS foo;
+go
+
+SET enable_drop_babelfish_role = true;
+go
 DROP USER IF EXISTS su_user;
+go
+SET enable_drop_babelfish_role = false;
 go
 
 -- Create Login through tsql
@@ -448,6 +455,10 @@ GO
 
 -- psql
 ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';
+GO
+-- Wait to sync with another session
+SELECT pg_sleep(1);
+GO
 SELECT pg_reload_conf();
 GO
 
@@ -692,6 +703,10 @@ GO
 
 -- psql
 ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'single-db';
+GO
+-- Wait to sync with another session
+SELECT pg_sleep(1);
+GO
 ALTER SYSTEM SET babelfishpg_tsql.allow_antlr_to_unsupported_grammar_for_testing = false;
 SELECT pg_reload_conf();
 GO

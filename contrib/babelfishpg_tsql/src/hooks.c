@@ -8,18 +8,25 @@
 #include "access/relation.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_attrdef_d.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_trigger.h"
+#include "catalog/pg_trigger_d.h"
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/explain.h"
 #include "commands/tablecmds.h"
 #include "commands/view.h"
+#include "common/logging.h"
 #include "funcapi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_coerce.h"
@@ -39,11 +46,11 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+#include "utils/ruleutils.h"
 #include "utils/syscache.h"
 #include "utils/numeric.h"
 #include <math.h>
 
-#include "pltsql.h"
 #include "backend_parser/scanner.h"
 #include "hooks.h"
 #include "pltsql.h"
@@ -51,16 +58,31 @@
 #include "catalog.h"
 #include "rolecmds.h"
 #include "session.h"
+#include "multidb.h"
+
 
 #define TDS_NUMERIC_MAX_PRECISION	38
-
+extern bool babelfish_dump_restore;
+extern char *babelfish_dump_restore_min_oid;
 extern bool pltsql_quoted_identifier;
+extern bool pltsql_ansi_nulls;
 extern bool is_tsql_rowversion_or_timestamp_datatype(Oid oid);
 
 /*****************************************
  * 			Catalog Hooks
  *****************************************/
 IsExtendedCatalogHookType PrevIsExtendedCatalogHook = NULL;
+static bool PlTsqlMatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
+							     bool include_out_arguments, int pronargs,
+							     int **argnumbers, List **defaults);
+static bool match_pltsql_func_call(HeapTuple proctup, int nargs, List *argnames,
+								   bool include_out_arguments, int **argnumbers,
+								   List **defaults, bool expand_defaults, bool expand_variadic,
+								   bool *use_defaults, bool *any_special,
+								   bool *variadic, Oid *va_elem_type);
+static ObjectAddress get_trigger_object_address(List *object, Relation *relp, bool missing_ok,bool object_from_input);
+Oid get_tsql_trigger_oid(List *object, const char *tsql_trigger_name,bool object_from_input);
+static Node* transform_like_in_add_constraint (Node* node);
 
 /*****************************************
  * 			Analyzer Hooks
@@ -83,16 +105,21 @@ static void modify_insert_stmt(InsertStmt *stmt, Oid relid);
  * 			Commands Hooks
  *****************************************/
 static int find_attr_by_name_from_column_def_list(const char *attributeName, List *schema);
+static void pltsql_drop_func_default_positions(Oid objectId);
 
 /*****************************************
  * 			Utility Hooks
  *****************************************/
 static void pltsql_report_proc_not_found_error(List *names, List *argnames, int nargs, ParseState *pstate, int location, bool proc_call);
 extern PLtsql_execstate *get_outermost_tsql_estate(int *nestlevel);
+extern PLtsql_execstate *get_current_tsql_estate();
 static void pltsql_store_view_definition(const char *queryString, ObjectAddress address);
 static void pltsql_drop_view_definition(Oid objectId);
 static void preserve_view_constraints_from_base_table(ColumnDef  *col, Oid tableOid, AttrNumber colId);
 static bool pltsql_detect_numeric_overflow(int weight, int dscale, int first_block, int numeric_base);
+static void insert_pltsql_function_defaults(HeapTuple func_tuple, List *defaults, Node **argarray);
+static int print_pltsql_function_arguments(StringInfo buf, HeapTuple proctup, bool print_table_args, bool print_defaults);
+static void pltsql_GetNewObjectId(VariableCache variableCache);
 /*****************************************
  * 			Executor Hooks
  *****************************************/
@@ -116,6 +143,11 @@ static void bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid obj
 static void revoke_func_permission_from_public(Oid objectId);
 static char *gen_func_arg_list(Oid objectId);
 
+/*****************************************
+ * 			Planner Hook
+ *****************************************/
+static PlannedStmt * pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams);
+
 /* Save hook values in case of unload */
 static core_yylex_hook_type prev_core_yylex_hook = NULL;
 static pre_transform_returning_hook_type prev_pre_transform_returning_hook = NULL;
@@ -123,6 +155,7 @@ static pre_transform_insert_hook_type prev_pre_transform_insert_hook = NULL;
 static post_transform_insert_row_hook_type prev_post_transform_insert_row_hook = NULL;
 static pre_transform_target_entry_hook_type prev_pre_transform_target_entry_hook = NULL;
 static tle_name_comparison_hook_type prev_tle_name_comparison_hook = NULL;
+static get_trigger_object_address_hook_type prev_get_trigger_object_address_hook = NULL;
 static resolve_target_list_unknowns_hook_type prev_resolve_target_list_unknowns_hook = NULL;
 static find_attr_by_name_from_column_def_list_hook_type prev_find_attr_by_name_from_column_def_list_hook = NULL;
 static find_attr_by_name_from_relation_hook_type prev_find_attr_by_name_from_relation_hook = NULL;
@@ -134,8 +167,15 @@ static ExecutorStart_hook_type prev_ExecutorStart = NULL;
 static ExecutorRun_hook_type prev_ExecutorRun = NULL;
 static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
+static GetNewObjectId_hook_type prev_GetNewObjectId_hook = NULL;
 static inherit_view_constraints_from_table_hook_type prev_inherit_view_constraints_from_table = NULL;
 static detect_numeric_overflow_hook_type prev_detect_numeric_overflow_hook = NULL;
+static match_pltsql_func_call_hook_type prev_match_pltsql_func_call_hook = NULL;
+static insert_pltsql_function_defaults_hook_type prev_insert_pltsql_function_defaults_hook = NULL;
+static print_pltsql_function_arguments_hook_type prev_print_pltsql_function_arguments_hook = NULL;
+static planner_hook_type prev_planner_hook = NULL;
+static transform_check_constraint_expr_hook_type prev_transform_check_constraint_expr_hook = NULL;
+
 /*****************************************
  * 			Install / Uninstall
  *****************************************/
@@ -174,6 +214,9 @@ InstallExtendedHooks(void)
 	prev_tle_name_comparison_hook = tle_name_comparison_hook;
 	tle_name_comparison_hook = tle_name_comparison;
 
+	prev_get_trigger_object_address_hook = get_trigger_object_address_hook;
+	get_trigger_object_address_hook = get_trigger_object_address;
+
 	prev_resolve_target_list_unknowns_hook = resolve_target_list_unknowns_hook;
 	resolve_target_list_unknowns_hook = resolve_target_list_unknowns;
 
@@ -207,12 +250,29 @@ InstallExtendedHooks(void)
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = pltsql_ExecutorEnd;
 
+	prev_GetNewObjectId_hook = GetNewObjectId_hook;
+	GetNewObjectId_hook = pltsql_GetNewObjectId;
+
 	prev_inherit_view_constraints_from_table = inherit_view_constraints_from_table_hook;
 	inherit_view_constraints_from_table_hook = preserve_view_constraints_from_base_table;
 	TriggerRecuresiveCheck_hook = plsql_TriggerRecursiveCheck;
 
 	prev_detect_numeric_overflow_hook = detect_numeric_overflow_hook;
 	detect_numeric_overflow_hook = pltsql_detect_numeric_overflow;
+
+	prev_match_pltsql_func_call_hook = match_pltsql_func_call_hook;
+	match_pltsql_func_call_hook = match_pltsql_func_call;
+
+	prev_insert_pltsql_function_defaults_hook = insert_pltsql_function_defaults_hook;
+	insert_pltsql_function_defaults_hook = insert_pltsql_function_defaults;
+
+	prev_print_pltsql_function_arguments_hook = print_pltsql_function_arguments_hook;
+	print_pltsql_function_arguments_hook = print_pltsql_function_arguments;
+
+	prev_planner_hook = planner_hook;
+	planner_hook = pltsql_planner_hook;
+	prev_transform_check_constraint_expr_hook = transform_check_constraint_expr_hook;
+	transform_check_constraint_expr_hook = transform_like_in_add_constraint;
 }
 
 void
@@ -232,6 +292,7 @@ UninstallExtendedHooks(void)
 	post_transform_table_definition_hook = NULL;
 	pre_transform_target_entry_hook = prev_pre_transform_target_entry_hook;
 	tle_name_comparison_hook = prev_tle_name_comparison_hook;
+	get_trigger_object_address_hook = prev_get_trigger_object_address_hook;
 	resolve_target_list_unknowns_hook = prev_resolve_target_list_unknowns_hook;
 	find_attr_by_name_from_column_def_list_hook = prev_find_attr_by_name_from_column_def_list_hook;
 	find_attr_by_name_from_relation_hook = prev_find_attr_by_name_from_relation_hook;
@@ -243,8 +304,14 @@ UninstallExtendedHooks(void)
 	ExecutorRun_hook = prev_ExecutorRun;
 	ExecutorFinish_hook = prev_ExecutorFinish;
 	ExecutorEnd_hook = prev_ExecutorEnd;
+	GetNewObjectId_hook = prev_GetNewObjectId_hook;
 	inherit_view_constraints_from_table_hook = prev_inherit_view_constraints_from_table;
 	detect_numeric_overflow_hook = prev_detect_numeric_overflow_hook;
+	match_pltsql_func_call_hook = prev_match_pltsql_func_call_hook;
+	insert_pltsql_function_defaults_hook = prev_insert_pltsql_function_defaults_hook;
+	print_pltsql_function_arguments_hook = prev_print_pltsql_function_arguments_hook;
+	planner_hook = prev_planner_hook;
+	transform_check_constraint_expr_hook = prev_transform_check_constraint_expr_hook;
 }
 
 /*****************************************
@@ -252,9 +319,32 @@ UninstallExtendedHooks(void)
  *****************************************/
 
 static void
+pltsql_GetNewObjectId(VariableCache variableCache)
+{
+	Oid minOid;
+
+	if (!babelfish_dump_restore || !babelfish_dump_restore_min_oid)
+		return;
+
+	minOid = atooid(babelfish_dump_restore_min_oid);
+	Assert(OidIsValid(minOid));
+	if (ShmemVariableCache->nextOid >= minOid + 1)
+		return;
+
+	ShmemVariableCache->nextOid = minOid + 1;
+	ShmemVariableCache->oidCount = 0;
+}
+
+static void
 pltsql_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	int ef = pltsql_explain_only ? EXEC_FLAG_EXPLAIN_ONLY : eflags;
+	if (pltsql_explain_analyze)
+	{
+		PLtsql_execstate *estate = get_current_tsql_estate();
+		Assert(estate != NULL);
+		INSTR_TIME_SET_CURRENT(estate->execution_start);
+	}
 	if (is_explain_analyze_mode())
 	{
 		if (pltsql_explain_timing)
@@ -366,13 +456,14 @@ pltsql_ExecutorEnd(QueryDesc *queryDesc)
 static bool
 plsql_TriggerRecursiveCheck(ResultRelInfo *resultRelInfo)
 {
+	int i;
+	PLExecStateCallStack * cur;
+	PLtsql_execstate *estate;
+
 	if (resultRelInfo->ri_TrigDesc == NULL)
 		return false;
 	if (pltsql_recursive_triggers)
 		return false;
-	int i;
-	PLExecStateCallStack * cur;
-	PLtsql_execstate *estate;
 	cur = exec_state_call_stack;
 	while (cur != NULL){
 		estate = cur->estate;
@@ -805,18 +896,24 @@ pltsql_post_transform_column_definition(ParseState *pstate, RangeVar* relation, 
 }
 
 extern const char *ATTOPTION_BBF_ORIGINAL_TABLE_NAME;
+extern const char *ATTOPTION_BBF_TABLE_CREATE_DATE;
 
 static void
 pltsql_post_transform_table_definition(ParseState *pstate, RangeVar* relation, char *relname, List **alist)
 {
-	/* add "ALTER TABLE SET (bbf_original_table_name=<original_name>)" to alist so that original_name will be stored in pg_class.reloptions */
 	AlterTableStmt *stmt;
-	AlterTableCmd *cmd;
+	AlterTableCmd *cmd_orig_name;
+	AlterTableCmd *cmd_crdate;
+	char *curr_datetime;
 
 	/* To get original column name, utilize location of relation and query string. */
 	char *table_name_start, *original_name, *temp;
 
-	table_name_start = pstate->p_sourcetext + relation->location;
+	/* Skip during restore since reloptions are also dumped using separate ALTER command */
+	if (babelfish_dump_restore)
+		return;
+
+	table_name_start = (char *) pstate->p_sourcetext + relation->location;
 
 	/*
 	 * Could be the case that the fully qualified name is included,
@@ -841,23 +938,31 @@ pltsql_post_transform_table_definition(ParseState *pstate, RangeVar* relation, c
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("can't extract original table name")));
 
-	/* Only store if there's a difference, and if the difference is only in capitalization */
-	if (strncmp(relname, original_name, strlen(relname)) == 0 || strncasecmp(relname, original_name, strlen(relname)) != 0)
-	{
-		return;
-	}
-
-	cmd = makeNode(AlterTableCmd);
-	cmd->subtype = AT_SetRelOptions;
-	cmd->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(original_name)), -1));
-	cmd->behavior = DROP_RESTRICT;
-	cmd->missing_ok = false;
-
 	stmt = makeNode(AlterTableStmt);
 	stmt->relation = relation;
 	stmt->cmds = NIL;
 	stmt->objtype = OBJECT_TABLE;
-	stmt->cmds = lappend(stmt->cmds, cmd);
+
+	/* Only store original_name if there's a difference, and if the difference is only in capitalization */
+	if (strncmp(relname, original_name, strlen(relname)) != 0 && strncasecmp(relname, original_name, strlen(relname)) == 0)
+	{
+		/* add "ALTER TABLE SET (bbf_original_table_name=<original_name>)" to alist so that original_name will be stored in pg_class.reloptions */
+		cmd_orig_name = makeNode(AlterTableCmd);
+		cmd_orig_name->subtype = AT_SetRelOptions;
+		cmd_orig_name->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(original_name)), -1));
+		cmd_orig_name->behavior = DROP_RESTRICT;
+		cmd_orig_name->missing_ok = false;
+		stmt->cmds = lappend(stmt->cmds, cmd_orig_name);
+	}
+
+	/* add "ALTER TABLE SET (bbf_rel_create_date=<datetime>)" to alist so that create_date will be stored in pg_class.reloptions */
+	curr_datetime = DatumGetCString(DirectFunctionCall1(timestamp_out, TimestampGetDatum(GetSQLLocalTimestamp(3))));
+	cmd_crdate = makeNode(AlterTableCmd);
+	cmd_crdate->subtype = AT_SetRelOptions;
+	cmd_crdate->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_TABLE_CREATE_DATE), (Node *) makeString(pstrdup(curr_datetime)), -1));
+	cmd_crdate->behavior = DROP_RESTRICT;
+	cmd_crdate->missing_ok = false;
+	stmt->cmds = lappend(stmt->cmds, cmd_crdate);
 
 	(*alist) = lappend(*alist, stmt);
 }
@@ -1136,6 +1241,127 @@ tle_name_comparison(const char *tlename, const char *identifier)
 		return (0 == strcmp(tlename, identifier));
 }
 
+Oid
+get_tsql_trigger_oid(List *object, const char *tsql_trigger_name, bool object_from_input){
+	Oid				trigger_rel_oid = InvalidOid;
+	Relation		tgrel;
+	ScanKeyData		key;
+	SysScanDesc 	tgscan;
+	HeapTuple		tuple;
+	Oid				reloid;
+	Relation		relation = NULL;
+	const char		*pg_trigger_physical_schema = NULL;
+	const char 		*cur_physical_schema = NULL;
+	const char		*tsql_trigger_physical_schema = NULL;
+	const char		*tsql_trigger_logical_schema = NULL;
+	List	   		*search_path = fetch_search_path(false);
+
+	if(list_length(object) == 1)
+	{
+		cur_physical_schema = get_namespace_name(linitial_oid(search_path));
+		list_free(search_path);
+	}
+	else
+	{
+		if(object_from_input)
+			tsql_trigger_logical_schema = ((Value *)linitial(object))->val.str;
+		else
+		{
+			tsql_trigger_physical_schema = ((Value *)linitial(object))->val.str;
+			tsql_trigger_logical_schema = get_logical_schema_name(tsql_trigger_physical_schema, true);
+		}
+		cur_physical_schema = get_physical_schema_name(get_cur_db_name(),tsql_trigger_logical_schema);
+	}
+
+	/* 
+	* Get the table name of the trigger from pg_trigger. We know that
+	* trigger names are forced to be unique in the tsql dialect, so we
+	* can rely on searching for trigger name and schema name to find 
+	* the corresponding relation name.
+	*/
+	tgrel = table_open(TriggerRelationId, AccessShareLock);
+	ScanKeyInit(&key,
+					Anum_pg_trigger_tgname,
+					BTEqualStrategyNumber, F_NAMEEQ,
+					CStringGetDatum(tsql_trigger_name));
+
+	tgscan = systable_beginscan(tgrel, TriggerRelidNameIndexId, false,
+									NULL, 1, &key);
+	while (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
+	{
+		Form_pg_trigger pg_trigger = (Form_pg_trigger) GETSTRUCT(tuple);
+		if(!OidIsValid(pg_trigger->tgrelid))
+		{
+			break;
+		}
+		
+		if(namestrcmp(&(pg_trigger->tgname), tsql_trigger_name) == 0){
+			reloid = pg_trigger->tgrelid;
+			relation = RelationIdGetRelation(reloid);
+			pg_trigger_physical_schema = get_namespace_name(get_rel_namespace(pg_trigger->tgrelid));
+			if(strcasecmp(pg_trigger_physical_schema,cur_physical_schema) == 0)
+			{
+				trigger_rel_oid = reloid;
+				RelationClose(relation);
+				break;
+			}
+			RelationClose(relation);
+		}
+	}
+
+	systable_endscan(tgscan);
+	table_close(tgrel, AccessShareLock);
+
+	if (!OidIsValid(trigger_rel_oid))
+	{
+		relation = NULL;		/* department of accident prevention */
+		return InvalidOid;
+	}
+	return trigger_rel_oid;
+}
+
+/*
+* A special case of the get_object_address_relobject() function, specifically
+* for the case of triggers in tsql dialect. We add a pg_trigger lookup to search
+* for the relation that the trigger is associated with, since the relation name
+* is not supplied by the user, and thus not a part of the *object list.
+*/
+static ObjectAddress
+get_trigger_object_address(List *object, Relation *relp, bool missing_ok, bool object_from_input)
+{
+	ObjectAddress 	address;
+	const char 		*depname;
+	Oid 			trigger_rel_oid = InvalidOid;
+
+
+	address.classId = InvalidOid;
+	address.objectId = InvalidOid;
+	address.objectSubId = InvalidAttrNumber;
+		
+	if (sql_dialect != SQL_DIALECT_TSQL)
+	{
+		return address;
+	}
+	/* Extract name of dependent object. */
+	depname = strVal(llast(object));
+
+	if (prev_get_trigger_object_address_hook)
+		return (*prev_get_trigger_object_address_hook)(object,relp,missing_ok,object_from_input);
+
+	trigger_rel_oid = get_tsql_trigger_oid(object,depname,object_from_input);
+
+	if(!OidIsValid(trigger_rel_oid))
+		return address;
+
+	address.classId = TriggerRelationId;
+	address.objectId = get_trigger_oid(trigger_rel_oid, depname, missing_ok);
+	address.objectSubId = 0;
+
+	*relp = RelationIdGetRelation(trigger_rel_oid);
+	RelationClose(*relp);
+	return address;
+}
+
 /* Generate similar error message with SQL Server when function/procedure is not found if possible. */
 void
 pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs, ParseState *pstate, int location, bool proc_call)
@@ -1217,6 +1443,7 @@ pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs,
 			if(!isnull)
 			{
 				Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(tup);
+				HeapTuple bbffunctuple;
 				int pronargs = procform->pronargs;
 				int first_arg_with_default = pronargs - procform->pronargdefaults;
 				int pronallargs;
@@ -1228,7 +1455,10 @@ pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs,
 				char *p_argmodes;
 				char *first_unknown_argname = NULL;
 				bool arggiven[FUNC_MAX_ARGS];
+				bool default_positions_available = false;
+				List *default_positions = NIL;
 				ListCell *lc;
+				char *langname = get_language_name(procform->prolang, true);
 
 				if (nargs > pronargs) /* Too many parameters provided. */
 				{
@@ -1277,13 +1507,76 @@ pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs,
 					if (!match_found && first_unknown_argname == NULL)
 						first_unknown_argname = argname;
 				}
+				
+				if (langname && pg_strcasecmp("pltsql", langname) == 0 && nargs < pronargs)
+				{
+					bbffunctuple = get_bbf_function_tuple_from_proctuple(tup);
+
+					if (HeapTupleIsValid(bbffunctuple))
+					{
+						Datum	arg_default_positions;
+						char	*str;
+
+						/* Fetch default positions */
+						arg_default_positions = SysCacheGetAttr(PROCNSPSIGNATURE,
+																bbffunctuple,
+																Anum_bbf_function_ext_default_positions,
+																&isnull);
+
+						if (!isnull)
+						{
+							str = TextDatumGetCString(arg_default_positions);
+							default_positions = castNode(List, stringToNode(str));
+							lc = list_head(default_positions);
+							default_positions_available = true;
+							pfree(str);
+						}
+						else
+							ReleaseSysCache(bbffunctuple);
+					}
+				}
 
 				/* Traverse arggiven list to check if a non-default parameter is not supplied. */
-				for (pp = numposargs; pp < first_arg_with_default; pp++)
+				for (pp = numposargs; pp < pronargs; pp++)
 				{
 					if (arggiven[pp])
 						continue;
-					else
+
+					/*
+					 * If the positions of default arguments are available then we need
+					 * special handling. Look into default_positions list to find out
+					 * the default expression for pp'th argument.
+					 */
+					if (default_positions_available)
+					{
+						bool has_default = false;
+						
+						/*
+						 * Iterate over argdefaults list to find out the default expression
+						 * for current argument.
+						 */
+						while (lc != NULL)
+						{
+							int position = intVal((Node *) lfirst(lc));
+
+							if (position == pp)
+							{
+								has_default = true;
+								lc = lnext(default_positions, lc);
+								break;
+							}
+							else if (position > pp)
+								break;
+							lc = lnext(default_positions, lc);
+						}
+
+						if (!has_default)
+							ereport(ERROR,
+									(errcode(ERRCODE_UNDEFINED_FUNCTION),
+									 errmsg("%s %s expects parameter \"%s\", which was not supplied.", obj_type, NameListToString(names), p_argnames[pp])),
+									 parser_errposition(pstate, location));
+					}
+					else if (pp < first_arg_with_default)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -1292,7 +1585,7 @@ pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs,
 					}
 				}
 				/* Default arguments are also supplied but parameter name is unknown. */
-				if((nargs > first_arg_with_default) && first_unknown_argname)
+				if(first_unknown_argname)
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -1304,6 +1597,12 @@ pltsql_report_proc_not_found_error(List *names, List *given_argnames, int nargs,
 						(errcode(ERRCODE_UNDEFINED_FUNCTION),
 						 errmsg("The %s %s is found but cannot be used. Possibly due to datatype mismatch and implicit casting is not allowed.", obj_type, NameListToString(names))),
 						 parser_errposition(pstate, location));
+				
+				if (default_positions_available)
+				{
+					ReleaseSysCache(bbffunctuple);
+				}
+				pfree(langname);
 			}
 			else if(nargs > 0) /* proargnames is NULL. Procedure/function has no parameters but arguments are specified. */
 			{
@@ -1373,6 +1672,9 @@ bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int s
 
 	if (access == OAT_DROP && classId == RelationRelationId)
 		pltsql_drop_view_definition(objectId);
+
+	if (access == OAT_DROP && classId == ProcedureRelationId)
+		pltsql_drop_func_default_positions(objectId);
 
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
@@ -1556,7 +1858,8 @@ pltsql_store_view_definition(const char *queryString, ObjectAddress address)
 	Form_pg_class	form_reltup;
 	int16		dbid;
 	uint64		flag_values = 0, flag_validity = 0;
-	char		*physical_schemaname, *logical_schemaname;
+	char		*physical_schemaname;
+	const char  *logical_schemaname;
 
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
@@ -1624,6 +1927,8 @@ pltsql_store_view_definition(const char *queryString, ObjectAddress address)
 	new_record[3] = CStringGetTextDatum(queryString);
 	new_record[4] = UInt64GetDatum(flag_validity);
 	new_record[5] = UInt64GetDatum(flag_values);
+	new_record[6] = TimestampGetDatum(GetSQLLocalTimestamp(3));
+	new_record[7] = TimestampGetDatum(GetSQLLocalTimestamp(3));
 
 	tuple = heap_form_tuple(bbf_view_def_rel_dsc,
 							new_record, new_record_nulls);
@@ -1631,7 +1936,7 @@ pltsql_store_view_definition(const char *queryString, ObjectAddress address)
 	CatalogTupleInsert(bbf_view_def_rel, tuple);
 
 	pfree(physical_schemaname);
-	pfree(logical_schemaname);
+	pfree((char *) logical_schemaname);
 	ReleaseSysCache(reltup);
 	heap_freetuple(tuple);
 	table_close(bbf_view_def_rel, RowExclusiveLock);
@@ -1668,7 +1973,7 @@ pltsql_drop_view_definition(Oid objectId)
 				 form->relnamespace);
 	}
 	dbid = get_dbid_from_physical_schema_name(physical_schemaname, true);
-	logical_schemaname = get_logical_schema_name(physical_schemaname, true);
+	logical_schemaname = (char *) get_logical_schema_name(physical_schemaname, true);
 	objectname = NameStr(form->relname);
 
 	/*
@@ -1736,11 +2041,12 @@ preserve_view_constraints_from_base_table(ColumnDef  *col, Oid tableOid, AttrNum
 bool
 pltsql_detect_numeric_overflow(int weight, int dscale, int first_block, int numeric_base)
 {
+	int partially_filled_numeric_block = 0;
+	int total_digit_count = 0;
+	
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return false;
 
-	int partially_filled_numeric_block = 0;
-	int total_digit_count = 0;
 
 	total_digit_count = (dscale == 0) ? (weight * numeric_base) :
 					    ((weight + 1) * numeric_base);
@@ -1772,4 +2078,908 @@ pltsql_detect_numeric_overflow(int weight, int dscale, int first_block, int nume
 		total_digit_count += (dscale % numeric_base);
 
 	return (total_digit_count > TDS_NUMERIC_MAX_PRECISION);
+}
+
+/*
+ * Stores argument positions of default values of a PL/tsql function to bbf_function_ext catalog
+ */
+void
+pltsql_store_func_default_positions(ObjectAddress address, List *parameters, const char *queryString, int origname_location)
+{
+	Relation	bbf_function_ext_rel;
+	TupleDesc	bbf_function_ext_rel_dsc;
+	Datum		new_record[BBF_FUNCTION_EXT_NUM_COLS];
+	bool		new_record_nulls[BBF_FUNCTION_EXT_NUM_COLS];
+	bool		new_record_replaces[BBF_FUNCTION_EXT_NUM_COLS];
+	HeapTuple	tuple, proctup, oldtup;
+	Form_pg_proc	form_proctup;
+	NameData		*schema_name_NameData;
+	char		*physical_schemaname;
+	char		*func_signature;
+	char		*original_name = NULL;
+	List		*default_positions = NIL;
+	ListCell	*x;
+	int			idx;
+	uint64		flag_values = 0, flag_validity = 0;
+
+	/* Fetch the object details from function */
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(address.objectId));
+	/* Disallow extended catalog lookup during restore */
+	if (!HeapTupleIsValid(proctup) || babelfish_dump_restore)
+		return;
+	form_proctup = (Form_pg_proc) GETSTRUCT(proctup);
+
+	if (!is_pltsql_language_oid(form_proctup->prolang))
+	{
+		ReleaseSysCache(proctup);
+		return;
+	}
+
+	physical_schemaname = get_namespace_name(form_proctup->pronamespace);
+	if (physical_schemaname == NULL)
+	{
+		elog(ERROR,
+				"Could not find physical schemaname for %u",
+				 form_proctup->pronamespace);
+	}
+
+	/*
+	 * Do not store data in case of sys, information_schema_tsql and
+	 * other shared schemas.
+	 */
+	if (is_shared_schema(physical_schemaname))
+	{
+		pfree(physical_schemaname);
+		ReleaseSysCache(proctup);
+		return;
+	}
+
+	func_signature = (char *) get_pltsql_function_signature_internal(NameStr(form_proctup->proname),
+															form_proctup->pronargs,
+															form_proctup->proargtypes.values);
+
+	idx = 0;
+	foreach(x, parameters)
+	{
+		FunctionParameter *fp = (FunctionParameter *) lfirst(x);
+
+		if (fp->defexpr)
+		{
+			default_positions = lappend(default_positions, (Node *) makeInteger(idx));
+		}
+		idx++;
+	}
+
+	if (!OidIsValid(get_bbf_function_ext_idx_oid()))
+	{	
+		pfree(func_signature);
+		pfree(physical_schemaname);
+		ReleaseSysCache(proctup);
+		return;
+	}
+
+	bbf_function_ext_rel = table_open(get_bbf_function_ext_oid(), RowExclusiveLock);
+	bbf_function_ext_rel_dsc = RelationGetDescr(bbf_function_ext_rel);
+
+	MemSet(new_record_nulls, false, sizeof(new_record_nulls));
+	MemSet(new_record_replaces, false, sizeof(new_record_replaces));
+
+	if (origname_location != -1 && queryString)
+	{
+		/* To get original function name, utilize location of original name and query string. */
+		char *func_name_start, *temp;
+		const char *funcname = NameStr(form_proctup->proname);
+
+		func_name_start = (char *) queryString + origname_location;
+
+		/*
+		 * Could be the case that the fully qualified name is included,
+		 * so just find the text after '.' in the identifier.
+		 * We need to be careful as there can be '.' in the function name
+		 * itself, so we will break the loop if current string matches
+		 * with actual funcname.
+		 */
+		temp = strpbrk(func_name_start, ". ");
+		while (temp && temp[0] != ' ' &&
+			strncasecmp(funcname, func_name_start, strlen(funcname)) != 0 &&
+			strncasecmp(funcname, func_name_start + 1, strlen(funcname)) != 0) /* match after skipping delimiter */
+		{
+			temp += 1;
+			func_name_start = temp;
+			temp = strpbrk(func_name_start, ". ");
+		}
+
+		original_name = extract_identifier(func_name_start);
+		if (original_name == NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					errmsg("can't extract original function name.")));
+	}
+
+	/*
+	 * To store certain flag, Set corresponding bit in flag_validity which
+	 * tracks currently supported flag bits and then set/unset flag_values bit
+	 * according to flag settings.
+	 * Used !Transform_null_equals instead of pltsql_ansi_nulls because NULL is
+	 * being inserted in catalog if it is used.
+	 * Currently, Only two flags are supported.
+	 */
+	flag_validity |= FLAG_IS_ANSI_NULLS_ON;
+	if (!Transform_null_equals)
+		flag_values |= FLAG_IS_ANSI_NULLS_ON;
+	flag_validity |= FLAG_USES_QUOTED_IDENTIFIER;
+	if (pltsql_quoted_identifier)
+		flag_values |= FLAG_USES_QUOTED_IDENTIFIER;
+
+	schema_name_NameData = (NameData *) palloc0(NAMEDATALEN);
+	snprintf(schema_name_NameData->data, NAMEDATALEN, "%s", physical_schemaname);
+
+	new_record[Anum_bbf_function_ext_nspname -1] = NameGetDatum(schema_name_NameData);
+	new_record[Anum_bbf_function_ext_funcname -1] = NameGetDatum(&form_proctup->proname);
+	if (original_name)
+		new_record[Anum_bbf_function_ext_orig_name -1] = CStringGetTextDatum(original_name);
+	else
+		new_record_nulls[Anum_bbf_function_ext_orig_name -1] = true; /* TODO: Fill users' original input name */
+	new_record[Anum_bbf_function_ext_funcsignature - 1] = CStringGetTextDatum(func_signature);
+	if (default_positions != NIL)
+		new_record[Anum_bbf_function_ext_default_positions - 1] = CStringGetTextDatum(nodeToString(default_positions));
+	else
+		new_record_nulls[Anum_bbf_function_ext_default_positions - 1] = true;
+	new_record[Anum_bbf_function_ext_flag_validity - 1] = UInt64GetDatum(flag_validity);
+	new_record[Anum_bbf_function_ext_flag_values - 1] = UInt64GetDatum(flag_values);
+	new_record[Anum_bbf_function_ext_create_date - 1] = TimestampGetDatum(GetSQLLocalTimestamp(3));
+	new_record[Anum_bbf_function_ext_modify_date - 1] = TimestampGetDatum(GetSQLLocalTimestamp(3));
+	new_record_replaces[Anum_bbf_function_ext_default_positions - 1] = true;
+
+	oldtup = get_bbf_function_tuple_from_proctuple(proctup);
+
+	if (HeapTupleIsValid(oldtup))
+	{
+		tuple = heap_modify_tuple(oldtup, bbf_function_ext_rel_dsc,
+								  new_record, new_record_nulls,
+								  new_record_replaces);
+		CatalogTupleUpdate(bbf_function_ext_rel, &tuple->t_self, tuple);
+
+		ReleaseSysCache(oldtup);
+	}
+	else
+	{
+		ObjectAddress index;
+		tuple = heap_form_tuple(bbf_function_ext_rel_dsc,
+								new_record, new_record_nulls);
+
+		CatalogTupleInsert(bbf_function_ext_rel, tuple);
+
+		/*
+		 * Add function's dependency on catalog table's index so
+		 * that table gets restored before function during MVU.
+		 */
+		index.classId = IndexRelationId;
+		index.objectId = get_bbf_function_ext_idx_oid();
+		index.objectSubId = 0;
+		recordDependencyOn(&address, &index, DEPENDENCY_NORMAL);
+	}
+
+	pfree(physical_schemaname);
+	pfree(func_signature);
+	ReleaseSysCache(proctup);
+	heap_freetuple(tuple);
+	table_close(bbf_function_ext_rel, RowExclusiveLock);
+}
+
+/*
+ * Drops argument positions of default values of a PL/tsql function from bbf_function_ext catalog
+ */
+static void
+pltsql_drop_func_default_positions(Oid objectId)
+{
+	HeapTuple	 proctuple, bbffunctuple;
+
+	/* return if it is not a PL/tsql function */
+	proctuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(objectId));
+	if (!HeapTupleIsValid(proctuple))
+		return;					/* concurrently dropped */
+
+	bbffunctuple = get_bbf_function_tuple_from_proctuple(proctuple);
+
+	if (HeapTupleIsValid(bbffunctuple))
+	{
+		Relation	 bbf_function_ext_rel;
+
+		/* Fetch the relation */
+		bbf_function_ext_rel = table_open(get_bbf_function_ext_oid(), RowExclusiveLock);
+
+		CatalogTupleDelete(bbf_function_ext_rel,
+						   &bbffunctuple->t_self);
+		table_close(bbf_function_ext_rel, RowExclusiveLock);
+		ReleaseSysCache(bbffunctuple);
+	}
+
+	ReleaseSysCache(proctuple);
+}
+
+static bool
+match_pltsql_func_call(HeapTuple proctup, int nargs, List *argnames,
+					   bool include_out_arguments, int **argnumbers,
+					   List **defaults, bool expand_defaults, bool expand_variadic,
+					   bool *use_defaults, bool *any_special,
+					   bool *variadic, Oid *va_elem_type)
+{
+	Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
+	int			pronargs = procform->pronargs;
+
+	if (argnames != NIL)
+	{
+		/*
+		 * Call uses named or mixed notation
+		 *
+		 * Named or mixed notation can match a variadic function only if
+		 * expand_variadic is off; otherwise there is no way to match the
+		 * presumed-nameless parameters expanded from the variadic array.
+		 */
+		if (OidIsValid(procform->provariadic) && expand_variadic)
+			return false;
+		*va_elem_type = InvalidOid;
+		*variadic = false;
+
+		/*
+		 * Check argument count.
+		 */
+		Assert(nargs >= 0); /* -1 not supported with argnames */
+
+		if (pronargs > nargs && expand_defaults)
+		{
+			/* Ignore if not enough default expressions */
+			if (nargs + procform->pronargdefaults < pronargs)
+				return false;
+			*use_defaults = true;
+		}
+		else
+			*use_defaults = false;
+
+		/* Ignore if it doesn't match requested argument count */
+		if (pronargs != nargs && !(*use_defaults))
+			return false;
+
+		/* Check for argument name match, generate positional mapping */
+		if (!PlTsqlMatchNamedCall(proctup, nargs, argnames,
+								  include_out_arguments, pronargs,
+								  argnumbers, defaults))
+			return false;
+
+		/* Named argument matching is always "special" */
+		*any_special = true;
+	}
+	else
+	{
+		/*
+		 * Call uses positional notation
+		 *
+		 * Check if function is variadic, and get variadic element type if
+		 * so.  If expand_variadic is false, we should just ignore
+		 * variadic-ness.
+		 */
+		if (pronargs <= nargs && expand_variadic)
+		{
+			*va_elem_type = procform->provariadic;
+			*variadic = OidIsValid(*va_elem_type);
+			*any_special |= *variadic;
+		}
+		else
+		{
+			*va_elem_type = InvalidOid;
+			*variadic = false;
+		}
+
+		/*
+		 * Check if function can match by using parameter defaults.
+		 */
+		if (pronargs > nargs && expand_defaults)
+		{
+			/* Ignore if not enough default expressions */
+			if (nargs + procform->pronargdefaults < pronargs)
+				return false;
+			*use_defaults = true;
+			*any_special = true;
+		}
+		else
+			*use_defaults = false;
+
+		/* Ignore if it doesn't match requested argument count */
+		if (nargs >= 0 && pronargs != nargs && !(*variadic) && !(*use_defaults))
+			return false;
+
+		/*
+		 * If call uses all positional arguments, then validate if all
+		 * the remaining arguments have defaults.
+		 */
+		if (*use_defaults)
+		{
+			HeapTuple	bbffunctuple = get_bbf_function_tuple_from_proctuple(proctup);
+
+			if (HeapTupleIsValid(bbffunctuple))
+			{
+				Datum	 arg_default_positions;
+				bool	 isnull;
+
+				/* Fetch default positions */
+				arg_default_positions = SysCacheGetAttr(PROCNSPSIGNATURE,
+														bbffunctuple,
+														Anum_bbf_function_ext_default_positions,
+														&isnull);
+
+				if (!isnull)
+				{
+					char	 *str;
+					List	 *default_positions = NIL;
+					ListCell *def_idx = NULL;
+					int		 idx = nargs;
+
+					str = TextDatumGetCString(arg_default_positions);
+					default_positions = castNode(List, stringToNode(str));
+					pfree(str);
+
+					foreach(def_idx, default_positions)
+					{
+						int position = intVal((Node *) lfirst(def_idx));
+
+						if (position == idx)
+							idx++;
+					}
+
+					/* we could not find defaults for some arguments. */
+					if (idx < pronargs)
+					{
+						ReleaseSysCache(bbffunctuple);
+						return false;
+					}
+				}
+
+				ReleaseSysCache(bbffunctuple);
+			}
+		}
+	}
+
+	return true;
+}
+
+/*
+ * PlTsqlMatchNamedCall
+ *		Given a pg_proc heap tuple of a PL/tsql function and a call's list of
+ *		argument names, check whether the function could match the call.
+ *
+ * The call could match if all supplied argument names are accepted by
+ * the function, in positions after the last positional argument, and there
+ * are defaults for all unsupplied arguments.
+ *
+ * Most of the implementation of this function has been taken from backend's
+ * MatchNamedCall function (see catalog/namespace.c) but it has been modified
+ * to use babelfish_function_ext catalog to get the default positions, if
+ * available.
+ *
+ * On match, return true and fill *argnumbers with a palloc'd array showing
+ * the mapping from call argument positions to actual function argument
+ * numbers. Defaulted arguments are included in this map, at positions
+ * after the last supplied argument.
+ * Additionally if default positions are available in babelfish_function_ext
+ * catalog then fill *defaults with list of default expression nodes for
+ * unsupplied arguments.
+ */
+static bool
+PlTsqlMatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
+					 bool include_out_arguments, int pronargs,
+					 int **argnumbers, List **defaults)
+{
+	Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
+	int			 numposargs = nargs - list_length(argnames);
+	int			 pronallargs;
+	Oid		    *p_argtypes;
+	char	   **p_argnames;
+	char	    *p_argmodes;
+	bool		 arggiven[FUNC_MAX_ARGS];
+	bool		 isnull;
+	int			 ap;				/* call args position */
+	int			 pp;				/* proargs position */
+	ListCell    *lc;
+
+	Assert(argnames != NIL);
+	Assert(numposargs >= 0);
+	Assert(nargs <= pronargs);
+
+	/* Ignore this function if its proargnames is null */
+	(void) SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_proargnames,
+						   &isnull);
+	if (isnull)
+		return false;
+
+	/* OK, let's extract the argument names and types */
+	pronallargs = get_func_arg_info(proctup,
+									&p_argtypes, &p_argnames, &p_argmodes);
+	Assert(p_argnames != NULL);
+
+	Assert(include_out_arguments ? (pronargs == pronallargs) : (pronargs <= pronallargs));
+
+	/* initialize state for matching */
+	*argnumbers = (int *) palloc(pronargs * sizeof(int));
+	memset(arggiven, false, pronargs * sizeof(bool));
+
+	/* there are numposargs positional args before the named args */
+	for (ap = 0; ap < numposargs; ap++)
+	{
+		(*argnumbers)[ap] = ap;
+		arggiven[ap] = true;
+	}
+
+	/* now examine the named args */
+	foreach(lc, argnames)
+	{
+		char	   *argname = (char *) lfirst(lc);
+		bool		found;
+		int			i;
+
+		pp = 0;
+		found = false;
+		for (i = 0; i < pronallargs; i++)
+		{
+			/* consider only input params, except with include_out_arguments */
+			if (!include_out_arguments &&
+				p_argmodes &&
+				(p_argmodes[i] != FUNC_PARAM_IN &&
+				 p_argmodes[i] != FUNC_PARAM_INOUT &&
+				 p_argmodes[i] != FUNC_PARAM_VARIADIC))
+				continue;
+			if (p_argnames[i] && strcmp(p_argnames[i], argname) == 0)
+			{
+				/* fail if argname matches a positional argument */
+				if (arggiven[pp])
+					return false;
+				arggiven[pp] = true;
+				(*argnumbers)[ap] = pp;
+				found = true;
+				break;
+			}
+			/* increase pp only for considered parameters */
+			pp++;
+		}
+		/* if name isn't in proargnames, fail */
+		if (!found)
+			return false;
+		ap++;
+	}
+
+	Assert(ap == nargs);		/* processed all actual parameters */
+
+	/* Check for default arguments */
+	*defaults = NIL;
+	if (nargs < pronargs)
+	{
+		int			first_arg_with_default = pronargs - procform->pronargdefaults;
+		HeapTuple	bbffunctuple = get_bbf_function_tuple_from_proctuple(proctup);
+		List		*argdefaults = NIL,
+					*default_positions = NIL;
+		bool		default_positions_available = false;
+		ListCell	*def_item = NULL,
+					*def_idx = NULL;
+		bool		match_found = true;
+
+		if (HeapTupleIsValid(bbffunctuple))
+		{
+			Datum		proargdefaults;
+			Datum		arg_default_positions;
+
+			/* Fetch argument defaults */
+			proargdefaults = SysCacheGetAttr(PROCOID, proctup,
+											Anum_pg_proc_proargdefaults,
+											&isnull);
+
+			if (!isnull)
+			{
+				char *str;
+
+				str = TextDatumGetCString(proargdefaults);
+				argdefaults = castNode(List, stringToNode(str));
+				def_item = list_head(argdefaults);
+				pfree(str);
+			}
+
+			/* Fetch default positions */
+			arg_default_positions = SysCacheGetAttr(PROCNSPSIGNATURE,
+													bbffunctuple,
+													Anum_bbf_function_ext_default_positions,
+													&isnull);
+
+			if (!isnull)
+			{
+				char *str;
+
+				str = TextDatumGetCString(arg_default_positions);
+				default_positions = castNode(List, stringToNode(str));
+				def_idx = list_head(default_positions);
+				default_positions_available = true;
+				pfree(str);
+			}
+			else
+				ReleaseSysCache(bbffunctuple);
+		}
+
+		for (pp = numposargs; pp < pronargs; pp++)
+		{
+			if (arggiven[pp])
+				continue;
+
+			/*
+			 * If the positions of default arguments are available then we need
+			 * special handling. Look into default_positions list to find out
+			 * the default expression for pp'th argument.
+			 */
+			if (default_positions_available)
+			{
+				bool has_default = false;
+
+				/*
+				 * Iterate over argdefaults list to find out the default expression
+				 * for current argument.
+				 */
+				while (def_item != NULL && def_idx != NULL)
+				{
+					int position = intVal((Node *) lfirst(def_idx));
+
+					if (position == pp)
+					{
+						has_default = true;
+						*defaults = lappend(*defaults, lfirst(def_item));
+						def_item = lnext(argdefaults, def_item);
+						def_idx = lnext(default_positions, def_idx);
+						break;
+					}
+					else if (position > pp)
+						break;
+					def_item = lnext(argdefaults, def_item);
+					def_idx = lnext(default_positions, def_idx);
+				}
+
+				if (!has_default)
+				{
+					match_found = false;
+					break;
+				}
+				(*argnumbers)[ap++] = pp;
+				continue;
+			}
+			/* fail if arg not given and no default available */
+			else if (pp < first_arg_with_default)
+			{
+				match_found = false;
+				break;
+			}
+			(*argnumbers)[ap++] = pp;
+		}
+
+		if (default_positions_available)
+			ReleaseSysCache(bbffunctuple);
+
+		if (!match_found)
+			return false;
+	}
+
+	Assert(ap == pronargs);		/* processed all function parameters */
+
+	return true;
+}
+
+/*
+ * insert_pltsql_function_defaults
+ *		Given a pg_proc heap tuple of a PL/tsql function and list of defaults,
+ *		fill missing arguments in *argarray with default expressions.
+ *
+ * If given PL/tsql function has default positions available from babelfish_function_ext
+ * catalog then use them to fill *argarray, otherwise fallback to PG's way to
+ * fill only last few arguments with defaults.
+ */
+static void
+insert_pltsql_function_defaults(HeapTuple func_tuple, List *defaults, Node **argarray)
+{
+	HeapTuple	bbffunctuple;
+
+	bbffunctuple = get_bbf_function_tuple_from_proctuple(func_tuple);
+
+	if (HeapTupleIsValid(bbffunctuple))
+	{
+		Datum				  arg_default_positions;
+		bool				  isnull;
+
+		/* Fetch default positions */
+		arg_default_positions = SysCacheGetAttr(PROCNSPSIGNATURE,
+												bbffunctuple,
+												Anum_bbf_function_ext_default_positions,
+												&isnull);
+
+		if (!isnull)
+		{
+			char				  *str;
+			List				  *default_positions = NIL;
+			ListCell			  *def_idx = NULL,
+								  *def_item = NULL;
+
+			str = TextDatumGetCString(arg_default_positions);
+			default_positions = castNode(List, stringToNode(str));
+			pfree(str);
+
+			forboth(def_idx, default_positions, def_item, defaults)
+			{
+				int position = intVal((Node *) lfirst(def_idx));
+
+				if (argarray[position] == NULL)
+					argarray[position] = (Node *) lfirst(def_item);
+			}
+		}
+
+		ReleaseSysCache(bbffunctuple);
+	}
+	else
+	{
+		Form_pg_proc funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
+		int			 i;
+		ListCell	*lc = NULL;
+
+		i = funcform->pronargs - funcform->pronargdefaults;
+		foreach(lc, defaults)
+		{
+			if (argarray[i] == NULL)
+				argarray[i] = (Node *) lfirst(lc);
+			i++;
+		}
+	}
+}
+
+/*
+ * Same as backend's print_function_arguments (see ruleutils.c)
+ * but only for PL/tsql functions. If given function has default
+ * positions available from babelfish_function_ext catalog then use
+ * them to print default arguments.
+ */
+static int
+print_pltsql_function_arguments(StringInfo buf, HeapTuple proctup,
+								bool print_table_args, bool print_defaults)
+{
+	Form_pg_proc proc = (Form_pg_proc) GETSTRUCT(proctup);
+	HeapTuple	bbffunctuple;
+	int			numargs;
+	Oid		   *argtypes;
+	char	  **argnames;
+	char	   *argmodes;
+	int			insertorderbyat = -1;
+	int			argsprinted;
+	int			inputargno;
+	bool		isnull;
+	bool		default_positions_available = false;
+	int			nlackdefaults;
+	List	   *argdefaults = NIL;
+	List	   *defaultpositions = NIL;
+	ListCell   *nextargdefault = NULL;
+	ListCell   *nextdefaultposition = NULL;
+	int			i;
+
+	numargs = get_func_arg_info(proctup,
+								&argtypes, &argnames, &argmodes);
+
+	nlackdefaults = numargs;
+	if (print_defaults && proc->pronargdefaults > 0)
+	{
+		Datum		proargdefaults;
+
+		proargdefaults = SysCacheGetAttr(PROCOID, proctup,
+										 Anum_pg_proc_proargdefaults,
+										 &isnull);
+		if (!isnull)
+		{
+			char	   *str;
+
+			str = TextDatumGetCString(proargdefaults);
+			argdefaults = castNode(List, stringToNode(str));
+			pfree(str);
+			nextargdefault = list_head(argdefaults);
+			/* nlackdefaults counts only *input* arguments lacking defaults */
+			nlackdefaults = proc->pronargs - list_length(argdefaults);
+		}
+	}
+
+	bbffunctuple = get_bbf_function_tuple_from_proctuple(proctup);
+
+	if (HeapTupleIsValid(bbffunctuple))
+	{
+		Datum		arg_default_positions;
+		char	   *str;
+
+		/* Fetch default positions */
+		arg_default_positions = SysCacheGetAttr(PROCNSPSIGNATURE,
+												bbffunctuple,
+												Anum_bbf_function_ext_default_positions,
+												&isnull);
+
+		if (!isnull)
+		{
+			str = TextDatumGetCString(arg_default_positions);
+			defaultpositions = castNode(List, stringToNode(str));
+			nextdefaultposition = list_head(defaultpositions);
+			default_positions_available = true;
+			pfree(str);
+		}
+		else
+			ReleaseSysCache(bbffunctuple);
+	}
+
+	/* Check for special treatment of ordered-set aggregates */
+	if (proc->prokind == PROKIND_AGGREGATE)
+	{
+		HeapTuple	aggtup;
+		Form_pg_aggregate agg;
+
+		aggtup = SearchSysCache1(AGGFNOID, proc->oid);
+		if (!HeapTupleIsValid(aggtup))
+			elog(ERROR, "cache lookup failed for aggregate %u",
+				 proc->oid);
+		agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
+		if (AGGKIND_IS_ORDERED_SET(agg->aggkind))
+			insertorderbyat = agg->aggnumdirectargs;
+		ReleaseSysCache(aggtup);
+	}
+
+	argsprinted = 0;
+	inputargno = 0;
+	for (i = 0; i < numargs; i++)
+	{
+		Oid			argtype = argtypes[i];
+		char	   *argname = argnames ? argnames[i] : NULL;
+		char		argmode = argmodes ? argmodes[i] : PROARGMODE_IN;
+		const char *modename;
+		bool		isinput;
+
+		switch (argmode)
+		{
+			case PROARGMODE_IN:
+
+				/*
+				 * For procedures, explicitly mark all argument modes, so as
+				 * to avoid ambiguity with the SQL syntax for DROP PROCEDURE.
+				 */
+				if (proc->prokind == PROKIND_PROCEDURE)
+					modename = "IN ";
+				else
+					modename = "";
+				isinput = true;
+				break;
+			case PROARGMODE_INOUT:
+				modename = "INOUT ";
+				isinput = true;
+				break;
+			case PROARGMODE_OUT:
+				modename = "OUT ";
+				isinput = false;
+				break;
+			case PROARGMODE_VARIADIC:
+				modename = "VARIADIC ";
+				isinput = true;
+				break;
+			case PROARGMODE_TABLE:
+				modename = "";
+				isinput = false;
+				break;
+			default:
+				elog(ERROR, "invalid parameter mode '%c'", argmode);
+				modename = NULL;	/* keep compiler quiet */
+				isinput = false;
+				break;
+		}
+		if (isinput)
+			inputargno++;		/* this is a 1-based counter */
+
+		if (print_table_args != (argmode == PROARGMODE_TABLE))
+			continue;
+
+		if (argsprinted == insertorderbyat)
+		{
+			if (argsprinted)
+				appendStringInfoChar(buf, ' ');
+			appendStringInfoString(buf, "ORDER BY ");
+		}
+		else if (argsprinted)
+			appendStringInfoString(buf, ", ");
+
+		appendStringInfoString(buf, modename);
+		if (argname && argname[0])
+			appendStringInfo(buf, "%s ", quote_identifier(argname));
+		appendStringInfoString(buf, format_type_be(argtype));
+		if (print_defaults && isinput && default_positions_available)
+		{
+			if (nextdefaultposition != NULL)
+			{
+				int position = intVal((Node *) lfirst(nextdefaultposition));
+				Node *defexpr;
+
+				Assert(nextargdefault != NULL);
+				defexpr = (Node *) lfirst(nextargdefault);
+
+				if (position == (inputargno - 1))
+				{
+					appendStringInfo(buf, " DEFAULT %s",
+									 deparse_expression(defexpr, NIL, false, false));
+					nextdefaultposition = lnext(defaultpositions, nextdefaultposition);
+					nextargdefault = lnext(argdefaults, nextargdefault);
+				}
+			}
+		}
+		else if (print_defaults && isinput && inputargno > nlackdefaults)
+		{
+			Node	   *expr;
+
+			Assert(nextargdefault != NULL);
+			expr = (Node *) lfirst(nextargdefault);
+			nextargdefault = lnext(argdefaults, nextargdefault);
+
+			appendStringInfo(buf, " DEFAULT %s",
+							 deparse_expression(expr, NIL, false, false));
+		}
+		argsprinted++;
+
+		/* nasty hack: print the last arg twice for variadic ordered-set agg */
+		if (argsprinted == insertorderbyat && i == numargs - 1)
+		{
+			i--;
+			/* aggs shouldn't have defaults anyway, but just to be sure ... */
+			print_defaults = false;
+		}
+	}
+
+	if (default_positions_available)
+		ReleaseSysCache(bbffunctuple);
+
+	return argsprinted;
+}
+
+static PlannedStmt *
+pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams)
+{
+	PlannedStmt * plan;
+	PLtsql_execstate *estate = NULL;
+
+	if (pltsql_explain_analyze)
+	{
+		estate = get_current_tsql_estate();
+		Assert(estate != NULL);
+		INSTR_TIME_SET_CURRENT(estate->planning_start);
+	}
+	if (prev_planner_hook)
+		plan = prev_planner_hook(parse, query_string, cursorOptions, boundParams);
+	else
+		plan = standard_planner(parse, query_string, cursorOptions, boundParams);
+	if (pltsql_explain_analyze)
+	{
+		INSTR_TIME_SET_CURRENT(estate->planning_end);
+		INSTR_TIME_SUBTRACT(estate->planning_end, estate->planning_start);
+	}
+
+	return plan;
+}
+
+static Node* 
+transform_like_in_add_constraint (Node* node)
+{
+	PG_TRY();
+	{
+		if (!babelfish_dump_restore && current_query_is_create_tbl_check_constraint 
+				&& has_ilike_node_and_ci_as_coll(node))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("nondeterministic collations are not supported for ILIKE")));
+		}
+	}
+	PG_FINALLY();
+	{
+		current_query_is_create_tbl_check_constraint = false;
+	}
+	PG_END_TRY();
+	
+	return pltsql_predicate_transformer(node);
 }

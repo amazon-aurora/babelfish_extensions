@@ -21,6 +21,7 @@
 
 #include "src/include/tds_debug.h"
 #include "src/include/tds_int.h"
+#include "src/include/tds_iofuncmap.h"
 #include "src/include/tds_protocol.h"
 #include "src/include/tds_response.h"
 #include "src/include/tds_instr.h"
@@ -116,6 +117,9 @@ do \
 #define PRINT_CURSOR_HANDLE 			0x0001
 #define PRINT_PREPARED_CURSOR_HANDLE 		0x0002
 #define PRINT_BOTH_CURSOR_HANDLE		0x0004
+
+/* Max number of Args allowed for Prepared stmts. */
+#define PREPARE_STMT_MAX_ARGS 2100
 
 /* Local functions */
 static void GetSPHandleParameter(TDSRequestSP request);
@@ -476,7 +480,7 @@ SPExecuteSQL(TDSRequestSP req)
 {
 	StringInfoData s;
 	InlineCodeBlock *codeblock;
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	FunctionCallInfo fcinfo;
 
 	int paramno;
 	Datum retval;
@@ -485,12 +489,12 @@ SPExecuteSQL(TDSRequestSP req)
 	char *activity;
 
 	TdsErrorContext->err_text = "Processing SP_EXECUTESQL Request";
-	if ((req->nTotalParams + 2) > FUNC_MAX_ARGS)
+	if ((req->nTotalParams) > PREPARE_STMT_MAX_ARGS)
 	    ereport(ERROR,
 	                    (errcode(ERRCODE_PROTOCOL_VIOLATION),
 	                    errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
 							"Too many parameters were provided in this RPC request. The maximum is %d",
-	                            FUNC_MAX_ARGS)));
+	                            PREPARE_STMT_MAX_ARGS)));
 
 	TDSInstrumentation(INSTR_TDS_SP_EXECUTESQL);
 
@@ -508,7 +512,7 @@ SPExecuteSQL(TDSRequestSP req)
 	codeblock->atomic = false;
 
 	/* Just to satisfy argument requirement */
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	fcinfo = palloc0(SizeForFunctionCallInfo(req->nTotalParams + 2));
 	fcinfo->nargs = 1;
 	fcinfo->args[0].value = PointerGetDatum(codeblock);
 	fcinfo->args[0].isnull = false;
@@ -590,7 +594,7 @@ static void
 SPPrepare(TDSRequestSP req)
 {
 	StringInfoData s;
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	FunctionCallInfo fcinfo;
 
 	Datum retval;
 	Datum *values;
@@ -602,12 +606,11 @@ SPPrepare(TDSRequestSP req)
 
 	tvp_lookup_list = NIL;
 
-	if ((req->nTotalParams + 2) > FUNC_MAX_ARGS)
+	if (req->nTotalParams > 1)
 	    ereport(ERROR,
 	                    (errcode(ERRCODE_PROTOCOL_VIOLATION),
 	                    errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
-							"Too many parameters were provided in this RPC request. The maximum is %d",
-	                            FUNC_MAX_ARGS)));
+							"Too many parameters were provided in this RPC request")));
 
 	initStringInfo(&s);
 	FillQueryFromParameterToken(req, &s);
@@ -616,7 +619,7 @@ SPPrepare(TDSRequestSP req)
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
 
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	fcinfo = palloc0(SizeForFunctionCallInfo(3));
 
 	fcinfo->nargs = 3;
 	fcinfo->args[1].value = PointerGetDatum(cstring_to_text(req->metaDataParameterValue->data));
@@ -676,7 +679,7 @@ static void
 SPExecute(TDSRequestSP req)
 {
 	InlineCodeBlock *codeblock;
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	FunctionCallInfo fcinfo;
 
 	int paramno;
 	Datum retval;
@@ -691,12 +694,12 @@ SPExecute(TDSRequestSP req)
 
 	tvp_lookup_list = NIL;
 
-	if ((req->nTotalParams + 2) > FUNC_MAX_ARGS)
+	if ((req->nTotalParams) > PREPARE_STMT_MAX_ARGS)
 	    ereport(ERROR,
 	                    (errcode(ERRCODE_PROTOCOL_VIOLATION),
 	                    errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
 							"Too many parameters were provided in this RPC request. The maximum is %d",
-	                            FUNC_MAX_ARGS)));
+	                            PREPARE_STMT_MAX_ARGS)));
 
 	codeblock = makeNode(InlineCodeBlock);
 	codeblock->source_text = NULL;
@@ -705,7 +708,7 @@ SPExecute(TDSRequestSP req)
 	codeblock->atomic = false;
 
 	/* Just to satisfy argument requirement. */
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	fcinfo = palloc0(SizeForFunctionCallInfo(req->nTotalParams + 2));
 	fcinfo->nargs = 1;
 	fcinfo->args[0].value = PointerGetDatum(codeblock);
 	fcinfo->args[0].isnull = false;
@@ -788,7 +791,7 @@ SPPrepExec(TDSRequestSP req)
 	StringInfoData s;
 	InlineCodeBlock *codeblock;
 	InlineCodeBlockArgs* codeblock_args;
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	FunctionCallInfo fcinfo;
 
 	int paramno;
 	Datum retval;
@@ -799,12 +802,12 @@ SPPrepExec(TDSRequestSP req)
 	tvp_lookup_list = NIL;
 	TdsErrorContext->err_text = "Processing SP_PREPEXEC Request";
 
-	if ((req->nTotalParams + 2) > FUNC_MAX_ARGS)
+	if ((req->nTotalParams) > PREPARE_STMT_MAX_ARGS)
 	    ereport(ERROR,
 	                    (errcode(ERRCODE_PROTOCOL_VIOLATION),
 	                    errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
 							"Too many parameters were provided in this RPC request. The maximum is %d",
-	                            FUNC_MAX_ARGS)));
+	                            PREPARE_STMT_MAX_ARGS)));
 
 	TDSInstrumentation(INSTR_TDS_SP_PREPEXEC);
 
@@ -822,7 +825,7 @@ SPPrepExec(TDSRequestSP req)
 	codeblock->atomic = false;
 
 	/* Just to satisfy argument requirement */
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	fcinfo = palloc0(SizeForFunctionCallInfo(req->nTotalParams + 2));
 	fcinfo->nargs = 1;
 	fcinfo->args[0].value = PointerGetDatum(codeblock);
 	fcinfo->args[0].isnull = false;
@@ -1015,7 +1018,7 @@ SPCustomType(TDSRequestSP req)
 {
 	StringInfoData s;
 	InlineCodeBlock *codeblock;
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	FunctionCallInfo fcinfo;
 	ParameterToken returnParamToken = NULL;
 
 	int paramno;
@@ -1025,12 +1028,12 @@ SPCustomType(TDSRequestSP req)
 	char *activity;
 
 	TdsErrorContext->err_text = "Processing SP_CUSTOMTYPE Request";
-	if ((req->nTotalParams + 2) > FUNC_MAX_ARGS)
+	if ((req->nTotalParams) > PREPARE_STMT_MAX_ARGS)
 	    ereport(ERROR,
 	                    (errcode(ERRCODE_PROTOCOL_VIOLATION),
 	                    errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
 							"Too many parameters were provided in this RPC request. The maximum is %d",
-	                            FUNC_MAX_ARGS)));
+	                            PREPARE_STMT_MAX_ARGS)));
 
 	TDSInstrumentation(INSTR_TDS_USER_CUSTOM_SP);
 
@@ -1048,7 +1051,7 @@ SPCustomType(TDSRequestSP req)
 	codeblock->atomic = false;
 
 	/* Just to satisfy argument requirement */
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	fcinfo = palloc0(SizeForFunctionCallInfo(req->nTotalParams + 2));
 	fcinfo->nargs = 1;
 	fcinfo->args[0].value = PointerGetDatum(codeblock);
 	fcinfo->args[0].isnull = false;
@@ -1136,7 +1139,8 @@ SPCustomType(TDSRequestSP req)
 static void
 SPUnprepare(TDSRequestSP req)
 {
-	LOCAL_FCINFO(fcinfo, FUNC_MAX_ARGS);
+	/* SP_UNPREPARE takes only one argument. */
+	LOCAL_FCINFO(fcinfo, 1);
 
 	char *activity = psprintf("SP_UNPREPARE Handle: %d", req->handle);
 	TdsErrorContext->err_text = "Processing SP_UNPREPARE Request";
@@ -1146,7 +1150,7 @@ SPUnprepare(TDSRequestSP req)
 	TDSInstrumentation(INSTR_TDS_SP_UNPREPARE);
 
 	/* Just to satisfy argument requirement */
-	MemSet(fcinfo, 0, SizeForFunctionCallInfo(FUNC_MAX_ARGS));
+	MemSet(fcinfo, 0, SizeForFunctionCallInfo(1));
 	fcinfo->nargs = 1;
 	fcinfo->args[0].value = PointerGetDatum(req->handle);
 	fcinfo->args[0].isnull = false;
@@ -1698,6 +1702,12 @@ ReadParameters(TDSRequestSP request, uint64_t offset, StringInfo message, int *p
 				                            paramOrdinal, temp->paramMeta.colName.data)));
 
 				temp->len = message->data[offset++];
+				if (temp->len > TDS_MAXLEN_NUMERIC)
+					ereport(ERROR,
+							(errcode(ERRCODE_PROTOCOL_VIOLATION),
+								errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
+									"Parameter %d (\"%s\"): Data type 0x%02X has an invalid data length or metadata length.",
+									paramOrdinal, temp->paramMeta.colName.data, tdsType)));
 
 	 			if (temp->len == 0)
 	 				temp->isNull = true;

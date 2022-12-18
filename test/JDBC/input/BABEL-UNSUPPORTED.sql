@@ -1543,3 +1543,121 @@ INSERT INTO t_unsupported_sp EXEC sp_help 'a'
 GO
 DROP TABLE t_unsupported_sp;
 GO
+
+--HIERARCHYID, GEOGRAPHY, GEOMETRY
+-- Should throw detailed error messages, same as TIMESTAMP and ROWVERSION cases
+CREATE TABLE test_unsupported_hierarchyid(a HIERARCHYID);
+GO
+DROP TABLE test_unsupported_hierarchyid;
+GO
+CREATE TABLE test_unsupported_geography(a GEOGRAPHY);
+GO
+DROP TABLE test_unsupported_geography;
+GO
+CREATE TABLE test_unsupported_geometry(a GEOMETRY);
+GO
+DROP TABLE test_unsupported_geometry;
+GO
+
+-- With escape_hatch_rowversion to ignore
+-- Should throw a simple error message saying the datatype does not exist
+EXEC sp_babelfish_configure 'babelfishpg_tsql.escape_hatch_rowversion', 'ignore';
+GO
+
+CREATE TABLE test_unsupported_rowversion(a ROWVERSION);
+GO
+DROP TABLE test_unsupported_rowversion;
+GO
+CREATE TABLE test_unsupported_timestamp(a TIMESTAMP);
+GO
+DROP TABLE test_unsupported_timestamp;
+GO
+CREATE TABLE test_unsupported_hierarchyid(a HIERARCHYID);
+GO
+DROP TABLE test_unsupported_hierarchyid;
+GO
+CREATE TABLE test_unsupported_geography(a GEOGRAPHY);
+GO
+DROP TABLE test_unsupported_geography;
+GO
+CREATE TABLE test_unsupported_geometry(a GEOMETRY);
+GO
+DROP TABLE test_unsupported_geometry;
+GO
+
+EXEC sp_babelfish_configure 'babelfishpg_tsql.escape_hatch_rowversion', 'strict';
+GO
+
+--HIERARCHYID, GEOGRAPHY, GEOMETRY
+-- Create Type: Should throw detailed error messages
+CREATE TYPE [FolderHierarchy] AS TABLE( 
+	[FolderId] UNIQUEIDENTIFIER NULL,
+	[Name] NVARCHAR(225) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[PathLocator] HIERARCHYID NULL,
+	[ParentPathLocator] HIERARCHYID NULL,
+	[Level] INT NULL
+);
+GO
+
+CREATE TYPE [FolderGeography] AS TABLE( 
+	[FolderGeography_ID] UNIQUEIDENTIFIER NULL,
+	[FolderGeography_X] GEOGRAPHY NULL,
+	[FolderGeography_Y] GEOGRAPHY NULL
+);
+GO
+
+CREATE TYPE [FolderGeometry] AS TABLE( 
+	[FolderGeometry_ID] UNIQUEIDENTIFIER NULL,
+	[FolderGeometry_Geometry] Geometry NULL
+);
+GO
+
+-- Create Function: Should throw detailed error messages
+CREATE FUNCTION [func_hierarchyid]() RETURNS HIERARCHYID AS
+BEGIN
+RETURN NULL;
+END
+GO
+
+CREATE FUNCTION [func_geography](@X float,@Y float) RETURNS GEOGRAPHY AS 
+BEGIN 
+IF (@X IS NULL OR @Y IS NULL OR (@X = 0 and @Y = 0)) RETURN NULL;
+IF (@X < -90) BEGIN SET @X=-90; END
+IF (@X > 90) BEGIN SET @X=90; END
+IF (@Y < -15069) BEGIN SET @Y=-15069; END
+IF (@Y > 15069) BEGIN SET @Y=15069; END
+RETURN GEOGRAPHY::Point(@X,@Y,4326);
+END
+GO
+
+CREATE FUNCTION [func_geometry]() RETURNS GEOMETRY AS
+BEGIN
+RETURN NULL;
+END
+GO
+
+-- Variable Declaration: Should throw detailed error messages
+DECLARE @var_rowversion ROWVERSION;
+GO
+DECLARE @var_timestamp TIMESTAMP;
+GO
+DECLARE @var_hierarchyid HIERARCHYID;
+GO
+DECLARE @var_geography GEOGRAPHY;
+GO
+DECLARE @var_geometry GEOMETRY;
+GO
+
+-- Create Procedure: Should throw detailed error messages
+CREATE PROCEDURE proc_hierarchyid (@var_hierarchyid2 HIERARCHYID) AS BEGIN PRINT CAST(@var_hierarchyid2 AS VARCHAR(10)) END;
+GO
+DROP PROCEDURE proc_hierarchyid;
+GO
+CREATE PROCEDURE proc_geography (@var_geography2 GEOGRAPHY) AS BEGIN PRINT CAST(@var_geography2 AS VARCHAR(10)) END;
+GO
+DROP PROCEDURE proc_geography;
+GO
+CREATE PROCEDURE proc_geometry (@var_geometry2 GEOMETRY) AS BEGIN PRINT CAST(@var_geometry2 AS VARCHAR(10)) END;
+GO
+DROP PROCEDURE proc_geometry;
+GO

@@ -95,11 +95,8 @@ Function sys.abs(sys.fixeddecimal)
 Function sys.applock_mode(character varying,character varying,character varying)
 Function sys.applock_test(character varying,character varying,character varying,character varying)
 Function sys.assemblyproperty(character varying,character varying)
-Function sys.babelfish_cast_floor_bigint(anyelement)
 Function sys.babelfish_cast_floor_bigint(text)
-Function sys.babelfish_cast_floor_int(anyelement)
 Function sys.babelfish_cast_floor_int(text)
-Function sys.babelfish_cast_floor_smallint(anyelement)
 Function sys.babelfish_cast_floor_smallint(text)
 Function sys.babelfish_collation_list()
 Function sys.babelfish_concat_wrapper(text,text)
@@ -110,13 +107,7 @@ Function sys.babelfish_conv_greg_to_hijri(numeric,numeric,numeric)
 Function sys.babelfish_conv_greg_to_hijri(text,text,text)
 Function sys.babelfish_conv_greg_to_hijri(timestamp without time zone)
 Function sys.babelfish_conv_helper_to_date(anyelement,boolean,numeric)
-Function sys.babelfish_conv_helper_to_date(text,boolean,numeric)
-Function sys.babelfish_conv_helper_to_datetime(anyelement,boolean,numeric)
-Function sys.babelfish_conv_helper_to_datetime(text,boolean,numeric)
 Function sys.babelfish_conv_helper_to_time(anyelement,boolean,numeric)
-Function sys.babelfish_conv_helper_to_time(text,boolean,numeric)
-Function sys.babelfish_conv_helper_to_varchar(text,anyelement,boolean,numeric)
-Function sys.babelfish_conv_helper_to_varchar(text,text,boolean,numeric)
 Function sys.babelfish_conv_hijri_to_greg(date)
 Function sys.babelfish_conv_hijri_to_greg(numeric,numeric,numeric)
 Function sys.babelfish_conv_hijri_to_greg(text,text,text)
@@ -206,13 +197,7 @@ Function sys.babelfish_strpos3(text,text,integer)
 Function sys.babelfish_tomsbit(character varying)
 Function sys.babelfish_tomsbit(numeric)
 Function sys.babelfish_truncate_identifier(text)
-Function sys.babelfish_try_cast_floor_bigint(anyelement)
 Function sys.babelfish_try_cast_floor_bigint(text)
-Function sys.babelfish_try_cast_floor_int(anyelement)
-Function sys.babelfish_try_cast_floor_int(text)
-Function sys.babelfish_try_cast_floor_smallint(anyelement)
-Function sys.babelfish_try_cast_floor_smallint(text)
-Function sys.babelfish_try_cast_to_any(text,anyelement,integer)
 Function sys.babelfish_try_conv_date_to_string(text,date,numeric)
 Function sys.babelfish_try_conv_datetime_to_string(text,text,timestamp without time zone,numeric)
 Function sys.babelfish_try_conv_float_to_string(text,double precision,numeric)
@@ -239,8 +224,8 @@ Function sys.bbf_varbinary_cmp(sys.bbf_varbinary,sys.bbf_varbinary)
 Function sys.bbfbinary_sqlvariant(sys.bbf_binary)
 Function sys.bbfvarbinary(sys.bbf_varbinary,integer,boolean)
 Function sys.bbfvarbinary_sqlvariant(sys.bbf_varbinary)
-Function sys.bigint2datetime(bigint)
 Function sys.bigint_sqlvariant(bigint)
+Function sys.bigint_sum(internal)
 Function sys.binary2uniqueidentifier(sys.bbf_binary,integer,boolean)
 Function sys.binaryfloat4(sys.bbf_binary)
 Function sys.binaryfloat8(sys.bbf_binary)
@@ -250,7 +235,6 @@ Function sys.binaryint8(sys.bbf_binary)
 Function sys.binaryrowversion(sys.bbf_binary,integer,boolean)
 Function sys.binarysysvarchar(sys.bbf_binary)
 Function sys.binaryvarchar(sys.bbf_binary)
-Function sys.bit2datetime(sys."bit")
 Function sys.bit2fixeddec(sys."bit")
 Function sys.bit2int2(sys."bit")
 Function sys.bit2int4(sys."bit")
@@ -263,14 +247,11 @@ Function sys.bit_unsupported_max(sys."bit",sys."bit")
 Function sys.bit_unsupported_min(sys."bit",sys."bit")
 Function sys.bit_unsupported_sum(sys."bit",sys."bit")
 Function sys.bitxor(bit,bit)
-Function sys.bpchar2datetime(sys.bpchar)
 Function sys.bpchar2datetime2(sys.bpchar)
 Function sys.bpchar2float4(sys.bpchar)
-Function sys.bpchar2float8(sys.bpchar)
 Function sys.bpchar2int2(sys.bpchar)
 Function sys.bpchar2int4(sys.bpchar)
 Function sys.bpchar2int8(sys.bpchar)
-Function sys.bpchar2smalldatetime(sys.bpchar)
 Function sys.bpchar_larger(sys.bpchar,sys.bpchar)
 Function sys.bpchar_smaller(sys.bpchar,sys.bpchar)
 Function sys.bpchar_to_name(character)
@@ -312,15 +293,11 @@ Function sys.datalength(anyelement)
 Function sys.datalength(character)
 Function sys.datalength(sys.sql_variant)
 Function sys.datalength(text)
-Function sys.date2datetime(date)
 Function sys.date2datetime2(date)
 Function sys.date2datetimeoffset(date)
 Function sys.date2smalldatetime(date)
 Function sys.date_sqlvariant(date)
 Function sys.dateadd_internal(text,integer,anyelement)
-Function sys.dateadd_internal_df(text,integer,sys.datetimeoffset)
-Function sys.datediff(text,sys.datetime,sys.datetime)
-Function sys.datediff(text,sys.datetimeoffset,sys.datetimeoffset)
 Function sys.datediff(text,sys.smalldatetime,sys.smalldatetime)
 Function sys.datediff(text,time without time zone,time without time zone)
 Function sys.datediff_internal(text,anyelement,anyelement)
@@ -349,7 +326,6 @@ Function sys.datetime2date(sys.datetime)
 Function sys.datetime2datetimeoffset(sys.datetime)
 Function sys.datetime2fromparts(numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric)
 Function sys.datetime2fromparts(text,text,text,text,text,text,text,text)
-Function sys.datetime2scale(sys.datetime2,integer)
 Function sys.datetime2smalldatetime(sys.datetime)
 Function sys.datetime2sysvarchar(sys.datetime)
 Function sys.datetime2time(sys.datetime)
@@ -360,7 +336,6 @@ Function sys.datetime_hash(sys.datetime)
 Function sys.datetime_larger(sys.datetime,sys.datetime)
 Function sys.datetime_smaller(sys.datetime,sys.datetime)
 Function sys.datetime_sqlvariant(sys.datetime)
-Function sys.datetimefromparts(numeric,numeric,numeric,numeric,numeric,numeric,numeric)
 Function sys.datetimefromparts(text,text,text,text,text,text,text)
 Function sys.datetimeoffset2date(sys.datetimeoffset)
 Function sys.datetimeoffset2datetime(sys.datetimeoffset)
@@ -416,13 +391,12 @@ Function sys.fixeddecimalint4(sys.fixeddecimal)
 Function sys.fixeddecimalint8(sys.fixeddecimal)
 Function sys.fixeddecimallarger(sys.fixeddecimal,sys.fixeddecimal)
 Function sys.fixeddecimalsmaller(sys.fixeddecimal,sys.fixeddecimal)
-Function sys.fixeddecimaltod(sys.fixeddecimal)
 Function sys.fixeddecimaltof(sys.fixeddecimal)
 Function sys.float4binary(real,integer,boolean)
-Function sys.float4datetime(real)
 Function sys.float4varbinary(real,integer,boolean)
 Function sys.float8binary(double precision,integer,boolean)
 Function sys.float8datetime(double precision)
+Function sys.float8smalldatetime(double precision)
 Function sys.float8varbinary(double precision,integer,boolean)
 Function sys.float_sqlvariant(double precision)
 Function sys.floor(bigint)
@@ -432,6 +406,9 @@ Function sys.floor(sys."bit")
 Function sys.floor(sys.tinyint)
 Function sys.fn_helpcollations()
 Function sys.fn_mapped_system_error_list()
+Function sys.format(anyelement,sys.nvarchar,character varying)
+Function sys.format_datetime(anyelement,sys.nvarchar,character varying,character varying)
+Function sys.format_numeric(anyelement,sys.nvarchar,character varying,character varying,integer)
 Function sys.formatmessage(character varying)
 Function sys.formatmessage(character varying,"any")
 Function sys.formatmessage(text)
@@ -442,12 +419,8 @@ Function sys.ftrunci2(real)
 Function sys.ftrunci4(real)
 Function sys.ftrunci8(real)
 Function sys.fulltextserviceproperty(text)
-Function sys.get_babel_server_collation_oid()
 Function sys.get_current_full_xact_id()
 Function sys.get_host_os()
-Function sys.get_max_id_from_table(text,text,text)
-Function sys.get_min_id_from_table(text,text,text)
-Function sys.get_tds_id(sys."varchar")
 Function sys.getdate()
 Function sys.getutcdate()
 Function sys.has_dbaccess(sys.sysname)
@@ -473,18 +446,17 @@ Function sys.int2fixeddecimal(smallint)
 Function sys.int2fixeddecimaldiv(smallint,sys.fixeddecimal)
 Function sys.int2fixeddecimaldiv(smallint,sys.smallmoney)
 Function sys.int2rowversion(smallint,integer,boolean)
+Function sys.int2smalldatetime(integer)
 Function sys.int2varbinary(smallint,integer,boolean)
 Function sys.int4_fixeddecimal_cmp(integer,sys.fixeddecimal)
-Function sys.int4binary(integer,integer,boolean)
-Function sys.int4fixeddecimal(integer)
 Function sys.int4fixeddecimaldiv(integer,sys.fixeddecimal)
 Function sys.int4fixeddecimaldiv(integer,sys.smallmoney)
+Function sys.int4int2_sum(bigint)
 Function sys.int4rowversion(integer,integer,boolean)
 Function sys.int4varbinary(integer,integer,boolean)
 Function sys.int8_fixeddecimal_cmp(bigint,sys.fixeddecimal)
 Function sys.int8binary(bigint,integer,boolean)
 Function sys.int8bit(bigint)
-Function sys.int8fixeddecimal(bigint)
 Function sys.int8fixeddecimaldiv(bigint,sys.fixeddecimal)
 Function sys.int8fixeddecimaldiv(bigint,sys.smallmoney)
 Function sys.int8rowversion(bigint,integer,boolean)
@@ -503,7 +475,6 @@ Function sys.isjson(text)
 Function sys.isnumeric(anyelement)
 Function sys.isnumeric(text)
 Function sys.json_query(text,text)
-Function sys.json_value(text,text)
 Function sys.language()
 Function sys.len(sys.bbf_varbinary)
 Function sys.len(text)
@@ -511,7 +482,6 @@ Function sys.lock_timeout()
 Function sys.max_connections()
 Function sys.max_precision()
 Function sys.microsoftversion()
-Function sys.money2datetime(sys.fixeddecimal)
 Function sys.money_sqlvariant(sys.fixeddecimal)
 Function sys.money_sqlvariant(sys.money)
 Function sys.nchar_larger(sys."nchar",sys."nchar")
@@ -520,9 +490,7 @@ Function sys.nchar_sqlvariant(sys."nchar")
 Function sys.nestlevel()
 Function sys.newid()
 Function sys.newsequentialid()
-Function sys.numeric2datetime(numeric)
-Function sys.numeric_bit(numeric)
-Function sys.numeric_fixeddecimal(numeric)
+Function sys.num_days_in_date(integer,integer,integer)
 Function sys.numeric_fixeddecimal_cmp(numeric,sys.fixeddecimal)
 Function sys.numeric_sqlvariant(numeric)
 Function sys.nvarchar(sys.nvarchar,integer,boolean)
@@ -597,7 +565,6 @@ Function sys.smalldatetime_hash(sys.smalldatetime)
 Function sys.smalldatetime_larger(sys.smalldatetime,sys.smalldatetime)
 Function sys.smalldatetime_smaller(sys.smalldatetime,sys.smalldatetime)
 Function sys.smalldatetime_sqlvariant(sys.smalldatetime)
-Function sys.smallint2datetime(smallint)
 Function sys.smallint_sqlvariant(smallint)
 Function sys.smallmoney_sqlvariant(sys.smallmoney)
 Function sys.smallmoneylarger(sys.smallmoney,sys.smallmoney)
@@ -670,7 +637,6 @@ Function sys.timefromparts(numeric,numeric,numeric,numeric,numeric)
 Function sys.timefromparts(text,text,text,text,text)
 Function sys.timestamp2datetime(timestamp without time zone)
 Function sys.timestamp2datetime2(timestamp without time zone)
-Function sys.timestamp2datetimeoffset(timestamp without time zone)
 Function sys.timestamp2smalldatetime(timestamp without time zone)
 Function sys.timestamptz2datetime(timestamp with time zone)
 Function sys.timestamptz2datetime2(timestamp with time zone)
@@ -689,7 +655,7 @@ Function sys.tsql_query_to_xml(text,integer,text,boolean,text)
 Function sys.tsql_query_to_xml_text(text,integer,text,boolean,text)
 Function sys.tsql_stat_get_activity(text)
 Function sys.tsql_type_length_for_sp_columns_helper(text,integer,integer)
-Function sys.tsql_type_max_length_helper(text,integer,integer,boolean)
+Function sys.tsql_type_max_length_helper(text,integer,integer,boolean,boolean)
 Function sys.tsql_type_precision_helper(text,integer)
 Function sys.tsql_type_radix_for_sp_columns_helper(text)
 Function sys.tsql_type_scale_helper(text,integer,boolean)
@@ -717,18 +683,15 @@ Function sys.varbinaryvarchar(sys.bbf_varbinary,integer,boolean)
 Function sys.varchar2bit(sys."varchar")
 Function sys.varchar2date(sys."varchar")
 Function sys.varchar2datetime(character varying)
-Function sys.varchar2datetime(sys."varchar")
 Function sys.varchar2datetime2(character varying)
 Function sys.varchar2datetime2(sys."varchar")
 Function sys.varchar2float4(sys."varchar")
-Function sys.varchar2float8(sys."varchar")
 Function sys.varchar2int2(sys."varchar")
 Function sys.varchar2int4(sys."varchar")
 Function sys.varchar2int8(sys."varchar")
 Function sys.varchar2money(sys."varchar")
 Function sys.varchar2numeric(sys."varchar")
 Function sys.varchar2smalldatetime(character varying)
-Function sys.varchar2smalldatetime(sys."varchar")
 Function sys.varchar2time(sys."varchar")
 Function sys.varchar2uniqueidentifier(character varying,integer,boolean)
 Function sys.varchar2uniqueidentifier(sys."varchar",integer,boolean)
@@ -748,7 +711,6 @@ Function sys.varcharvarbinary(sys."varchar",integer,boolean)
 Function sys.version()
 Function sys.xact_state()
 Function sys.xid8rowversion(xid8,integer,boolean)
-Operator <(sys."varchar",sys."varchar")
 Operator <=(sys."varchar",sys."varchar")
 Operator <=(sys.bpchar,sys.bpchar)
 Operator <>(sys."varchar",sys."varchar")
@@ -765,7 +727,6 @@ Operator sys.*(bigint,sys.fixeddecimal)
 Operator sys.*(bigint,sys.smallmoney)
 Operator sys.*(integer,sys.fixeddecimal)
 Operator sys.*(integer,sys.smallmoney)
-Operator sys.*(smallint,sys.fixeddecimal)
 Operator sys.*(smallint,sys.smallmoney)
 Operator sys.*(sys.fixeddecimal,bigint)
 Operator sys.*(sys.fixeddecimal,integer)
@@ -780,11 +741,7 @@ Operator sys.*(sys.tinyint,sys.smallmoney)
 Operator sys.*(sys.tinyint,sys.tinyint)
 Operator sys.+(bigint,sys.fixeddecimal)
 Operator sys.+(bigint,sys.smallmoney)
-Operator sys.+(double precision,sys.datetime)
-Operator sys.+(double precision,sys.smalldatetime)
-Operator sys.+(integer,sys.datetime)
 Operator sys.+(integer,sys.fixeddecimal)
-Operator sys.+(integer,sys.smalldatetime)
 Operator sys.+(integer,sys.smallmoney)
 Operator sys.+(interval,sys.datetimeoffset)
 Operator sys.+(smallint,sys.fixeddecimal)
@@ -793,8 +750,6 @@ Operator sys.+(sys."nchar",sys."nchar")
 Operator sys.+(sys."varchar",sys."varchar")
 Operator sys.+(sys."varchar",sys.nvarchar)
 Operator sys.+(sys.bpchar,sys.bpchar)
-Operator sys.+(sys.datetime,double precision)
-Operator sys.+(sys.datetime,integer)
 Operator sys.+(sys.datetimeoffset,interval)
 Operator sys.+(sys.fixeddecimal,bigint)
 Operator sys.+(sys.fixeddecimal,integer)
@@ -802,8 +757,6 @@ Operator sys.+(sys.fixeddecimal,smallint)
 Operator sys.+(sys.fixeddecimal,sys.fixeddecimal)
 Operator sys.+(sys.nvarchar,sys."varchar")
 Operator sys.+(sys.nvarchar,sys.nvarchar)
-Operator sys.+(sys.smalldatetime,double precision)
-Operator sys.+(sys.smalldatetime,integer)
 Operator sys.+(sys.smallmoney,bigint)
 Operator sys.+(sys.smallmoney,integer)
 Operator sys.+(sys.smallmoney,smallint)
@@ -811,31 +764,22 @@ Operator sys.+(sys.smallmoney,sys.smallmoney)
 Operator sys.+(sys.smallmoney,sys.tinyint)
 Operator sys.+(sys.tinyint,sys.smallmoney)
 Operator sys.+(sys.tinyint,sys.tinyint)
-Operator sys.+(text,text)
 Operator sys.-(NONE,sys."bit")
 Operator sys.-(NONE,sys.fixeddecimal)
 Operator sys.-(NONE,sys.smallmoney)
 Operator sys.-(NONE,sys.tinyint)
 Operator sys.-(bigint,sys.fixeddecimal)
 Operator sys.-(bigint,sys.smallmoney)
-Operator sys.-(double precision,sys.datetime)
-Operator sys.-(double precision,sys.smalldatetime)
-Operator sys.-(integer,sys.datetime)
 Operator sys.-(integer,sys.fixeddecimal)
-Operator sys.-(integer,sys.smalldatetime)
 Operator sys.-(integer,sys.smallmoney)
 Operator sys.-(smallint,sys.fixeddecimal)
 Operator sys.-(smallint,sys.smallmoney)
-Operator sys.-(sys.datetime,double precision)
-Operator sys.-(sys.datetime,integer)
 Operator sys.-(sys.datetimeoffset,interval)
 Operator sys.-(sys.datetimeoffset,sys.datetimeoffset)
 Operator sys.-(sys.fixeddecimal,bigint)
 Operator sys.-(sys.fixeddecimal,integer)
 Operator sys.-(sys.fixeddecimal,smallint)
 Operator sys.-(sys.fixeddecimal,sys.fixeddecimal)
-Operator sys.-(sys.smalldatetime,double precision)
-Operator sys.-(sys.smalldatetime,integer)
 Operator sys.-(sys.smallmoney,bigint)
 Operator sys.-(sys.smallmoney,integer)
 Operator sys.-(sys.smallmoney,smallint)
@@ -998,65 +942,43 @@ Operator sys.^(smallint,smallint)
 Operator sys.^(sys.tinyint,sys.tinyint)
 Operator sys.~(NONE,sys."bit")
 Type sys."bigint"
-Type sys."float"
 Type sys."int"
 Type sys."real"
-Type sys.bbf_binary
 Type sys.bbf_varbinary
 Type sys.cursor
-Type sys.rowversion
 View information_schema_tsql.check_constraints
 View information_schema_tsql.column_domain_usage
-View information_schema_tsql.columns
 View information_schema_tsql.constraint_column_usage
 View information_schema_tsql.domains
 View information_schema_tsql.routines
-View information_schema_tsql.table_constraints
-View information_schema_tsql.tables
 View information_schema_tsql.views
 View sys.all_columns
-View sys.all_objects
-View sys.all_sql_modules
 View sys.all_sql_modules_internal
 View sys.assembly_modules
 View sys.babelfish_has_perms_by_name_permissions
 View sys.change_tracking_databases
 View sys.change_tracking_tables
-View sys.check_constraints
-View sys.columns
-View sys.computed_columns
 View sys.data_spaces
 View sys.database_files
 View sys.database_filestream_options
-View sys.database_principals
 View sys.database_recovery_status
 View sys.database_role_members
-View sys.default_constraints
 View sys.dm_hadr_cluster
 View sys.dm_hadr_database_replica_states
 View sys.dm_os_host_info
 View sys.endpoints
 View sys.filetable_system_defined_objects
-View sys.foreign_key_columns
-View sys.foreign_keys
 View sys.fulltext_catalogs
 View sys.fulltext_index_columns
 View sys.fulltext_languages
 View sys.fulltext_stoplists
-View sys.identity_columns
-View sys.index_columns
-View sys.indexes
-View sys.key_constraints
 View sys.master_files
 View sys.pg_namespace_ext
 View sys.registered_search_property_lists
-View sys.schemas
 View sys.selective_xml_index_paths
-View sys.server_principals
 View sys.shipped_objects_not_in_sys
 View sys.sp_column_privileges_view
 View sys.sp_columns_100_view
-View sys.sp_databases_view
 View sys.sp_fkeys_view
 View sys.sp_pkeys_view
 View sys.sp_special_columns_view
@@ -1064,24 +986,13 @@ View sys.sp_sproc_columns_view
 View sys.sp_statistics_view
 View sys.sp_stored_procedures_view
 View sys.sp_table_privileges_view
-View sys.sp_tables_view
 View sys.spatial_index_tessellations
 View sys.spatial_indexes
 View sys.spt_columns_view_managed
 View sys.spt_tablecollations_view
-View sys.sql_modules
 View sys.stats
 View sys.synonyms
 View sys.syscharsets
-View sys.syscolumns
-View sys.sysforeignkeys
-View sys.sysindexes
 View sys.syslanguages
-View sys.system_objects
-View sys.system_sql_modules
-View sys.table_types
-View sys.tables
-View sys.types
-View sys.views
 View sys.xml_indexes
 View sys.xml_schema_collections

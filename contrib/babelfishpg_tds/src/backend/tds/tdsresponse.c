@@ -433,7 +433,7 @@ resolve_numeric_typmod_from_exp(Node *expr)
 		case T_OpExpr:
 		{
 			OpExpr *op = (OpExpr *) expr;
-			Node *arg1, *arg2;
+			Node *arg1, *arg2 = NULL;
 			int32 typmod1 = -1, typmod2 = -1;
 			uint8_t scale1, scale2, precision1, precision2;
 			uint8_t scale, precision;
@@ -564,18 +564,31 @@ resolve_numeric_typmod_from_exp(Node *expr)
 			 * Otherwise it simply won't fit in 38 precision and let an
 			 * overflow error be thrown in PrepareRowDescription.
 			 */
-			if (precision > TDS_MAX_NUM_PRECISION &&
-			    precision - scale <= TDS_MAX_NUM_PRECISION)
+			if (precision > TDS_MAX_NUM_PRECISION)
 			{
-			    /*
-			     * scale adjustment by delta is only applicable for division
-			     * and (multiplcation having no aggregate operand)
-			     */
-			    int delta = precision - TDS_MAX_NUM_PRECISION;
-			    precision = TDS_MAX_NUM_PRECISION;
-			    scale = Max(scale - delta, 0);
+				if (precision - scale > 32 && scale > 6)
+				{
+					/*
+					 * Result might be rounded to 6 decimal places or the overflow error
+					 * will be thrown if the integral part can't fit into 32 digits.
+					 */
+					precision = TDS_MAX_NUM_PRECISION;
+					scale = 6;
+				}
+				else if (precision - scale <= TDS_MAX_NUM_PRECISION)
+				{
+					/*
+					 * scale adjustment by delta is only applicable for division
+			     		 * and (multiplcation having no aggregate operand)
+			     		 */
+			    		int delta = precision - TDS_MAX_NUM_PRECISION;
+			    		precision = TDS_MAX_NUM_PRECISION;
+			    		scale = Max(scale - delta, 0);
+				}
+				/*
+				 * Control reaching here for only arithmetic overflow cases
+				 */
 			}
-
 			return ((precision << 16) | scale) + VARHDRSZ;
 		}
 		case T_FuncExpr:
@@ -680,7 +693,7 @@ resolve_numeric_typmod_from_exp(Node *expr)
 			/* select max(a) from t; max(a) is an Aggref */
 			Aggref *aggref = (Aggref *) expr;
 			TargetEntry *te;
-			const char *aggFuncName;
+			char *aggFuncName;
 			int32 typmod;
 			uint8_t precision, scale;
 
@@ -890,7 +903,7 @@ MakeEmptyParameterToken(char *name, int atttypid, int32 atttypmod, int attcollat
 				 * Get the precision and scale out of the typmod value if typmod is valid
 				 * Otherwise tds_default_numeric_precision/scale will be used.
 				 */
-				if (atttypmod >= VARHDRSZ)
+				if (atttypmod > VARHDRSZ)
 				{
 					scale = (atttypmod - VARHDRSZ) & 0xffff;
 					precision = ((atttypmod - VARHDRSZ) >> 16) & 0xffff;
@@ -1576,7 +1589,7 @@ PrepareRowDescription(TupleDesc typeinfo, List *targetlist, int16 *formats,
 					 * Get the precision and scale out of the typmod value if typmod is valid
 					 * Otherwise tds_default_numeric_precision/scale will be used.
 					 */
-					if (atttypmod >= VARHDRSZ)
+					if (atttypmod > VARHDRSZ)
 					{
 						scale = (atttypmod - VARHDRSZ) & 0xffff;
 						precision = ((atttypmod - VARHDRSZ) >> 16) & 0xffff;
@@ -1759,7 +1772,7 @@ PrepareRowDescription(TupleDesc typeinfo, List *targetlist, int16 *formats,
 			{
 				Relation		rel;
 				TdsRelationMetaDataInfo	relMetaDataInfo;
-				const char		*physical_schema_name;
+				char		*physical_schema_name;
 
 				relMetaDataInfo = (TdsRelationMetaDataInfo) palloc(sizeof(TdsRelationMetaDataInfoData));
 				tableNum++;
@@ -1790,7 +1803,7 @@ PrepareRowDescription(TupleDesc typeinfo, List *targetlist, int16 *formats,
 				 */
 				if (pltsql_plugin_handler_ptr && 
 					pltsql_plugin_handler_ptr->pltsql_get_logical_schema_name)
-					relMetaDataInfo->partName[1] = pltsql_plugin_handler_ptr->pltsql_get_logical_schema_name(physical_schema_name, true);
+					relMetaDataInfo->partName[1] = (char *) pltsql_plugin_handler_ptr->pltsql_get_logical_schema_name(physical_schema_name, true);
 
 				/* If we could not find logical schema name then send physical schema name only assuming its shared schema. */
 				if (relMetaDataInfo->partName[1] == NULL)
@@ -2196,11 +2209,30 @@ TdsSendError(int number, int state, int class,
 	 */
 	TdsSetMessageType(TDS_RESPONSE);
 
-	TdsSendInfoOrError(TDS_TOKEN_ERROR, number, state, class,
+	/*
+	 * It is possible that we fail while trying to send a message to client
+	 * (for example, because of encoding conversion failure). Therefore, we
+	 * place a PG_TRY block here to handle those scenario.
+	 */
+	PG_TRY();
+	{
+		TdsSendInfoOrError(TDS_TOKEN_ERROR, number, state, class,
 						  message,
-						  "BABELFISH",	/* TODO: where to get this? */
-						  "",		/* TODO: where to get this? */
+						  "BABELFISH",
+						  "",
 						  lineNo);
+	}
+	PG_CATCH();
+	{
+		/* Send message to client that internal error occurred */
+		TdsSendInfoOrError(TDS_TOKEN_ERROR, ERRCODE_PLTSQL_ERROR_NOT_MAPPED, 1, 16,
+						  "internal error occurred",
+						  "BABELFISH",
+						  "",
+						  lineNo);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	markErrorFlag = true;
 }
@@ -2608,9 +2640,10 @@ TdsSendDone(int token, int status, int curcmd, uint64_t nprocessed)
 
 	TdsErrorContext->err_text = "Writing Done Token";
 
-	if (GetConfigOption("babelfishpg_tsql.nocount", true, false) &&
-		strcmp(GetConfigOption("babelfishpg_tsql.nocount", true, false), "on") == 0)
-		gucNocount = true;
+	/* should be initialized already */
+	Assert(pltsql_plugin_handler_ptr);
+	if (pltsql_plugin_handler_ptr->pltsql_nocount_addr)
+		gucNocount = *(pltsql_plugin_handler_ptr->pltsql_nocount_addr);
 
 	if (TdsRequestCtrl)
 		TdsRequestCtrl->isEmptyResponse = false;

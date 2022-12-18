@@ -101,12 +101,24 @@
 					return TSQL_ATAT;
 				}
 
-<tsql>{tsql_money}	{
+<tsql>{tsql_money_with_one_byte} {
 					SET_YYLLOC();
-					yylval->str = pstrdup(yytext+1); /* stripping currency symbol */
+					yylval->str = pstrdup(yytext+1); /* stripping currency symbol with one byte */
 					return FCONST;
 				}
 
+<tsql>{tsql_money_with_two_byte} {
+					SET_YYLLOC();
+					yylval->str = pstrdup(yytext+2); /* stripping currency symbol with two byte */
+					return FCONST;
+				}
+
+<tsql>{tsql_money_with_three_byte}	{
+					SET_YYLLOC();
+					yylval->str = pstrdup(yytext+3); /* stripping currency symbol with three byte */
+					return FCONST;
+				}
+				
 <tsql>{tsql_hex}	{
 					SET_YYLLOC();
 					yylval->str = pstrdup(yytext);
@@ -220,6 +232,7 @@
 							case TSQL_LOGIN:
 							case TSQL_M:
 							case TSQL_MCS:
+							case TSQL_MI:
 							case TSQL_MICROSECOND:
 							case TSQL_MILLISECOND:
 							case TSQL_MM:
@@ -245,10 +258,12 @@
 							case TSQL_TZ:
 							case TSQL_TEXTIMAGE_ON:
 							case TSQL_TZOFFSET:
+							case TSQL_W:
 							case TSQL_WEEK:
 							case TSQL_WEEKDAY:
 							case TSQL_WK:
 							case TSQL_WW:
+							case TSQL_Y:
 							case TSQL_YY:
 							case TSQL_YYYY:
 							case TSQL_TRY_CAST:
@@ -269,6 +284,8 @@
 							case TSQL_BASE64:
 							case TSQL_ROOT:
 							case TSQL_PROC:
+							case TSQL_INCLUDE_NULL_VALUES:
+							case TSQL_WITHOUT_ARRAY_WRAPPER:
 							case TSQL_IIF:
 							case TSQL_NOCHECK:
 							case TSQL_NOLOCK:

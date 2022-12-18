@@ -46,6 +46,7 @@
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -335,7 +336,7 @@ void pltsql_estate_setup(PLtsql_execstate *estate,
 					 EState *simple_eval_estate);
 void exec_eval_cleanup(PLtsql_execstate *estate);
 
-static int exec_fmtonly(PLtsql_execstate *estate,
+int exec_fmtonly(PLtsql_execstate *estate,
                         PLtsql_stmt_execsql *stmt);
 
 static void exec_check_rw_parameter(PLtsql_expr *expr, int target_dno);
@@ -460,7 +461,7 @@ static void pltsql_clean_table_variables(PLtsql_execstate *estate, PLtsql_functi
 static void pltsql_init_exec_error_data(PLtsqlErrorData *error_data);
 static void pltsql_copy_exec_error_data(PLtsqlErrorData *src, PLtsqlErrorData *dst, MemoryContext dstCxt);
 PLtsql_estate_err *pltsql_clone_estate_err(PLtsql_estate_err *err);
-bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* reset_session_properties);
+bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* reset_session_properties, bool inside_trigger);
 
 extern void pltsql_init_anonymous_cursors(PLtsql_execstate *estate);
 extern void pltsql_cleanup_local_cursors(PLtsql_execstate *estate);
@@ -4602,15 +4603,41 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 	bool		need_path_reset = false;
 	char		*cur_dbname = get_cur_db_name();
 	bool            reset_session_properties = false;
+	bool            inside_trigger = false;
 	/* fetch current search_path */
 	List 		*path_oids = fetch_search_path(false);
 	char 		*old_search_path = flatten_search_path(path_oids);
 
 	if (stmt->is_cross_db)
-		SetCurrentRoleId(GetSessionUserId(), false);
-	
-	if(stmt->is_dml || stmt->is_ddl)
-		need_path_reset = reset_search_path(stmt, old_search_path, &reset_session_properties);
+	{
+		char *login = GetUserNameFromId(GetSessionUserId(), false);
+		char *user = get_user_for_database(stmt->db_name);
+
+		if (user)
+			SetCurrentRoleId(GetSessionUserId(), false);
+		else
+			ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_DATABASE),
+							errmsg("The server principal \"%s\" is not able to access "
+								"the database \"%s\" under the current security context",
+								login, stmt->db_name)));
+		/*
+		 * When there is cross db reference to sys or information_schema schemas,
+		 * Change the session property.
+		 */
+		if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
+			set_session_properties(stmt->db_name);
+	}
+	if(stmt->is_dml || stmt->is_ddl || stmt->is_create_view)
+	{
+		if (stmt->is_schema_specified)
+			estate->schema_name = stmt->schema_name;
+		else
+			estate->schema_name = NULL;
+		if (estate->trigdata)
+			inside_trigger = true;
+		need_path_reset = reset_search_path(stmt, old_search_path, &reset_session_properties, inside_trigger);
+	}
 
 	PG_TRY();
 	{
@@ -4994,7 +5021,11 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 			SetCurrentRoleId(current_user_id, false);
 		}
 		if (stmt->is_cross_db)
+		{
+			if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
+				set_session_properties(cur_dbname);
 			SetCurrentRoleId(current_user_id, false);
+		}
 		list_free(path_oids);
 		PG_RE_THROW();
 	}
@@ -5010,7 +5041,11 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		SetCurrentRoleId(current_user_id, false);
 	}
 	if (stmt->is_cross_db)
+	{
+		if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
+			set_session_properties(cur_dbname);
 		SetCurrentRoleId(current_user_id, false);
+	}
 	list_free(path_oids);
 
 	return PLTSQL_RC_OK;
@@ -5075,7 +5110,7 @@ static void updateColumnUpdatedList(PLtsql_expr* expr, int i){
  * call sp_describe_first_result_set.
  */
 
-static int
+int
 exec_fmtonly(PLtsql_execstate *estate,
              PLtsql_stmt_execsql *stmt)
 {
@@ -5378,22 +5413,11 @@ pltsql_update_identity_insert_sequence(PLtsql_expr *expr)
 		{
 			Relation rel;
 			TupleDesc tupdesc;
-			char *rel_name;
-			const char *physical_schema_name;
 			AttrNumber attnum;
-			SPIPlanPtr setval_plan;
-			char *setval_query;
-			char buf[1024];
-			Datum setval_values [NUM_SETVAL_QUERY_PARAMS];
-			Oid setval_argtypes [NUM_SETVAL_QUERY_PARAMS] = { TEXTOID, TEXTOID, TEXTOID, TEXTOID };
 			char *id_attname = NULL;
 			Oid seqid = InvalidOid;
-			ListCell *seq_lc;
-			List *seq_options;
-			int64 seq_incr = 0;
 			SPITupleTable *tuptable = SPI_tuptable;
 			uint64 n_processed = SPI_processed;
-			int prev_sql_dialect = sql_dialect;
 
 			/* Get the identity column name */
 			rel = RelationIdGetRelation(tsql_identity_insert.rel_oid);
@@ -5410,8 +5434,6 @@ pltsql_update_identity_insert_sequence(PLtsql_expr *expr)
 				}
 			}
 
-			rel_name = RelationGetRelationName(rel);
-
 			RelationClose(rel);
 
 			/* Handle if identity column name not found */
@@ -5424,71 +5446,95 @@ pltsql_update_identity_insert_sequence(PLtsql_expr *expr)
 			if (tuptable != NULL && n_processed > 0)
 			{
 				TupleDesc tupdesc_ret = tuptable->tupdesc;
-				HeapTuple tuple = tuptable->vals[n_processed-1];
 
-				/* Obtain the user identity value */
+				/* Obtain the user identity column */
 				for (attnum = 0; attnum < tupdesc_ret->natts; attnum++)
 				{
 					Form_pg_attribute attr = TupleDescAttr(tupdesc, attnum);
-					bool isnull;
 
 					/* Find by name since other attributes not defined */
 					if (strcmp(NameStr(attr->attname), id_attname) == 0)
 					{
-						int64 last_identity = DatumGetInt64(SPI_getbinval(tuple,
-																		  tupdesc_ret,
-																		  attnum+1,
-																		  &isnull));
+						int tup_idx;
+						int64 seq_incr = 0;
+						int64 last_identity;
+						int64 min_identity = LONG_MAX;
+						int64 max_identity = LONG_MIN;
+						ListCell *seq_lc;
+						List *seq_options;
 
+						for (tup_idx = 0; tup_idx < n_processed; tup_idx++)
+						{
+							bool isnull;
+							HeapTuple tuple = tuptable->vals[tup_idx];
+
+							last_identity = DatumGetInt64(SPI_getbinval(tuple,
+																		tupdesc_ret,
+																		attnum+1,
+																		&isnull));
+
+							Assert(!isnull);
+
+							if (last_identity < min_identity)
+								min_identity = last_identity;
+							if (last_identity > max_identity)
+								max_identity = last_identity;
+						}
+
+						/*
+						 * We also need to reset the seed.  If the increment
+						 * is positive, we need to find the max identity that
+						 * we've inserted.  Other wise, we need to set the
+						 * min identity.
+						 */
+						seq_options = sequence_options(seqid);
+
+						foreach (seq_lc, seq_options)
+						{
+							DefElem *defel = (DefElem *) lfirst(seq_lc);
+
+							if (strcmp(defel->defname, "increment") == 0)
+								seq_incr = defGetInt64(defel);
+
+						}
+
+						PG_TRY();
+						{
+							/*
+							 * We want the T-SQL behavior of setval function.
+							 * Please check the variable definition for details.
+							 */
+							pltsql_setval_identity_mode = true;
+							if (seq_incr > 0)
+								DirectFunctionCall2(setval_oid,
+													ObjectIdGetDatum(seqid),
+													Int64GetDatum(max_identity));
+							else if (seq_incr < 0)
+								DirectFunctionCall2(setval_oid,
+													ObjectIdGetDatum(seqid),
+													Int64GetDatum(min_identity));
+							else {
+								/* increment can't be zero */
+								Assert(0);
+							}
+						}
+						PG_FINALLY();
+						{
+							/* reset the value */
+							pltsql_setval_identity_mode = false;
+						}
+						PG_END_TRY();
+
+						/* update last used identity if setval is successful */
 						pltsql_update_last_identity(seqid, last_identity);
+
+						/* more than one identity column isn't allowed */
+						break;
 					}
 				}
 			}
 
-			physical_schema_name = get_namespace_name(tsql_identity_insert.schema_oid);
-
-			seq_options = sequence_options(seqid);
-
-			foreach (seq_lc, seq_options)
-			{
-				DefElem *defel = (DefElem *) lfirst(seq_lc);
-
-				if (strcmp(defel->defname, "increment") == 0)
-					seq_incr = defGetInt64(defel);
-			}
-
-			/*
-			* Set sequence start value. Since names are qualified (fetched from built-in functions),
-			* double-quote to preserve cases. Second argument of pg_get_serial_sequence() preserves
-			* case by default
-			*/
-			if (seq_incr < 0)
-				setval_query = "SELECT setval(pg_get_serial_sequence($1, $2), sys.get_min_id_from_table($2, $3, $4));";
-			else
-				setval_query = "SELECT setval(pg_get_serial_sequence($1, $2), sys.get_max_id_from_table($2, $3, $4));";
-
-			snprintf(buf, 1024, "\"%s\".\"%s\"", physical_schema_name, rel_name);
-			setval_values[0] = CStringGetTextDatum(buf);
-			setval_values[1] = CStringGetTextDatum(id_attname);
-			setval_values[2] = CStringGetTextDatum(physical_schema_name);
-			setval_values[3] = CStringGetTextDatum(rel_name);
-
-			sql_dialect = SQL_DIALECT_PG;
-			PG_TRY();
-			{
-				setval_plan = SPI_prepare(setval_query, NUM_SETVAL_QUERY_PARAMS, setval_argtypes);
-				if (setval_plan)
-					SPI_execute_plan(setval_plan, setval_values, NULL, false, 1);
-			}
-			PG_CATCH();
-			{
-				FlushErrorState();
-			}
-			PG_END_TRY();
-			sql_dialect = prev_sql_dialect;
-
 			/* Clean up */
-			SPI_freeplan(setval_plan);
 			SPI_freetuptable(SPI_tuptable);
 		}
 	}
@@ -7173,9 +7219,7 @@ exec_run_select(PLtsql_execstate *estate,
 	 * can't support.
 	 */
 	if (expr->plan == NULL)
-		exec_prepare_plan(estate, expr,
-						  portalP == NULL ? CURSOR_OPT_PARALLEL_OK : 0, true);
-
+		exec_prepare_plan(estate, expr, portalP == NULL ? CURSOR_OPT_PARALLEL_OK : 0, true);
 	/*
 	 * If we started an implicit_transaction for this statement but
 	 * the statement has a simple expression associated with them,
@@ -10046,19 +10090,20 @@ pltsql_clone_estate_err(PLtsql_estate_err *err)
 	return clone;
 }
 
-bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* reset_session_properties)
+bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* reset_session_properties, bool inside_trigger)
 {
 	PLExecStateCallStack *top_es_entry;
 	char		*cur_dbname = get_cur_db_name();
 	char 		*new_search_path;
 	char 		*physical_schema;
-	char		*dbo_schema;
+	const char		*dbo_schema;
 	top_es_entry = exec_state_call_stack->next;
 
 	while(top_es_entry != NULL)
 	{
-		/* traverse through the estate stack. If the occurrence of
-		 * exec in the call stack, update the search path.
+		/*
+		 * Traverse through the estate stack. If the occurrence of
+		 * exec in the call stack, update the search path accordingly.
 		 */
 		if(top_es_entry->estate && top_es_entry->estate->err_stmt &&
 			top_es_entry->estate->err_stmt->cmd_type == PLTSQL_STMT_EXEC)
@@ -10089,7 +10134,7 @@ bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* r
 					}
 					else
 					{
-						physical_schema = get_physical_schema_name(top_es_entry->estate->db_name, top_es_entry->estate->schema_name);
+						physical_schema = get_physical_schema_name((char *) top_es_entry->estate->db_name, top_es_entry->estate->schema_name);
 						dbo_schema = get_dbo_schema_name(top_es_entry->estate->db_name);
 					}
 				}
@@ -10111,6 +10156,35 @@ bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* r
 		else if(top_es_entry->estate && top_es_entry->estate->err_stmt &&
 				top_es_entry->estate->err_stmt->cmd_type == PLTSQL_STMT_EXEC_BATCH)
 			return false;
+
+		/*
+		 * Traverse through the estate stack, if the stmt is inside trigger
+		 * we set the search path accordingly.
+		 */
+		else if(top_es_entry->estate && top_es_entry->estate->err_stmt &&
+				top_es_entry->estate->err_stmt->cmd_type == PLTSQL_STMT_EXECSQL)
+		{
+			if(inside_trigger && top_es_entry->estate->schema_name)
+			{
+				/*
+				 * If the object in the stmt is schema qualified or it's a ddl
+				 * we don't need to update the searh path.
+				 */
+				if (stmt->is_schema_specified || stmt->is_ddl)
+					return false;
+				else
+				{
+					physical_schema = get_physical_schema_name(cur_dbname, top_es_entry->estate->schema_name);
+					dbo_schema = get_dbo_schema_name(cur_dbname);
+					new_search_path = psprintf("%s, %s, %s", physical_schema, dbo_schema, old_search_path);
+					/* Add the schema where the object is referenced and dbo schema to the new search path */
+					(void) set_config_option("search_path", new_search_path,
+							PGC_USERSET, PGC_S_SESSION,
+							GUC_ACTION_SAVE, true, 0, false);
+					return true;
+				}
+			}
+		}
 		top_es_entry = top_es_entry->next;
 	}
 	/*
@@ -10118,9 +10192,8 @@ bool reset_search_path(PLtsql_stmt_execsql *stmt, char *old_search_path, bool* r
 	 * search the specified schema for the object. If not found,
 	 * then search the dbo schema. Don't update the path for "sys" schema.
 	 */
-	if (stmt->func_call && stmt->schema_name != NULL &&
-			((strncmp(stmt->schema_name, "sys", strlen(stmt->schema_name)) != 0 && strlen(stmt->schema_name) == 3)
-			|| strlen(stmt->schema_name) != 3))
+	if ((stmt->func_call || stmt->is_create_view) && stmt->schema_name != NULL &&
+			(strcmp(stmt->schema_name, "sys") != 0 && strcmp(stmt->schema_name, "pg_catalog") != 0))
 	{
 		cur_dbname = get_cur_db_name();
 		physical_schema = get_physical_schema_name(cur_dbname, stmt->schema_name);

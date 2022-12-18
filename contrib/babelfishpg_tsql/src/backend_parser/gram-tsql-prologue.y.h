@@ -14,6 +14,7 @@
 #include "src/backend_parser/gramparse.h"
 #include "src/pltsql_instr.h"
 #include "src/multidb.h"
+#include "src/forjson.h"
 
 #define MD5_HASH_LEN 32
 
@@ -46,8 +47,9 @@ static Node *TsqlFunctionParse(Node *arg, TypeName *typename, Node *culture, boo
 static Node *TsqlFunctionIIF(Node *bool_expr, Node *arg1, Node *arg2, int location);
 static Node *TsqlFunctionChoose(Node *int_expr, List *choosable, int location);
 static void tsql_check_param_readonly(const char* paramname, TypeName *typename, bool readonly);
-static void tsql_completeDefaultValues(List *parameters);
 static ResTarget *TsqlForXMLMakeFuncCall(TSQL_ForClause *forclause, char *src_query, size_t start_location, core_yyscan_t yyscanner);
+static ResTarget *TsqlForJSONMakeFuncCall(TSQL_ForClause *forclause, char *src_query, size_t start_location, core_yyscan_t yyscanner);
+static Node* tsql_get_transformed_query(StringInfo format_query, char *end_param, char *query, List *params);
 
 char * construct_unique_index_name(char *index_name, char *relation_name);
 

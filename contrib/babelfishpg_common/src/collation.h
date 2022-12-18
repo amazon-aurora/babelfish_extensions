@@ -5,6 +5,13 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pathnodes.h"
 
+
+extern char *pltsql_default_locale;
+extern char *pltsql_server_collation_name;
+
+/* Dump and Restore */
+extern char *babelfish_restored_server_collation_name;
+
 /* Set default encoding to UTF8 */
 #define COLL_DEFAULT_ENCODING PG_UTF8
 
@@ -69,7 +76,7 @@ typedef struct ht_like2ilike_entry{
 typedef struct collation_callbacks
 {
 	/* Function pointers set up by the plugin */
-	char* (*EncodingConversion)(const char *s, int len, int encoding, int *encodedByteLen);
+	char* (*EncodingConversion)(const char *s, int len, int src_encoding, int dest_encoding, int *encodedByteLen);
 
 	Oid (*get_server_collation_oid_internal)(bool missingOk);
 
@@ -97,6 +104,8 @@ typedef struct collation_callbacks
 
 	int (*find_collation_internal)(const char *collation_name);
 
+	bool (*has_ilike_node)(Node *expr);
+
 } collation_callbacks;
 
 extern int find_cs_as_collation(int collidx);
@@ -121,6 +130,8 @@ extern int init_like_ilike_table_internal(void);
 extern like_ilike_info lookup_like_ilike_table(Oid opno);
 extern int find_collation(const char *collation_name);
 Oid get_oid_from_collidx(int collidx);
+extern bool has_ilike_node(Node *expr);
+extern Oid babelfish_define_type_default_collation(Oid typeNamespace);
 
 extern collation_callbacks *get_collation_callbacks(void);
 

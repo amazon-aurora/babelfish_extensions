@@ -44,9 +44,6 @@ static void truncate_tsql_identifier(char *ident);
 bool
 enable_schema_mapping(void)
 {
-	if (!ownership_structure_enabled())
-		return false;
-
 	if (!DbidIsValid(get_cur_db_id()))  /* TODO: remove it after cur_db_oid() is enforeced */
 		return false;
 
@@ -97,6 +94,13 @@ rewrite_object_refs(Node *stmt)
 				
 				switch(cmd->subtype)
 				{
+				case AT_ColumnDefault:
+				{
+					ColumnDef *def = (ColumnDef *) cmd->def;
+
+					rewrite_relation_walker((Node *) def, (void *) NULL);
+					break;
+				}
 				case AT_AddColumn:
 				case AT_AlterColumnType:
 				{
@@ -440,7 +444,7 @@ rewrite_object_refs(Node *stmt)
 			}
 
 			rewrite_plain_name(create_func->funcname);
-			if (list_length(create_func->options) == 3)
+			if (list_length(create_func->options) >= 3)
 			{
 				DefElem *defElem = (DefElem *) lthird(create_func->options);
 				if (strncmp(defElem->defname, "trigStmt", 8) == 0)
@@ -685,8 +689,8 @@ rewrite_column_refs(ColumnRef *cref)
 			else
 			{
 				new_schema = makeString(get_physical_schema_name(cur_db, strVal(schema)));
-				list_delete_first(cref->fields);
-				lcons(new_schema, cref->fields);
+				cref->fields = list_delete_first(cref->fields);
+				cref->fields = lcons(new_schema, cref->fields);
 			}
 			break;
 		}
@@ -697,13 +701,13 @@ rewrite_column_refs(ColumnRef *cref)
 			Value      *new_schema;
 
 			if (is_shared_schema(strVal(schema)))
-				list_delete_first(cref->fields);  /* redirect to shared schema */
+				cref->fields = list_delete_first(cref->fields);  /* redirect to shared schema */
 			else
 			{
 				new_schema = makeString(get_physical_schema_name(strVal(db), strVal(schema)));
-				list_delete_first(cref->fields);
-				list_delete_first(cref->fields);
-				lcons(new_schema, cref->fields);
+				cref->fields = list_delete_first(cref->fields);
+				cref->fields = list_delete_first(cref->fields);
+				cref->fields = lcons(new_schema, cref->fields);
 			}
 			break;
 		}
@@ -759,8 +763,8 @@ rewrite_plain_name(List *name)
 
 			new_schema = makeString(get_physical_schema_name(cur_db, strVal(schema)));
 			/* ignoring the return value sinece list is valid and cannot be empty */
-			list_delete_first(name);
-			lcons(new_schema, name);
+			name = list_delete_first(name);
+			name = lcons(new_schema, name);
 			break;
 		}
 		case 3:
@@ -772,14 +776,14 @@ rewrite_plain_name(List *name)
 
 			/* do nothing for shared schemas */
 			if (is_shared_schema(strVal(schema)))
-				list_delete_first(name);  /* redirect to shared SYS schema */
+				name = list_delete_first(name);  /* redirect to shared SYS schema */
 			else
 			{
 				new_schema = makeString(get_physical_schema_name(strVal(db), strVal(schema)));
 				/* ignoring the return value sinece list is valid and cannot be empty */
-				list_delete_first(name);
-				list_delete_first(name);
-				lcons(new_schema, name);
+				name = list_delete_first(name);
+				name = list_delete_first(name);
+				name = lcons(new_schema, name);
 			}
 			break;
 		}
@@ -1118,9 +1122,13 @@ const char *get_guest_role_name(const char *dbname)
 		return "tempdb_guest";
 	if (0 == strcmp(dbname , "msdb"))
 		return "msdb_guest";
-	/* BABEL-2430: Disable guest user for DB other than master/tempdb/msdb */
 	else
-		return NULL;
+	{
+		char *name = palloc0(MAX_BBF_NAMEDATALEND);
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s_guest", dbname);
+		truncate_identifier(name, strlen(name), false);
+		return name;
+	}
 }
 
 /*************************************************************

@@ -74,10 +74,16 @@ PG_FUNCTION_INFO_V1(has_dbaccess);
 PG_FUNCTION_INFO_V1(sp_datatype_info_helper);
 PG_FUNCTION_INFO_V1(language);
 PG_FUNCTION_INFO_V1(host_name);
-
-/* Not supported -- only syntax support */
 PG_FUNCTION_INFO_V1(procid);
+PG_FUNCTION_INFO_V1(babelfish_integrity_checker);
+PG_FUNCTION_INFO_V1(bigint_degrees);
+PG_FUNCTION_INFO_V1(int_degrees);
+PG_FUNCTION_INFO_V1(smallint_degrees);
+PG_FUNCTION_INFO_V1(bigint_radians);
+PG_FUNCTION_INFO_V1(int_radians);
+PG_FUNCTION_INFO_V1(smallint_radians);
 
+void* string_to_tsql_varchar(const char *input_str);
 void* get_servername_internal(void);
 void* get_servicename_internal(void);
 void* get_language(void);
@@ -99,6 +105,8 @@ extern bool pltsql_concat_null_yields_null;
 extern bool pltsql_numeric_roundabort;
 extern bool pltsql_xact_abort;
 extern bool pltsql_case_insensitive_identifiers;
+extern bool inited_ht_tsql_cast_info;
+extern bool inited_ht_tsql_datatype_precedence_info;
 
 char *bbf_servername = "BABELFISH";
 const char *bbf_servicename = "MSSQLSERVER";
@@ -142,9 +150,9 @@ version(PG_FUNCTION_ARGS)
 
 		appendStringInfo(&temp,
 						 "Babelfish for PostgreSQL with SQL Server Compatibility - %s"
-						 "\n%s %s\nCopyright (c) Amazon Web Services\n%s",
+						 "\n%s %s\nCopyright (c) Amazon Web Services\n%s (Babelfish %s)",
 						 BABEL_COMPATIBILITY_VERSION,
-						 __DATE__, __TIME__, pg_version);
+						 __DATE__, __TIME__, pg_version, BABELFISH_VERSION_STR);
 	}
 	else
 		appendStringInfoString(&temp, pltsql_version);
@@ -755,6 +763,7 @@ tsql_stat_get_activity_deprecated_in_2_2_0(PG_FUNCTION_ARGS)
 Datum
 tsql_stat_get_activity(PG_FUNCTION_ARGS)
 {
+	Oid			sysadmin_oid = get_role_oid("sysadmin", false);
 	int			num_backends = pgstat_fetch_stat_numbackends();
 	int			curr_backend;
 	char*			view_name = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -775,14 +784,14 @@ tsql_stat_get_activity(PG_FUNCTION_ARGS)
 	 */
 	if (strcmp(view_name, "sessions") == 0)
 	{
-		if (role_is_sa(GetSessionUserId()))
+		if (has_privs_of_role(GetSessionUserId(), sysadmin_oid))
 			pid = -1;
 		else
 			pid = MyProcPid;
 	}
 	else if (strcmp(view_name, "connections") == 0)
 	{
-		if (role_is_sa(GetSessionUserId()))
+		if (has_privs_of_role(GetSessionUserId(), sysadmin_oid))
 			pid = -1;
 		else
 			ereport(ERROR,
@@ -882,6 +891,7 @@ checksum(PG_FUNCTION_ARGS)
        StringInfoData buf;
        char md5[MD5_HASH_LEN + 1];
        char *name;
+       bool success;
 
        initStringInfo(&buf);
        if (nargs > 0)
@@ -907,7 +917,7 @@ checksum(PG_FUNCTION_ARGS)
          * We are taking the first 8 characters of the md5 hash
          * and converting it to int32.
          */
-        bool success = pg_md5_hash(buf.data, buf.len, md5);
+        success = pg_md5_hash(buf.data, buf.len, md5);
         if (success)
         {
                 md5[8] = '\0';
@@ -926,13 +936,15 @@ has_dbaccess(PG_FUNCTION_ARGS)
 	char *lowercase_db_name = lowerstr(db_name);
 	/* Also strip trailing whitespace to mimic SQL Server behaviour */
 	int i;
+	const char *user = NULL;
+	const char *login;
+	int16		db_id;
+
 	i = strlen(lowercase_db_name);
 	while (i > 0 && isspace((unsigned char) lowercase_db_name[i - 1]))
 		lowercase_db_name[--i] = '\0';
-	const char *user = NULL;
-	const char *login;
 
-	int16		db_id = get_db_id(lowercase_db_name);
+	db_id = get_db_id(lowercase_db_name);
 
 	if (!DbidIsValid(db_id))
 		PG_RETURN_NULL();
@@ -952,7 +964,13 @@ has_dbaccess(PG_FUNCTION_ARGS)
 		if (is_member_of_role(GetSessionUserId(), datdba))
 			user = get_dbo_role_name(lowercase_db_name);
 		else
-			user = get_guest_role_name(lowercase_db_name);
+		{
+			/* Get the guest role name only if the guest is enabled on the current db.*/
+			if (guest_has_dbaccess(lowercase_db_name))
+				user = get_guest_role_name(lowercase_db_name);
+			else
+				user = NULL;
+		}
 	}
 
 	if (!user)
@@ -1154,4 +1172,129 @@ host_name(PG_FUNCTION_ARGS)
 		PG_RETURN_VARCHAR_P(string_to_tsql_varchar((*pltsql_protocol_plugin_ptr)->get_host_name()));
 	else
 		PG_RETURN_NULL();
+}
+
+/*
+ * Execute various integrity checks.
+ * Returns true if all the checks pass otherwise
+ * raises an appropriate error message.
+ */
+Datum
+babelfish_integrity_checker(PG_FUNCTION_ARGS)
+{
+	if (!inited_ht_tsql_cast_info)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_CHECK_VIOLATION),
+				 errmsg("T-SQL cast info hash table is not properly initialized.")));
+	}
+	else if (!inited_ht_tsql_datatype_precedence_info)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_CHECK_VIOLATION),
+				 errmsg("T-SQL datatype precedence hash table is not properly initialized.")));
+	}
+
+	PG_RETURN_BOOL(true);
+}
+
+Datum
+bigint_degrees(PG_FUNCTION_ARGS)
+{
+	int64	arg1 = PG_GETARG_INT64(0);
+	float8	result;
+	 
+	result = DatumGetFloat8(DirectFunctionCall1(degrees, Float8GetDatum((float8) arg1)));
+
+	if (result < 0)
+		result = ceil(result);
+	else
+		result = floor(result);
+
+	 /* Range check */
+	if (unlikely(isnan(result) || !FLOAT8_FITS_IN_INT64(result)))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				errmsg("Arithmetic overflow error converting expression to data type bigint")));
+
+	PG_RETURN_INT64((int64)result);
+}
+
+Datum
+int_degrees(PG_FUNCTION_ARGS)
+{
+	int32	arg1 = PG_GETARG_INT32(0);
+	float8	result;
+	 
+	result = DatumGetFloat8(DirectFunctionCall1(degrees, Float8GetDatum((float8) arg1)));
+
+	if (result < 0)
+		result = ceil(result);
+	else
+		result = floor(result);
+
+	 /* Range check */
+	if (unlikely(isnan(result) || !FLOAT8_FITS_IN_INT32(result)))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				errmsg("Arithmetic overflow error converting expression to data type int")));
+
+	PG_RETURN_INT32((int32)result);
+}
+
+Datum
+smallint_degrees(PG_FUNCTION_ARGS)
+{
+	int16	arg1 = PG_GETARG_INT16(0);
+	float8	result;
+
+	result = DatumGetFloat8(DirectFunctionCall1(degrees, Float8GetDatum((float8) arg1)));
+
+	if (result < 0)
+		result = ceil(result);
+	else
+		result = floor(result);
+
+	/* skip range check, since it cannot overflow int32 */
+
+	PG_RETURN_INT32((int32) result);
+}
+
+Datum
+bigint_radians(PG_FUNCTION_ARGS)
+{
+	int64    arg1 = PG_GETARG_INT64(0);
+	float8  result;
+
+	result = DatumGetFloat8(DirectFunctionCall1(radians, Float8GetDatum((float8) arg1)));
+
+	/* skip range check, since it cannot overflow int64 */
+
+	PG_RETURN_INT64((int64)result);
+}
+
+Datum
+int_radians(PG_FUNCTION_ARGS)
+{
+	int32    arg1 = PG_GETARG_INT32(0);
+	float8  result;
+
+	result = DatumGetFloat8(DirectFunctionCall1(radians, Float8GetDatum((float8) arg1)));
+
+	/* skip range check, since it cannot overflow int32 */
+
+	PG_RETURN_INT32((int32)result);
+}
+
+Datum
+smallint_radians(PG_FUNCTION_ARGS)
+{
+	int16    arg1 = PG_GETARG_INT16(0);
+	float8  result;
+
+	result = DatumGetFloat8(DirectFunctionCall1(radians, Float8GetDatum((float8) arg1)));
+
+	/* skip range check, since it cannot overflow int32 */
+
+	PG_RETURN_INT32((int32)result);
 }

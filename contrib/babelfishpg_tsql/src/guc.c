@@ -8,6 +8,7 @@
 #include "pltsql_instr.h"
 #include "pltsql.h"
 #include "pl_explain.h"
+#include "miscadmin.h"
 
 #define PLTSQL_SESSION_ISOLATION_LEVEL "default_transaction_isolation"
 #define PLTSQL_TRANSACTION_ISOLATION_LEVEL "transaction_isolation"
@@ -16,11 +17,11 @@
 static int migration_mode = SINGLE_DB;
 bool   enable_ownership_structure = false;
 
+bool enable_metadata_inconsistency_check = true;
+
 bool pltsql_dump_antlr_query_graph = false;
 bool pltsql_enable_antlr_detailed_log = false;
 bool pltsql_allow_antlr_to_unsupported_grammar_for_testing = false;
-char* pltsql_default_locale = NULL;
-char* pltsql_server_collation_name = NULL;
 bool  pltsql_ansi_defaults = true;
 bool  pltsql_quoted_identifier = true;
 bool  pltsql_concat_null_yields_null = true;
@@ -75,18 +76,19 @@ extern bool Transform_null_equals;
 /* Dump and Restore */
 bool babelfish_dump_restore = false;
 bool restore_tsql_tabletype = false;
+char *babelfish_dump_restore_min_oid = NULL;
 
 /* T-SQL Hint Mapping */
-bool enable_hint_mapping = false;
+bool enable_hint_mapping = true;
+bool enable_pg_hint = false;
 
-static bool check_server_collation_name(char **newval, void **extra, GucSource source);
-static bool check_default_locale (char **newval, void **extra, GucSource source);
 static bool check_ansi_null_dflt_on (bool *newval, void **extra, GucSource source);
 static bool check_ansi_null_dflt_off (bool *newval, void **extra, GucSource source);
 static bool check_ansi_padding (bool *newval, void **extra, GucSource source);
 static bool check_ansi_warnings (bool *newval, void **extra, GucSource source);
 static bool check_arithignore (bool *newval, void **extra, GucSource source);
 static bool check_arithabort (bool *newval, void **extra, GucSource source);
+static bool check_babelfish_dump_restore_min_oid (char **newval, void **extra, GucSource source);
 static bool check_numeric_roundabort (bool *newval, void **extra, GucSource source);
 static bool check_cursor_close_on_commit (bool *newval, void **extra, GucSource source);
 static bool check_rowcount (int *newval, void **extra, GucSource source);
@@ -107,6 +109,7 @@ static void assign_language (const char *newval, void *extra);
 static void assign_lock_timeout (int newval, void *extra);
 static void assign_datefirst (int newval, void *extra);
 static bool check_no_browsetable (bool *newval, void **extra, GucSource source);
+static void assign_enable_pg_hint (bool newval, void *extra);
 int escape_hatch_session_settings; /* forward declaration */
 
 static const struct config_enum_entry migration_mode_options[] = {
@@ -120,29 +123,6 @@ static const struct config_enum_entry escape_hatch_options[] = {
 	{"ignore", EH_IGNORE, false},
 	{NULL, EH_NULL, false},
 };
-
-static bool check_server_collation_name(char **newval, void **extra, GucSource source)
-{
-	if (tsql_is_valid_server_collation_name(*newval))
-	{
-		/*
-			* We are storing value in lower case since
-			* Collation names are stored in lowercase into pg catalog (pg_collation).
-			*/
-		char *dupval = pstrdup(*newval);
-		strcpy(*newval, downcase_identifier(dupval, strlen(dupval), false, false));
-		pfree(dupval);
-		return true;
-	}
-	return false;
-}
-
-static bool check_default_locale (char **newval, void **extra, GucSource source)
-{
-	if (tsql_find_locale(*newval) >= 0)
-		return true;
-	return false;
-}
 
 static bool check_ansi_null_dflt_on (bool *newval, void **extra, GucSource source)
 {
@@ -241,6 +221,11 @@ static bool check_arithabort (bool *newval, void **extra, GucSource source)
 		*newval = true; /* overwrite to a default value */
 	}
     return true;
+}
+
+static bool check_babelfish_dump_restore_min_oid (char **newval, void **extra, GucSource source)
+{
+	return *newval == NULL || OidIsValid(atooid(*newval));
 }
 
 static bool check_numeric_roundabort (bool *newval, void **extra, GucSource source)
@@ -381,6 +366,18 @@ static bool check_showplan_xml (bool *newval, void **extra, GucSource source)
 		*newval = false; /* overwrite to a default value */
 	}
 	return true;
+}
+
+static void assign_enable_pg_hint (bool newval, void *extra)
+{
+	if (newval)
+	{
+		/* Will throw an error if pg_hint_plan is not installed */
+		load_libraries("pg_hint_plan", NULL, false);
+	}
+
+	if (GetConfigOption("pg_hint_plan.enable_hint", true, false))
+		SetConfigOption("pg_hint_plan.enable_hint", newval ? "on" : "off", PGC_USERSET, PGC_S_SESSION);
 }
 
 static void assign_transform_null_equals (bool newval, void *extra)
@@ -558,14 +555,6 @@ define_custom_variables(void)
 							  GUC_NO_RESET_ALL,
 							  NULL, NULL, NULL);
 
-	DefineCustomBoolVariable("babelfishpg_tsql.enable_ownership_structure",
-				 gettext_noop("Enable Babelfish Ownership Structure"),
-				 NULL,
-				 &enable_ownership_structure,
-				 false,
-				 PGC_SUSET,  /* only superuser can set */
-				 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
-				 NULL, NULL, NULL);
 
 	/* ANTLR parser */
 	DefineCustomBoolVariable("babelfishpg_tsql.dump_antlr_query_graph",
@@ -595,25 +584,6 @@ define_custom_variables(void)
 				 PGC_SUSET,  /* only superuser can set */
 				 GUC_NO_SHOW_ALL,
 				 NULL, NULL, NULL);
-
-	DefineCustomStringVariable("babelfishpg_tsql.server_collation_name",
-				   gettext_noop("Name of the default server collation."),
-				   NULL,
-				   &pltsql_server_collation_name,
-				   "sql_latin1_general_cp1_ci_as",
-				   PGC_SIGHUP,
-				   GUC_NO_RESET_ALL,
-				   check_server_collation_name, NULL, NULL);
-
-
-	DefineCustomStringVariable("babelfishpg_tsql.default_locale",
-				   gettext_noop("The default locale to use when creating a new collation."),
-				   NULL,
-				   &pltsql_default_locale,
-				   "en_US",
-				   PGC_SUSET,  /* only superuser can set */
-				   0,
-				   check_default_locale, NULL, NULL);
 
 	/* ISO standard settings */
 	DefineCustomBoolVariable("babelfishpg_tsql.ansi_defaults",
@@ -965,7 +935,7 @@ define_custom_variables(void)
 				 gettext_noop("Include actual startup time and time spent in each node in the output"),
 				 NULL,
 				 &pltsql_explain_timing,
-				 false,
+				 true,
 				 PGC_USERSET,
 				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 				 NULL, NULL, NULL);
@@ -974,7 +944,7 @@ define_custom_variables(void)
 				 gettext_noop("Include summary information (e.g., totaled timing information) after the query plan"),
 				 NULL,
 				 &pltsql_explain_summary,
-				 false,
+				 true,
 				 PGC_USERSET,
 				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 				 NULL, NULL, NULL);
@@ -1049,15 +1019,32 @@ define_custom_variables(void)
 				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 				 NULL, NULL, NULL);
 
+	DefineCustomStringVariable("babelfishpg_tsql.dump_restore_min_oid",
+				 gettext_noop("All new OIDs should be greater than this number during dump and restore"),
+				 NULL,
+				 &babelfish_dump_restore_min_oid,
+				 NULL,
+				 PGC_USERSET,
+				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+				 check_babelfish_dump_restore_min_oid, NULL, NULL);
+
 	/* T-SQL Hint Mapping */
 	DefineCustomBoolVariable("babelfishpg_tsql.enable_hint_mapping",
-				 gettext_noop("Enables T-SQL hint mapping"),
+				 gettext_noop("Enables T-SQL hint mapping in ANTLR parser"),
 				 NULL,
 				 &enable_hint_mapping,
-				 false,
+				 true,
 				 PGC_USERSET,
 				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 				 NULL, NULL, NULL);
+	DefineCustomBoolVariable("babelfishpg_tsql.enable_pg_hint",
+				 gettext_noop("Loads and enables pg_hint_plan library"),
+				 NULL,
+				 &enable_pg_hint,
+				 false,
+				 PGC_USERSET,
+				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+				 NULL, assign_enable_pg_hint, NULL);
 
 	DefineCustomIntVariable("babelfishpg_tsql.insert_bulk_rows_per_batch",
 				gettext_noop("Sets the number of rows per batch to be processed for Insert Bulk"),
@@ -1076,6 +1063,16 @@ define_custom_variables(void)
 				PGC_USERSET,
 				GUC_NOT_IN_SAMPLE,
 				NULL, NULL, NULL);
+
+
+	DefineCustomBoolVariable("babelfishpg_tsql.enable_metadata_inconsistency_check",
+				 gettext_noop("Enables babelfish_inconsistent_metadata"),
+				 NULL,
+				 &enable_metadata_inconsistency_check,
+				 true,
+				 PGC_USERSET,
+				 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+				 NULL, NULL, NULL);
 }
 
 int escape_hatch_storage_options = EH_IGNORE;
@@ -1108,6 +1105,7 @@ int escape_hatch_unique_constraint = EH_STRICT;
 int escape_hatch_ignore_dup_key = EH_STRICT;
 int escape_hatch_rowversion = EH_STRICT;
 int escape_hatch_showplan_all = EH_STRICT;
+int escape_hatch_checkpoint = EH_IGNORE;
 
 void
 define_escape_hatch_variables(void)
@@ -1435,6 +1433,17 @@ define_escape_hatch_variables(void)
 							  PGC_USERSET,
 							  GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 							  NULL, NULL, NULL);
+
+	/* CHECKPOINT */
+	DefineCustomEnumVariable("babelfishpg_tsql.escape_hatch_checkpoint",
+							  gettext_noop("escape hatch for CHECKPOINT"),
+							  NULL,
+							  &escape_hatch_checkpoint,
+							  EH_IGNORE,
+							  escape_hatch_options,
+							  PGC_USERSET,
+							  GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+							  NULL, NULL, NULL);
 }
 
 void
@@ -1460,8 +1469,9 @@ get_migration_mode(void)
 	return (MigrationMode) migration_mode;
 }
 
+
 bool
-ownership_structure_enabled(void)
+metadata_inconsistency_check_enabled(void)
 {
-	return enable_ownership_structure;
+	return enable_metadata_inconsistency_check;
 }

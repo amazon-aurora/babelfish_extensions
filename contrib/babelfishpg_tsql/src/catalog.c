@@ -10,8 +10,11 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_proc.h"
 #include "catalog/namespace.h"
+#include "parser/parse_relation.h"
 #include "parser/scansup.h"
+#include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -21,10 +24,12 @@
 #include "utils/timestamp.h"
 #include "nodes/execnodes.h"
 #include "catalog.h"
+#include "dbcmds.h"
 #include "guc.h"
 #include "hooks.h"
 #include "multidb.h"
 #include "rolecmds.h"
+#include "session.h"
 #include "pltsql.h"
 
 /*****************************************
@@ -65,10 +70,17 @@ Oid			bbf_view_def_oid;
 Oid			bbf_view_def_idx_oid;
 
 /*****************************************
+ *			FUNCTION_EXT
+ *****************************************/
+Oid			bbf_function_ext_oid;
+Oid			bbf_function_ext_idx_oid;
+
+/*****************************************
  * 			Catalog General
  *****************************************/
 
 static bool tsql_syscache_inited = false;
+extern bool babelfish_dump_restore;
 
 static struct cachedesc my_cacheinfo[] = {
      {-1,       /* SYSDATABASEOID */ 
@@ -92,7 +104,18 @@ static struct cachedesc my_cacheinfo[] = {
               0
           },
           16
-      }
+      },
+	  {-1,       /* PROCNSPSIGNATURE */ 
+          -1,
+          2,
+          {
+              Anum_bbf_function_ext_nspname,
+              Anum_bbf_function_ext_funcsignature,
+              0,
+              0
+          },
+          16
+     }
 };
 
 PG_FUNCTION_INFO_V1(init_catalog);
@@ -113,11 +136,17 @@ Datum init_catalog(PG_FUNCTION_ARGS)
 	namespace_ext_oid = get_relname_relid(NAMESPACE_EXT_TABLE_NAME, sys_schema_oid);
 	namespace_ext_idx_oid_oid = get_relname_relid(NAMESAPCE_EXT_PK_NAME, sys_schema_oid);
 
+	/* bbf_function_ext */
+	bbf_function_ext_oid = get_relname_relid(BBF_FUNCTION_EXT_TABLE_NAME, sys_schema_oid);
+	bbf_function_ext_idx_oid = get_relname_relid(BBF_FUNCTION_EXT_IDX_NAME, sys_schema_oid);
+
 	/* syscache info */
 	my_cacheinfo[0].reloid = sysdatabases_oid;
 	my_cacheinfo[0].indoid = sysdatabaese_idx_oid_oid;
 	my_cacheinfo[1].reloid = sysdatabases_oid;
 	my_cacheinfo[1].indoid = sysdatabaese_idx_name_oid;
+	my_cacheinfo[2].reloid = bbf_function_ext_oid;
+	my_cacheinfo[2].indoid = bbf_function_ext_idx_oid;
 
 	/* login ext */
 	bbf_authid_login_ext_oid = get_relname_relid(BBF_AUTHID_LOGIN_EXT_TABLE_NAME,
@@ -144,7 +173,7 @@ void initTsqlSyscache() {
 	Assert(my_cacheinfo[0].reloid != -1);
 	/* Initialize info for catcache */
 	if (!tsql_syscache_inited) {
-		InitExtensionCatalogCache(my_cacheinfo, SYSDATABASEOID, 2);
+		InitExtensionCatalogCache(my_cacheinfo, SYSDATABASEOID, 3);
 		tsql_syscache_inited = true;
 	}
 }
@@ -156,7 +185,7 @@ void initTsqlSyscache() {
 bool 
 IsPLtsqlExtendedCatalog(Oid relationId)
 {
-	if (relationId == sysdatabases_oid)
+	if (relationId == sysdatabases_oid || relationId == bbf_function_ext_oid)
 		return true;
 	if (PrevIsExtendedCatalogHook)
 		return (*PrevIsExtendedCatalogHook)(relationId);
@@ -772,7 +801,7 @@ get_authid_user_ext_physical_name(const char *db_name, const char *login)
 {
 	Relation		bbf_authid_user_ext_rel;
 	HeapTuple		tuple_user_ext;
-	ScanKeyData		key[2];
+	ScanKeyData		key[3];
 	TableScanDesc	scan;
 	char			*user_name = NULL;
 	NameData		*login_name;
@@ -793,8 +822,12 @@ get_authid_user_ext_physical_name(const char *db_name, const char *login)
 				Anum_bbf_authid_user_ext_database_name,
 				BTEqualStrategyNumber, F_TEXTEQ,
 				CStringGetTextDatum(db_name));
+	ScanKeyInit(&key[2],
+				Anum_bbf_authid_user_ext_user_can_connect,
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(1));
 
-	scan = table_beginscan_catalog(bbf_authid_user_ext_rel, 2, key);
+	scan = table_beginscan_catalog(bbf_authid_user_ext_rel, 3, key);
 
 	tuple_user_ext = heap_getnext(scan, ForwardScanDirection);
 	if (HeapTupleIsValid(tuple_user_ext))
@@ -908,24 +941,33 @@ get_authid_user_ext_db_users(const char *db_name)
 char *
 get_user_for_database(const char *db_name)
 {
-	const char		*user = NULL;
+	char		*user = NULL;
 	const char		*login;
+	bool			login_is_db_owner;
 
 	login = GetUserNameFromId(GetSessionUserId(), false);
 	user = get_authid_user_ext_physical_name(db_name, login);
+	login_is_db_owner = 0 == strncmp(login, get_owner_of_db(db_name), NAMEDATALEN);
 
 	if (!user)
 	{
 		Oid				datdba;
 
 		datdba = get_role_oid("sysadmin", false);
-		if (is_member_of_role(GetSessionUserId(), datdba))
-			user = get_dbo_role_name(db_name);
+		if (is_member_of_role(GetSessionUserId(), datdba) || login_is_db_owner)
+			user = (char *) get_dbo_role_name(db_name);
 		else
-			user = get_guest_role_name(db_name);
+		{
+			/* Get the guest role name only if the guest is enabled on the current db.*/
+			if (guest_has_dbaccess((char *) db_name))
+				user = (char *) get_guest_role_name(db_name);
+			else
+				user = NULL;
+		}
 	}
 
-	if (user && !is_member_of_role(GetSessionUserId(), get_role_oid(user, false)))
+	if (user && !(is_member_of_role(GetSessionUserId(), get_role_oid(user, false)) 
+					|| login_is_db_owner))
 		user = NULL;
 
 	return user;
@@ -1023,7 +1065,7 @@ check_is_tsql_view(Oid relid)
 		pfree(view_name);
 		pfree(schema_name);
 		if (logical_schema_name)
-			pfree(logical_schema_name);
+			pfree((char *) logical_schema_name);
 		return false;
 	}
 	/* Fetch the relation */
@@ -1039,7 +1081,7 @@ check_is_tsql_view(Oid relid)
 	table_close(bbf_view_def_rel, AccessShareLock);
 	pfree(view_name);
 	pfree(schema_name);
-	pfree(logical_schema_name);
+	pfree((char *) logical_schema_name);
 	return is_tsql_view;
 }
 
@@ -1076,6 +1118,146 @@ clean_up_bbf_view_def(int16 dbid)
 }
 
 /*****************************************
+ *			FUNCTION_EXT
+ *****************************************/
+
+Oid
+get_bbf_function_ext_oid()
+{
+	if (!OidIsValid(bbf_function_ext_oid))
+		bbf_function_ext_oid = get_relname_relid(BBF_FUNCTION_EXT_TABLE_NAME,
+											 get_namespace_oid("sys", false));
+
+	return bbf_function_ext_oid;
+}
+
+Oid
+get_bbf_function_ext_idx_oid()
+{
+	if (!OidIsValid(bbf_function_ext_idx_oid))
+		bbf_function_ext_idx_oid = get_relname_relid(BBF_FUNCTION_EXT_IDX_NAME,
+												 get_namespace_oid("sys", false));
+
+	return bbf_function_ext_idx_oid;
+}
+
+HeapTuple
+get_bbf_function_tuple_from_proctuple(HeapTuple proctuple)
+{
+	HeapTuple	 bbffunctuple;
+	Form_pg_proc form;
+	char		 *physical_schemaname;
+	const char		 *func_signature;
+
+	/* Disallow extended catalog lookup during restore */
+	if (!HeapTupleIsValid(proctuple) || babelfish_dump_restore)
+		return NULL;					/* concurrently dropped */
+	form = (Form_pg_proc) GETSTRUCT(proctuple);
+	if (!is_pltsql_language_oid(form->prolang))
+		return NULL;
+
+	physical_schemaname = get_namespace_name(form->pronamespace);
+	if (physical_schemaname == NULL)
+	{
+		elog(ERROR,
+				"Could not find physical schemaname for %u",
+				 form->pronamespace);
+	}
+
+	/* skip for shared schemas */
+	if (is_shared_schema(physical_schemaname))
+	{
+		pfree(physical_schemaname);
+		return NULL;
+	}
+
+	func_signature = get_pltsql_function_signature_internal(NameStr(form->proname),
+															form->pronargs,
+															form->proargtypes.values);
+
+	if (func_signature == NULL)
+	{
+		pfree(physical_schemaname);
+		return NULL;
+	}
+
+	bbffunctuple = SearchSysCache2(PROCNSPSIGNATURE,
+								   CStringGetDatum(physical_schemaname),
+								   CStringGetTextDatum(func_signature));
+
+	pfree(physical_schemaname);
+	pfree((char *) func_signature);
+
+	return bbffunctuple;
+}
+
+void
+clean_up_bbf_function_ext(int16 dbid)
+{
+	Relation		bbf_function_ext_rel, namespace_rel;
+	AttrNumber		attnum;
+	HeapTuple		scantup;
+	ScanKeyData		scanKey[1];
+	TableScanDesc	scan;
+
+	/* Fetch the relations */
+	namespace_rel = table_open(namespace_ext_oid, AccessShareLock);
+	bbf_function_ext_rel = table_open(get_bbf_function_ext_oid(), RowExclusiveLock);
+
+	attnum = (AttrNumber) attnameAttNum(namespace_rel, "dbid", false);
+	if (attnum == InvalidAttrNumber)
+		ereport(ERROR, 
+				(errcode(ERRCODE_UNDEFINED_COLUMN),
+				 errmsg("column \"dbid\" of relation \"%s\" does not exist",
+						RelationGetRelationName(namespace_rel))));
+
+	ScanKeyInit(&scanKey[0], 
+				attnum,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(dbid));
+
+	scan = table_beginscan_catalog(namespace_rel, 1, scanKey);
+	scantup = heap_getnext(scan, ForwardScanDirection);
+
+	while (HeapTupleIsValid(scantup))
+	{
+		bool		isNull;
+		Datum		nspname;
+		HeapTuple	functup;
+		SysScanDesc	funcscan;
+
+		nspname = heap_getattr(scantup,
+							   Anum_namespace_ext_namespace,
+							   RelationGetDescr(namespace_rel),
+							   &isNull);
+
+		/* Search and drop the entry */
+		ScanKeyInit(&scanKey[0],
+					Anum_bbf_function_ext_nspname,
+					BTEqualStrategyNumber, F_NAMEEQ,
+					nspname);
+
+		funcscan = systable_beginscan(bbf_function_ext_rel,
+									  get_bbf_function_ext_idx_oid(),
+									  true, NULL, 1, scanKey);
+
+		while ((functup = systable_getnext(funcscan)) != NULL)
+		{
+			if (HeapTupleIsValid(functup))
+				CatalogTupleDelete(bbf_function_ext_rel,
+								&functup->t_self);
+		}
+
+		systable_endscan(funcscan);
+		scantup = heap_getnext(scan, ForwardScanDirection);
+	}
+
+	table_endscan(scan);
+	table_close(namespace_rel, AccessShareLock);
+	table_close(bbf_function_ext_rel, RowExclusiveLock);
+}
+
+/*****************************************
  * 			Metadata Check
  * ---------------------------------------
  * Babelfish catalogs should comply with
@@ -1107,19 +1289,19 @@ static Datum get_msdb_dbo(HeapTuple tuple, TupleDesc dsc);
 static Datum get_dbo(HeapTuple tuple, TupleDesc dsc);
 static Datum get_db_owner(HeapTuple tuple, TupleDesc dsc);
 static Datum get_master_db_owner(HeapTuple tuple, TupleDesc dsc);
-static Datum get_master_guest(HeapTuple tuple, TupleDesc dsc);
 static Datum get_tempdb_db_owner(HeapTuple tuple, TupleDesc dsc);
-static Datum get_tempdb_guest(HeapTuple tuple, TupleDesc dsc);
 static Datum get_msdb_db_owner(HeapTuple tuple, TupleDesc dsc);
-static Datum get_msdb_guest(HeapTuple tuple, TupleDesc dsc);
 static Datum get_owner(HeapTuple tuple, TupleDesc dsc);
 static Datum get_name_db_owner(HeapTuple tuple, TupleDesc dsc);
 static Datum get_name_dbo(HeapTuple tuple, TupleDesc dsc);
+static Datum get_name_guest(HeapTuple tuple, TupleDesc dsc);
 static Datum get_nspname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_login_rolname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_default_database_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_user_rolname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_database_name(HeapTuple tuple, TupleDesc dsc);
+static Datum get_function_nspname(HeapTuple tuple, TupleDesc dsc);
+static Datum get_function_name(HeapTuple tuple, TupleDesc dsc);
 /* Condition function declaration */
 static bool is_multidb(void);
 static bool is_singledb_exists_userdb(void);
@@ -1133,6 +1315,9 @@ static bool check_must_match_rules(Rule rules[], size_t num_rules, Oid catalog_o
 static void update_report(Rule *rule, Tuplestorestate *res_tupstore, TupleDesc res_tupdesc);
 static void init_catalog_data(void);
 static void get_catalog_info(Rule *rule);
+static void create_guest_role_for_db(const char *dbname);
+static char *get_db_owner_role_name(const char *dbname);
+
 
 /*****************************************
  * 			Catalog Extra Info
@@ -1142,12 +1327,13 @@ static void get_catalog_info(Rule *rule);
  *****************************************/
 RelData catalog_data[] = 
 {
-	{"babelfish_sysdatabases", InvalidOid, InvalidOid, InvalidOid, Anum_sysdatabaese_name, F_TEXTEQ},
-	{"babelfish_namespace_ext", InvalidOid, InvalidOid, InvalidOid, Anum_namespace_ext_namespace, F_NAMEEQ},
-	{"babelfish_authid_login_ext", InvalidOid, InvalidOid, InvalidOid, Anum_bbf_authid_login_ext_rolname, F_NAMEEQ},
-	{"babelfish_authid_user_ext", InvalidOid, InvalidOid, InvalidOid, Anum_bbf_authid_user_ext_rolname, F_NAMEEQ},
-	{"pg_namespace", InvalidOid, InvalidOid, InvalidOid, Anum_pg_namespace_nspname, F_NAMEEQ},
-	{"pg_authid", InvalidOid, InvalidOid, InvalidOid, Anum_pg_authid_rolname, F_NAMEEQ}
+	{"babelfish_sysdatabases", InvalidOid, InvalidOid, true, InvalidOid, Anum_sysdatabaese_name, F_TEXTEQ},
+	{"babelfish_namespace_ext", InvalidOid, InvalidOid, true, InvalidOid, Anum_namespace_ext_namespace, F_NAMEEQ},
+	{"babelfish_authid_login_ext", InvalidOid, InvalidOid, true, InvalidOid, Anum_bbf_authid_login_ext_rolname, F_NAMEEQ},
+	{"babelfish_authid_user_ext", InvalidOid, InvalidOid, true, InvalidOid, Anum_bbf_authid_user_ext_rolname, F_NAMEEQ},
+	{"pg_namespace", InvalidOid, InvalidOid, true, InvalidOid, Anum_pg_namespace_nspname, F_NAMEEQ},
+	{"pg_authid", InvalidOid, InvalidOid, true, InvalidOid, Anum_pg_authid_rolname, F_NAMEEQ},
+	{"pg_proc", InvalidOid, InvalidOid, false, InvalidOid, Anum_pg_proc_proname, F_NAMEEQ}
 };
 	
 /*****************************************
@@ -1183,24 +1369,18 @@ Rule must_have_rules[] =
 	 "babelfish_authid_user_ext", "rolname", NULL, get_db_owner, is_singledb_exists_userdb, check_exist, NULL},
 	{"In single-db mode, if user db exists, dbo must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_dbo, is_singledb_exists_userdb, check_exist, NULL},
-	{"master_db_owner must exist in babelfish_authid_user_ext", 
+	{"master_db_owner must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_master_db_owner, NULL, check_exist, NULL},
 	{"master_dbo must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_master_dbo, NULL, check_exist, NULL},
-	{"master_guest must exist in babelfish_authid_user_ext",
-	 "babelfish_authid_user_ext", "rolname", NULL, get_master_guest, NULL, check_exist, NULL},
 	{"tempdb_db_owner must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_tempdb_db_owner, NULL, check_exist, NULL},
 	{"tempdb_dbo must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_tempdb_dbo, NULL, check_exist, NULL},
-	{"tempdb_guest must exist in babelfish_authid_user_ext",
-	 "babelfish_authid_user_ext", "rolname", NULL, get_tempdb_guest, NULL, check_exist, NULL},
 	{"msdb_db_owner must exist in babelfish_authid_user_ext",
 	 "babelfish_authid_user_ext", "rolname", NULL, get_msdb_db_owner, NULL, check_exist, NULL},
 	{"msdb_dbo must exist in babelfish_authid_user_ext",
-	 "babelfish_authid_user_ext", "rolname", NULL, get_msdb_dbo, NULL, check_exist, NULL},
-	{"msdb_guest must exist in babelfish_authid_user_ext",
-	 "babelfish_authid_user_ext", "rolname", NULL, get_msdb_guest, NULL, check_exist, NULL}
+	 "babelfish_authid_user_ext", "rolname", NULL, get_msdb_dbo, NULL, check_exist, NULL}
 };
 
 /* Must match rules, MUST comply with metadata_inconsistency_check() */
@@ -1214,7 +1394,11 @@ Rule must_match_rules_sysdb[] =
 	{"In multi-db mode, for each <name> in babelfish_sysdatabases, <name>_dbo must also exist in pg_authid",
 	 "pg_authid", "rolname", NULL, get_name_dbo, is_multidb, check_exist, NULL},
 	{"In multi-db mode, for each <name> in babelfish_sysdatabases, <name>_dbo must also exist in babelfish_namespace_ext",
-	 "babelfish_namespace_ext", "nspname", NULL, get_name_dbo, is_multidb, check_exist, NULL}
+	 "babelfish_namespace_ext", "nspname", NULL, get_name_dbo, is_multidb, check_exist, NULL},
+	{"In multi-db mode, for each <name> in babelfish_sysdatabases, <name>_guest must also exist in babelfish_authid_user_ext",
+	 "babelfish_authid_user_ext", "rolname", NULL, get_name_guest, is_multidb, check_exist, NULL},
+	{"In single-db mode, for each <name> in babelfish_sysdatabases, <name>_guest must also exist in babelfish_authid_user_ext",
+         "babelfish_authid_user_ext", "rolname", NULL, get_name_guest, is_singledb_exists_userdb, check_exist, NULL}
 };
 
 /* babelfish_namespace_ext */
@@ -1240,6 +1424,15 @@ Rule must_match_rules_user[] =
 	 "pg_authid", "rolname", NULL, get_user_rolname, NULL, check_exist, NULL},
 	{"<database_name> in babelfish_authid_user_ext must also exist in babelfish_sysdatabases",
 	 "babelfish_sysdatabases", "name", NULL, get_database_name, NULL, check_exist, NULL}
+};
+
+/* babelfish_function_ext */
+Rule must_match_rules_function[] = 
+{
+	{"<nspname> in babelfish_function_ext must also exist in babelfish_namespace_ext",
+	 "babelfish_namespace_ext", "nspname", NULL, get_function_nspname, NULL, check_exist, NULL},
+	{"<funcname> in babelfish_function_ext must also exist in pg_proc",
+	 "pg_proc", "proname", NULL, get_function_name, NULL, check_exist, NULL}
 };
 	
 /*****************************************
@@ -1300,9 +1493,11 @@ babelfish_inconsistent_metadata(PG_FUNCTION_ARGS)
 
 	PG_TRY();
 	{
-		/* Check metadata inconsistency */
-		metadata_inconsistency_check(tupstore, tupdesc);
-
+		if(metadata_inconsistency_check_enabled())		
+		{
+			/* Check metadata inconsistency */
+			metadata_inconsistency_check(tupstore, tupdesc);
+		}
 		/* clean up and return the tuplestore */
 		tuplestore_donestoring(tupstore);
 
@@ -1328,6 +1523,7 @@ metadata_inconsistency_check(Tuplestorestate *res_tupstore, TupleDesc res_tupdes
 	size_t num_must_match_rules_nsp = sizeof(must_match_rules_nsp) / sizeof(must_match_rules_nsp[0]);
 	size_t num_must_match_rules_login = sizeof(must_match_rules_login) / sizeof(must_match_rules_login[0]);
 	size_t num_must_match_rules_user = sizeof(must_match_rules_user) / sizeof(must_match_rules_user[0]);
+	size_t num_must_match_rules_function = sizeof(must_match_rules_function) / sizeof(must_match_rules_function[0]);
 
 	/* Initialize the catalog_data array to fetch catalog info */
 	init_catalog_data();
@@ -1353,6 +1549,9 @@ metadata_inconsistency_check(Tuplestorestate *res_tupstore, TupleDesc res_tupdes
 		||
 		!(check_must_match_rules(must_match_rules_user, num_must_match_rules_user,
 								 bbf_authid_user_ext_oid, res_tupstore, res_tupdesc))
+		||
+		!(check_must_match_rules(must_match_rules_function, num_must_match_rules_function,
+								 bbf_function_ext_oid, res_tupstore, res_tupdesc))
 	)
 		return;
 }
@@ -1518,33 +1717,15 @@ get_master_db_owner(HeapTuple tuple, TupleDesc dsc)
 }
 
 static Datum
-get_master_guest(HeapTuple tuple, TupleDesc dsc)
-{
-	return CStringGetDatum("master_guest");
-}
-
-static Datum
 get_tempdb_db_owner(HeapTuple tuple, TupleDesc dsc)
 {
 	return CStringGetDatum("tempdb_db_owner");
 }
 
 static Datum
-get_tempdb_guest(HeapTuple tuple, TupleDesc dsc)
-{
-	return CStringGetDatum("tempdb_guest");
-}
-
-static Datum
 get_msdb_db_owner(HeapTuple tuple, TupleDesc dsc)
 {
 	return CStringGetDatum("msdb_db_owner");
-}
-
-static Datum
-get_msdb_guest(HeapTuple tuple, TupleDesc dsc)
-{
-	return CStringGetDatum("msdb_guest");
 }
 
 static Datum
@@ -1578,6 +1759,20 @@ get_name_dbo(HeapTuple tuple, TupleDesc dsc)
 
 	truncate_identifier(name_str, strlen(name_str), false);
 	snprintf(name_dbo, MAX_BBF_NAMEDATALEND, "%s_dbo", name_str);
+	truncate_identifier(name_dbo, strlen(name_dbo), false);
+	return CStringGetDatum(name_dbo);
+}
+
+static Datum
+get_name_guest(HeapTuple tuple, TupleDesc dsc)
+{
+	Form_sysdatabases sysdb = ((Form_sysdatabases) GETSTRUCT(tuple));
+	const text *name = &(sysdb->name);
+	char *name_str = text_to_cstring(name);
+	char *name_dbo = palloc0(MAX_BBF_NAMEDATALEND);
+
+	truncate_identifier(name_str, strlen(name_str), false);
+	snprintf(name_dbo, MAX_BBF_NAMEDATALEND, "%s_guest", name_str);
 	truncate_identifier(name_dbo, strlen(name_dbo), false);
 	return CStringGetDatum(name_dbo);
 }
@@ -1619,6 +1814,20 @@ get_database_name(HeapTuple tuple, TupleDesc dsc)
 	return dbname;
 }
 
+static Datum
+get_function_nspname(HeapTuple tuple, TupleDesc dsc)
+{
+	Form_bbf_function_ext func = ((Form_bbf_function_ext) GETSTRUCT(tuple));
+	return NameGetDatum(&(func->schema));
+}
+
+static Datum
+get_function_name(HeapTuple tuple, TupleDesc dsc)
+{
+	Form_bbf_function_ext func = ((Form_bbf_function_ext) GETSTRUCT(tuple));
+	return NameGetDatum(&(func->funcname));
+}
+
 /*****************************************
  * 			Condition check funcs
  *****************************************/
@@ -1633,6 +1842,7 @@ is_multidb(void)
 {
 	return (MULTI_DB == get_migration_mode());
 }
+
 
 /*****************************************
  * 			Rule validation funcs
@@ -1667,7 +1877,7 @@ check_exist(void *arg, HeapTuple tuple)
 				rule->tbldata->regproc, 
 				datum);
 
-	scan = systable_beginscan(rel, rule->tbldata->idx_oid, true, NULL, 1, &scanKey);
+	scan = systable_beginscan(rel, rule->tbldata->idx_oid, rule->tbldata->index_ok, NULL, 1, &scanKey);
 
 	/* The rule passes if we found the wanted datum in the catalog */
 	found = (HeapTupleIsValid(systable_getnext(scan)));
@@ -1762,6 +1972,12 @@ init_catalog_data(void)
 			catalog_data[i].idx_oid = AuthIdRolnameIndexId;
 			catalog_data[i].atttype = get_atttype(AuthIdRelationId, Anum_pg_authid_rolname);
 		}
+		else if (strcmp(catalog_data[i].tblname, "pg_proc") == 0)
+		{
+			catalog_data[i].tbl_oid = ProcedureRelationId;
+			catalog_data[i].idx_oid = InvalidOid;
+			catalog_data[i].atttype = get_atttype(ProcedureRelationId, Anum_pg_proc_proname);
+		}
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1788,4 +2004,307 @@ get_catalog_info(Rule *rule)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("Failed to find \"%s\" in the pre-defined catalog data array", 
 						rule->tblname)));
+}
+
+/* Modifies the user_can_connect column in the catalog table
+ * sys.babelfish_authid_user_ext based on the "GRANT/REVOKE
+ * connect TO/FROM" statements.
+ */
+void
+alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
+{
+	Relation		bbf_authid_user_ext_rel;
+	TupleDesc		bbf_authid_user_ext_dsc;
+	ScanKeyData		key[2];
+	HeapTuple		usertuple;
+	HeapTuple		new_tuple;
+	TableScanDesc		tblscan;
+	Datum			new_record_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
+	bool			new_record_nulls_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
+	bool			new_record_repl_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
+
+	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
+										 RowExclusiveLock);
+	bbf_authid_user_ext_dsc = RelationGetDescr(bbf_authid_user_ext_rel);
+
+	/* Search and obtain the tuple based on the user name and db name */	
+	ScanKeyInit(&key[0],
+				Anum_bbf_authid_user_ext_orig_username,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(user_name));
+	ScanKeyInit(&key[1],
+				Anum_bbf_authid_user_ext_database_name,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(db_name));
+
+	tblscan = table_beginscan_catalog(bbf_authid_user_ext_rel, 2, key);
+
+	/* Build a tuple to insert */
+	MemSet(new_record_user_ext, 0, sizeof(new_record_user_ext));
+	MemSet(new_record_nulls_user_ext, false, sizeof(new_record_nulls_user_ext));
+	MemSet(new_record_repl_user_ext, false, sizeof(new_record_repl_user_ext));
+
+	usertuple = heap_getnext(tblscan, ForwardScanDirection);
+
+	if (!HeapTupleIsValid(usertuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				errmsg("Cannot find the user \"%s\", because it does not exist or you do not have permission.", user_name)));
+
+	/* Update the column user_can_connect to 1 in case of GRANT and to 0 in case of REVOKE */
+	if (is_grant)
+		new_record_user_ext[USER_EXT_USER_CAN_CONNECT] = Int32GetDatum(1);
+	else
+		new_record_user_ext[USER_EXT_USER_CAN_CONNECT] = Int32GetDatum(0);
+
+	new_record_repl_user_ext[USER_EXT_USER_CAN_CONNECT] = true;
+
+	new_tuple = heap_modify_tuple(usertuple,
+								  bbf_authid_user_ext_dsc,
+								  new_record_user_ext,
+								  new_record_nulls_user_ext,
+								  new_record_repl_user_ext);
+
+	CatalogTupleUpdate(bbf_authid_user_ext_rel, &new_tuple->t_self, new_tuple);
+
+	heap_freetuple(new_tuple);
+
+	table_endscan(tblscan);
+	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
+}
+
+/* Checks if the guest user is enabled on a given database. */
+bool
+guest_has_dbaccess(char *db_name)
+{
+	Relation		bbf_authid_user_ext_rel;
+	HeapTuple		tuple_user_ext;
+	ScanKeyData		key[3];
+	TableScanDesc		scan;
+	bool			has_access = false;
+
+	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
+										 RowExclusiveLock);
+	ScanKeyInit(&key[0],
+				Anum_bbf_authid_user_ext_orig_username,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum("guest"));
+	ScanKeyInit(&key[1],
+				Anum_bbf_authid_user_ext_database_name,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(db_name));
+	ScanKeyInit(&key[2],
+				Anum_bbf_authid_user_ext_user_can_connect,
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(1));
+
+	scan = table_beginscan_catalog(bbf_authid_user_ext_rel, 3, key);
+
+	tuple_user_ext = heap_getnext(scan, ForwardScanDirection);
+	if (HeapTupleIsValid(tuple_user_ext))
+		has_access = true;
+
+	table_endscan(scan);
+	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
+	return has_access;
+}
+
+PG_FUNCTION_INFO_V1(update_user_catalog_for_guest);
+Datum update_user_catalog_for_guest(PG_FUNCTION_ARGS)
+{
+	Relation        db_rel;
+	TableScanDesc   scan;
+	HeapTuple       tuple;
+	bool            is_null;
+
+	db_rel = table_open(sysdatabases_oid, AccessShareLock);
+	scan = table_beginscan_catalog(db_rel, 0, NULL);
+	tuple = heap_getnext(scan, ForwardScanDirection);
+
+	while (HeapTupleIsValid(tuple))
+	{
+		Datum	db_name_datum = heap_getattr(tuple, Anum_sysdatabaese_name,
+						 db_rel->rd_att, &is_null);
+		const char	*db_name = TextDatumGetCString(db_name_datum);
+
+		/*
+		 * For each database, check if the guest user exists.
+		 * If exists, check the next database.
+		 * If not, create the guest user on that database.
+		 */
+		if (guest_role_exists_for_db(db_name))
+		{
+			tuple = heap_getnext(scan, ForwardScanDirection);
+			continue;
+		}
+		create_guest_role_for_db(db_name);
+		tuple = heap_getnext(scan, ForwardScanDirection);
+	}
+	table_endscan(scan);
+	table_close(db_rel, AccessShareLock);
+	PG_RETURN_INT32(0);
+}
+
+bool
+guest_role_exists_for_db(const char *dbname)
+{
+	const char 	*guest_role = get_guest_role_name(dbname);
+	bool		role_exists = false;
+	Relation	bbf_authid_user_ext_rel;
+	HeapTuple	tuple;
+	ScanKeyData	scanKey;
+	SysScanDesc	scan;
+
+	/* Fetch the relation */
+	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
+									RowExclusiveLock);
+
+	/* Search if the role exists */
+	ScanKeyInit(&scanKey,
+				Anum_bbf_authid_user_ext_rolname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(guest_role));
+
+	scan = systable_beginscan(bbf_authid_user_ext_rel,
+							  get_authid_user_ext_idx_oid(),
+							  true, NULL, 1, &scanKey);
+
+	tuple = systable_getnext(scan);
+
+	if (HeapTupleIsValid(tuple))
+		role_exists = true;
+
+	systable_endscan(scan);
+	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
+
+	return role_exists;
+}
+
+static void
+create_guest_role_for_db(const char *dbname)
+{
+	const char		*guest = get_guest_role_name(dbname);
+	const char		*db_owner_role = get_db_owner_role_name(dbname);
+	List			*logins = NIL;
+	List			*res;
+	StringInfoData	query;
+	Node			*stmt;
+	ListCell		*res_item;
+	int				i = 0;
+	const char		*prev_current_user;
+	int16			old_dbid;
+	char			*old_dbname;
+	int16			dbid = get_db_id(dbname);
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "CREATE ROLE dummy INHERIT ROLE dummy; ");
+	logins = grant_guest_to_logins(&query);
+	res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	/* Replace dummy elements in parsetree with real values */
+	stmt = parsetree_nth_stmt(res, i++);
+	update_CreateRoleStmt(stmt, guest, db_owner_role, NULL);
+	pfree((char *) db_owner_role);
+
+	if (list_length(logins) > 0)
+	{
+		AccessPriv *tmp = makeNode(AccessPriv);
+		tmp->priv_name = pstrdup(guest);
+		tmp->cols = NIL;
+
+		stmt = parsetree_nth_stmt(res, i++);
+		update_GrantRoleStmt(stmt, list_make1(tmp), logins);
+	}
+
+	/* Set current user to session user for create permissions */
+	prev_current_user = GetUserNameFromId(GetUserId(), false);
+
+	bbf_set_current_user("sysadmin");
+
+	old_dbid = get_cur_db_id();
+	old_dbname = get_cur_db_name();
+	set_cur_db(dbid, dbname);  /* temporarily set current dbid as the new id */
+
+	PG_TRY();
+	{
+		/* Run all subcommands */
+		foreach(res_item, res)
+		{
+			Node	   *res_stmt = ((RawStmt *) lfirst(res_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = res_stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 18;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+						   "(CREATE LOGICAL DATABASE )",
+						   false,
+							PROCESS_UTILITY_SUBCOMMAND,
+							NULL,
+							NULL,
+							None_Receiver,
+							NULL);
+
+			/* make sure later steps can see the object created here */
+			CommandCounterIncrement();
+		}
+		set_cur_db(old_dbid, old_dbname);
+		add_to_bbf_authid_user_ext(guest, "guest", dbname, NULL, NULL, false, false);
+	}
+	PG_CATCH();
+	{
+		/* Clean up. Restore previous state. */
+		bbf_set_current_user(prev_current_user);
+		set_cur_db(old_dbid, old_dbname);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	/* Set current user back to previous user */
+	bbf_set_current_user(prev_current_user);
+}
+
+/*
+ * Retrieve the db_owner role name of a specific
+ * database from the catalog, it doesn't rely on the
+ * migration mode GUC.
+ */
+static char *
+get_db_owner_role_name(const char *dbname)
+{
+	Relation	bbf_authid_user_ext_rel;
+	HeapTuple	tuple_user_ext;
+	ScanKeyData		key[2];
+	TableScanDesc		scan;
+	char		*db_owner_role = NULL;
+
+	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
+										 RowExclusiveLock);
+	ScanKeyInit(&key[0],
+				Anum_bbf_authid_user_ext_orig_username,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum("db_owner"));
+	ScanKeyInit(&key[1],
+				Anum_bbf_authid_user_ext_database_name,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(dbname));
+
+	scan = table_beginscan_catalog(bbf_authid_user_ext_rel, 2, key);
+
+	tuple_user_ext = heap_getnext(scan, ForwardScanDirection);
+	if (HeapTupleIsValid(tuple_user_ext))
+		{
+			Form_authid_user_ext userform = (Form_authid_user_ext) GETSTRUCT(tuple_user_ext);
+			db_owner_role = pstrdup(NameStr(userform->rolname));
+		}
+
+	table_endscan(scan);
+	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
+	return db_owner_role;
 }

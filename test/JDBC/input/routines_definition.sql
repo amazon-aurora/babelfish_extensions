@@ -244,6 +244,32 @@ go
 select tsql_get_functiondef(oid) from pg_proc where proname='routines_cur_var';
 go
 
+-- Test with defaults at different argument positions
+CREATE PROCEDURE routines_test_def(@test_def_a int = 2, @test_def_b char(255) OUTPUT, @test_def_c varchar(20) = 'abc', @test_def_d varbinary(8))
+AS
+BEGIN
+        SET @test_def_b = 'a';
+        SELECT @test_def_a, @test_def_b, @test_def_c, @test_def_d;
+END;
+go
+
+-- Test with Table Valued Function
+CREATE FUNCTION routines_fc7()
+RETURNS @myRetTable table (a int PRIMARY KEY)
+AS
+BEGIN
+INSERT INTO @myRetTable VALUES (1)
+RETURN
+END;
+GO
+
+-- Execute sys.tsql_get_functiondef, should return NULL
+SELECT sys.tsql_get_functiondef(OBJECT_ID('routines_fc7'));
+go
+
+select tsql_get_functiondef(oid) from pg_proc where proname='routines_test_def';
+go
+
 drop procedure routines_test_nvar;
 go
 
@@ -298,6 +324,9 @@ go
 drop procedure routines_cur_var;
 go
 
+drop procedure routines_test_def;
+go
+
 drop function routines_fc1;
 go
 
@@ -314,4 +343,7 @@ drop function routines_fc5;
 go
 
 drop function routines_fc6;
+go
+
+drop function routines_fc7;
 go

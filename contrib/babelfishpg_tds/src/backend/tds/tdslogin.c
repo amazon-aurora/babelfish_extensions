@@ -25,6 +25,7 @@
 #endif
 
 #include "access/printtup.h"
+#include "access/xlog.h"
 #include "catalog/pg_type.h"	/* For type translation */
 #include "commands/dbcommands.h"
 #include "common/ip.h"
@@ -1202,6 +1203,18 @@ ProcessLoginInternal(Port *port)
 			break;
 		case CAC_OK:
 			break;
+		case CAC_NOTCONSISTENT:
+			if (EnableHotStandby)
+				ereport(FATAL,
+						(errcode(ERRCODE_CANNOT_CONNECT_NOW),
+						 errmsg("the database system is not yet accepting connections"),
+						 errdetail("Consistent recovery state has not been yet reached.")));
+			else
+				ereport(FATAL,
+						(errcode(ERRCODE_CANNOT_CONNECT_NOW),
+						 errmsg("the database system is not accepting connections"),
+						 errdetail("Hot standby mode is disabled.")));
+			break;
 	}
 
 	TdsErrorContext->err_text = "Process Login Flags";
@@ -1874,14 +1887,28 @@ TdsProcessLogin(Port *port, bool loadedSsl)
 		if (loadEncryption == TDS_ENCRYPT_ON ||
 			loadEncryption == TDS_ENCRYPT_OFF ||
 			loadEncryption == TDS_ENCRYPT_REQ)
-			SecureOpenServer(port);
+			rc = SecureOpenServer(port);
+	}
+	PG_CATCH();
+	{
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
-		if (loadEncryption == TDS_ENCRYPT_ON)
-			TDSInstrumentation(INSTR_TDS_LOGIN_END_TO_END_ENCRYPT);
+	/*
+	 * If SSL handshake failure has occurred then no need to go ahead with login,
+	 * Just return from here.
+	 */
+	if (rc < 0)
+		return rc;
 
+	if (loadEncryption == TDS_ENCRYPT_ON)
+		TDSInstrumentation(INSTR_TDS_LOGIN_END_TO_END_ENCRYPT);
+
+	PG_TRY();
+	{
 		/* Login */
 		rc = ProcessLoginInternal(port);
-
 	}
 	PG_CATCH();
 	{
@@ -1910,7 +1937,6 @@ void
 TdsSendLoginAck(Port *port)
 {
 	uint16_t	temp16;
-	char		mbuf[1024];
 	char	   *dbname = NULL;
 	int			prognameLen = pg_mbstrlen(default_server_name);
 	LoginRequest request;

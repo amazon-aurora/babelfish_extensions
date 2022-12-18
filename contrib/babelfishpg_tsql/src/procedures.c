@@ -14,21 +14,30 @@
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "commands/prepare.h"
+#include "common/string.h"
 #include "executor/spi.h"
 #include "fmgr.h"
 #include "funcapi.h"
 #include "hooks.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
+#include "nodes/value.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "pltsql_instr.h"
 #include "parser/parser.h"
 #include "parser/parse_target.h"
+#include "parser/parse_relation.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
+#include "tcop/utility.h"
+#include "tsearch/ts_locale.h"
 
+#include "catalog.h"
 #include "multidb.h"
+#include "session.h"
 
 PG_FUNCTION_INFO_V1(sp_unprepare);
 PG_FUNCTION_INFO_V1(sp_prepare);
@@ -39,12 +48,24 @@ PG_FUNCTION_INFO_V1(xp_qv_internal);
 PG_FUNCTION_INFO_V1(create_xp_qv_in_master_dbo_internal);
 PG_FUNCTION_INFO_V1(xp_instance_regread_internal);
 PG_FUNCTION_INFO_V1(create_xp_instance_regread_in_master_dbo_internal);
+PG_FUNCTION_INFO_V1(sp_addrole);
+PG_FUNCTION_INFO_V1(sp_droprole);
+PG_FUNCTION_INFO_V1(sp_addrolemember);
+PG_FUNCTION_INFO_V1(sp_droprolemember);
 
 extern void delete_cached_batch(int handle);
 extern InlineCodeBlockArgs *create_args(int numargs);
 extern void read_param_def(InlineCodeBlockArgs * args, const char *paramdefstr);
 extern int execute_batch(PLtsql_execstate *estate, char *batch, InlineCodeBlockArgs *args, List *params);
 extern PLtsql_execstate *get_current_tsql_estate(void);
+static List *gen_sp_addrole_subcmds(const char *user);
+static List *gen_sp_droprole_subcmds(const char *user);
+static List *gen_sp_addrolemember_subcmds(const char *user, const char *member);
+static List *gen_sp_droprolemember_subcmds(const char *user, const char *member);
+List *handle_bool_expr_rec(BoolExpr *expr, List *list);
+List *handle_where_clause_attnums(ParseState *pstate, Node *w_clause, List *target_attnums);
+List *handle_where_clause_restargets_left(ParseState *pstate, Node *w_clause, List *extra_restargets);
+List *handle_where_clause_restargets_right(ParseState *pstate, Node *w_clause, List *extra_restargets);
 
 char *sp_describe_first_result_set_view_name = NULL;
 
@@ -154,7 +175,7 @@ sp_babelfish_configure(PG_FUNCTION_ARGS)
 	MemoryContext savedPortalCxt;
 
 	/* SPI call input */
-	const char* query = "SELECT name, setting, short_desc from pg_settings where name like 'babelfish%%escape_hatch%%' AND name like $1";
+	const char* query = "SELECT name, setting, short_desc FROM sys.babelfish_configurations_view WHERE name like $1";
 	Datum arg;
 	Oid argoid = TEXTOID;
 	char nulls = 0;
@@ -260,12 +281,12 @@ static char *sp_describe_first_result_set_query(char *viewName)
 		"CAST(t3.\"ORDINAL_POSITION\" AS int) AS column_ordinal, "
 		"CAST(t3.\"COLUMN_NAME\" AS sys.sysname) AS name, "
 		"case "
-			"when t1.is_nullable = \'YES\' then CAST(1 AS sys.bit) "
+			"when t1.is_nullable collate sys.database_default = \'YES\' AND t3.\"DATA_TYPE\" collate sys.database_default <> \'timestamp\' then CAST(1 AS sys.bit) "
 			"else CAST(0 AS sys.bit) "
 		"end as is_nullable, "
 		"t4.system_type_id::int as system_type_id, "
 		"CAST(t3.\"DATA_TYPE\" as sys.nvarchar(256)) as system_type_name, "
-		"CAST(CASE WHEN t3.\"DATA_TYPE\" IN (\'text\', \'ntext\', \'image\') THEN -1 ELSE t4.max_length END AS smallint) AS max_length, "
+		"CAST(CASE WHEN t3.\"DATA_TYPE\" collate sys.database_default IN (\'text\', \'ntext\', \'image\') THEN -1 ELSE t4.max_length END AS smallint) AS max_length, "
 		"CAST(t4.precision AS sys.tinyint) AS precision, "
 		"CAST(t4.scale AS sys.tinyint) AS scale, "
 		"CAST(t4.collation_name AS sys.sysname) as collation_name, "
@@ -281,7 +302,7 @@ static char *sp_describe_first_result_set_query(char *viewName)
 		"CAST(NULL as sys.sysname) as xml_collection_schema, "
 		"CAST(NULL as sys.sysname) as xml_collection_name, "
 		"case "
-			"when t3.\"DATA_TYPE\" = \'xml\' then CAST(1 AS sys.bit) "
+			"when t3.\"DATA_TYPE\" collate sys.database_default = \'xml\' then CAST(1 AS sys.bit) "
 			"else CAST(0 AS sys.bit) "
 		"end as is_xml_document, "
 		"0::sys.bit as is_case_sensitive, "
@@ -292,16 +313,16 @@ static char *sp_describe_first_result_set_query(char *viewName)
 		"CAST(NULL as sys.sysname) as source_table, "
 		"CAST(NULL as sys.sysname) as source_column, "
 		"case "
-			"when t1.is_identity = \'YES\' then CAST(1 AS sys.bit) "
+			"when t1.is_identity collate sys.database_default = \'YES\' then CAST(1 AS sys.bit) "
 			"else CAST(0 AS sys.bit) "
 		"end as is_identity_column, "
 		"CAST(NULL as sys.bit) as is_part_of_unique_key, " /* pg_constraint */
 		"case  "
-			"when t1.is_updatable = \'YES\' AND t1.is_generated = \'NEVER\' AND t1.is_identity = \'NO\' then CAST(1 AS sys.bit) "
+			"when t1.is_updatable collate sys.database_default = \'YES\' AND t1.is_generated collate sys.database_default = \'NEVER\' AND t1.is_identity collate sys.database_default = \'NO\' AND t3.\"DATA_TYPE\" collate sys.database_default <> \'timestamp\' then CAST(1 AS sys.bit) "
 			"else CAST(0 AS sys.bit) "
 		"end as is_updateable, "
 		"case "
-			"when t1.is_generated = \'NEVER\' then CAST(0 AS sys.bit) "
+			"when t1.is_generated collate sys.database_default = \'NEVER\' then CAST(0 AS sys.bit) "
 			"else CAST(1 AS sys.bit) "
 		"end as is_computed_column, "
 		"CAST(0 as sys.bit) as is_sparse_column_set, "
@@ -312,21 +333,21 @@ static char *sp_describe_first_result_set_query(char *viewName)
 		"CAST(sys.get_tds_id(t3.\"DATA_TYPE\") as int) as tds_type_id, "
 		"CAST( "
 		"CASE "
-			"WHEN t3.\"DATA_TYPE\" = \'xml\' THEN 8100 "
-			"WHEN t3.\"DATA_TYPE\" = \'sql_variant\' THEN 8009 "
-			"WHEN t3.\"DATA_TYPE\" = \'numeric\' THEN 17 "
-			"WHEN t3.\"DATA_TYPE\" = \'decimal\' THEN 17 "
+			"WHEN t3.\"DATA_TYPE\" collate sys.database_default = \'xml\' THEN 8100 "
+			"WHEN t3.\"DATA_TYPE\" collate sys.database_default = \'sql_variant\' THEN 8009 "
+			"WHEN t3.\"DATA_TYPE\" collate sys.database_default = \'numeric\' THEN 17 "
+			"WHEN t3.\"DATA_TYPE\" collate sys.database_default = \'decimal\' THEN 17 "
 			"ELSE t4.max_length END as int) "
 		"as tds_length, "
 		"CAST(COLLATIONPROPERTY(t4.collation_name, 'CollationId') as int) as tds_collation_id, "
 		"CAST(COLLATIONPROPERTY(t4.collation_name, 'SortId') as int) AS tds_collation_sort_id "
 	"FROM information_schema.columns t1, information_schema_tsql.columns t3, "
 	"sys.columns t4, pg_class t5 "
-	"LEFT OUTER JOIN (sys.babelfish_namespace_ext ext JOIN sys.pg_namespace_ext t6 ON t6.nspname = ext.nspname) "
+	"LEFT OUTER JOIN (sys.babelfish_namespace_ext ext JOIN sys.pg_namespace_ext t6 ON t6.nspname = ext.nspname collate sys.database_default) "
 		"on t5.relnamespace = t6.oid "
-	"WHERE (t1.table_name = \'%s\' AND t1.table_schema = ext.nspname) "
-	"AND (t3.\"TABLE_NAME\" = t1.table_name AND t3.\"TABLE_SCHEMA\" = ext.orig_name) "
-	"AND t5.relname = t1.table_name "
+	"WHERE (t1.table_name = \'%s\' collate sys.database_default AND t1.table_schema = ext.nspname collate sys.database_default) "
+	"AND (t3.\"TABLE_NAME\" = t1.table_name collate sys.database_default AND t3.\"TABLE_SCHEMA\" = ext.orig_name collate sys.database_default) "
+	"AND t5.relname = t1.table_name collate sys.database_default "
 	"AND (t5.oid = t4.object_id AND t3.\"ORDINAL_POSITION\" = t4.column_id) "
 	"AND ext.dbid = cast(sys.db_id() as oid) "
 	"AND t1.dtd_identifier::int = t3.\"ORDINAL_POSITION\";", viewName);
@@ -347,8 +368,6 @@ sp_describe_first_result_set_internal(PG_FUNCTION_ARGS)
 
 	SPITupleTable *tuptable;
 	char *batch;
-	char *params;
-	int browseMode;
 	char *query;
 	int rc;
 	ANTLR_result result;
@@ -362,8 +381,7 @@ sp_describe_first_result_set_internal(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 		
 		batch		= PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
-		params	= PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
-		browseMode 	= PG_ARGISNULL(2) ? 0 : PG_GETARG_INT32(0);
+		/* TODO: params and browseMode has to be still implemented in this C-type function */
 		sp_describe_first_result_set_view_name = psprintf("sp_describe_first_result_set_view_%d", rand());
 
 		get_call_result_type(fcinfo, NULL, &tupdesc);
@@ -486,6 +504,313 @@ sp_describe_first_result_set_internal(PG_FUNCTION_ARGS)
 	}
 }
 
+/*
+ * Recurse down the BoolExpr if needed, and append all relevant ColumnRef->fields
+ * to the list.
+ */
+List *handle_bool_expr_rec(BoolExpr *expr, List *list)
+{
+	List *args = expr->args;
+	ListCell *lc;
+	A_Expr *xpr;
+	ColumnRef *ref;
+	foreach(lc, args)
+	{
+		Expr *arg = (Expr *) lfirst(lc);
+		switch(arg->type)
+		{
+			case T_A_Expr:
+				xpr = (A_Expr *)arg;
+
+				if (nodeTag(xpr->rexpr) != T_ColumnRef)
+				{
+					ereport(WARNING,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+				}
+				ref = (ColumnRef *) xpr->rexpr;
+				list = list_concat(list, ref->fields);
+				break;
+			case T_BoolExpr:
+				list = handle_bool_expr_rec((BoolExpr *)arg, list);
+				break;
+			default:
+				break;
+		}
+	}
+	return list;
+}
+
+/*
+ * Returns a list of attnums constructed from the where clause provided, using
+ * the column names given on the left hand side of the assignments
+ */
+List *handle_where_clause_attnums(ParseState *pstate, Node *w_clause, List *target_attnums)
+{
+	/*
+	 * Append attnos from WHERE clause into target_attnums
+	 */
+	ColumnRef *ref;
+	Value *field;
+	char *name;
+	int attrno;
+	
+	if (nodeTag(w_clause) == T_A_Expr)
+	{
+		A_Expr *where_clause = (A_Expr *)w_clause;
+		if (nodeTag(where_clause->lexpr) != T_ColumnRef)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+		}
+		ref = (ColumnRef *) where_clause->lexpr;
+		field = linitial(ref->fields);
+		name = field->val.str;
+		attrno = attnameAttNum(pstate->p_target_relation, name, false);
+		if (attrno == InvalidAttrNumber)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_COLUMN),
+				 errmsg("column \"%s\" of relation \"%s\" does not exist",
+						name,
+						RelationGetRelationName(pstate->p_target_relation))));
+		}
+
+		return lappend_int(target_attnums, attrno);
+	}
+	else if (nodeTag(w_clause) == T_BoolExpr)
+	{
+		BoolExpr *where_clause = (BoolExpr *)w_clause;
+		ListCell *lc;
+		foreach(lc, where_clause->args)
+		{
+			Expr *arg = (Expr *) lfirst(lc);
+			A_Expr *xpr;
+			switch(arg->type)
+			{
+				case T_A_Expr:
+					xpr = (A_Expr *)arg;
+					if (nodeTag(xpr->lexpr) != T_ColumnRef)
+					{
+						ereport(WARNING,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+					}
+					ref = (ColumnRef *) xpr->lexpr;
+					field = linitial(ref->fields);
+					name = field->val.str;
+					attrno = attnameAttNum(pstate->p_target_relation, name, false);
+					if (attrno == InvalidAttrNumber)
+					{
+						ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						 errmsg("column \"%s\" of relation \"%s\" does not exist",
+								name,
+								RelationGetRelationName(pstate->p_target_relation))));
+					}
+					target_attnums = lappend_int(target_attnums, attrno);
+					break;
+				case T_BoolExpr:
+					target_attnums = handle_where_clause_attnums(pstate, (Node *) arg, target_attnums);
+					break;
+				default:
+					break;
+			}
+		}
+		return target_attnums;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+	}
+	return target_attnums;
+}
+
+/*
+ * Returns a list of ResTargets constructed from the where clause provided, using
+ * the left hand side of the assignment (assumed to be intended as column names).
+ */
+List *handle_where_clause_restargets_left(ParseState *pstate, Node *w_clause, List *extra_restargets)
+{
+	/*
+	 * Construct a ResTarget and append it to the list.
+	 */
+	ColumnRef *ref;
+	Value *field;
+	char *name;
+	int attrno;
+	if (nodeTag(w_clause) == T_A_Expr)
+	{
+		A_Expr *where_clause = (A_Expr *)w_clause;
+		ResTarget *res;
+		if (nodeTag(where_clause->lexpr) != T_ColumnRef)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+		}
+		ref = (ColumnRef *) where_clause->lexpr;
+		field = linitial(ref->fields);
+		name = field->val.str;
+		attrno = attnameAttNum(pstate->p_target_relation, name, false);
+		if (attrno == InvalidAttrNumber)
+		{
+			ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_COLUMN),
+			 errmsg("column \"%s\" of relation \"%s\" does not exist",
+					name,
+					RelationGetRelationName(pstate->p_target_relation))));
+		}
+		res = (ResTarget *) palloc(sizeof(ResTarget));
+		res->type = ref->type;
+		res->name = field->val.str;
+		res->indirection = NIL; /* Unused for now */
+		res->val = (Node *) ref; /* Store the ColumnRef here if needed */
+		res->location = ref->location;
+
+		return lappend(extra_restargets, res);
+	}
+	else if (nodeTag(w_clause) == T_BoolExpr)
+	{
+		BoolExpr *where_clause = (BoolExpr *)w_clause;
+		ListCell *lc;
+		foreach(lc, where_clause->args)
+		{
+			Expr *arg = (Expr *) lfirst(lc);
+			A_Expr *xpr;
+			ResTarget *res;
+			switch(arg->type)
+			{
+				case T_A_Expr:
+					xpr = (A_Expr *)arg;
+
+					if (nodeTag(xpr->lexpr) != T_ColumnRef)
+					{
+						ereport(WARNING,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+					}
+					ref = (ColumnRef *) xpr->lexpr;
+					field = linitial(ref->fields);
+					name = field->val.str;
+					attrno = attnameAttNum(pstate->p_target_relation, name, false);
+					if (attrno == InvalidAttrNumber)
+					{
+						ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						 errmsg("column \"%s\" of relation \"%s\" does not exist",
+								name,
+								RelationGetRelationName(pstate->p_target_relation))));
+					}
+					res = (ResTarget *) palloc(sizeof(ResTarget));
+					res->type = ref->type;
+					res->name = field->val.str;
+					res->indirection = NIL; /* Unused for now */
+					res->val = (Node *) ref; /* Store the ColumnRef here if needed */
+					res->location = ref->location;
+
+					extra_restargets = lappend(extra_restargets, res);
+					break;
+				case T_BoolExpr:
+					extra_restargets = handle_where_clause_restargets_left(pstate, (Node *) arg, extra_restargets);
+					break;
+				default:
+					break;
+			}
+		}
+		return extra_restargets;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+	}
+	return extra_restargets;
+}
+
+/*
+ * Returns a list of ResTargets constructed from the where clause provided, using
+ * the right hand side of the assignment (assumed to be values/parameters).
+ */
+List *handle_where_clause_restargets_right(ParseState *pstate, Node *w_clause, List *extra_restargets)
+{
+	/*
+	 * Construct a ResTarget and append it to the list.
+	 */
+	ColumnRef *ref;
+	Value *field;
+	ResTarget *res;
+	if (nodeTag(w_clause) == T_A_Expr)
+	{
+		A_Expr *where_clause = (A_Expr *)w_clause;
+		if (nodeTag(where_clause->rexpr) != T_ColumnRef)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+		}
+		ref = (ColumnRef *) where_clause->rexpr;
+		field = linitial(ref->fields);
+		res = (ResTarget *) palloc(sizeof(ResTarget));
+		res->type = ref->type;
+		res->name = field->val.str;
+		res->indirection = NIL; /* Unused for now */
+		res->val = (Node *) ref; /* Store the ColumnRef here if needed */
+		res->location = ref->location;
+
+		return lappend(extra_restargets, res);
+	}
+	else if (nodeTag(w_clause) == T_BoolExpr)
+	{
+		BoolExpr *where_clause = (BoolExpr *)w_clause;
+		ListCell *lc;
+		foreach(lc, where_clause->args)
+		{
+			Expr *arg = (Expr *) lfirst(lc);
+			A_Expr *xpr;
+			switch(arg->type)
+			{
+				case T_A_Expr:
+					xpr = (A_Expr *)arg;
+
+					if (nodeTag(xpr->rexpr) != T_ColumnRef)
+					{
+						ereport(WARNING,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+					}
+					ref = (ColumnRef *) xpr->rexpr;
+					field = linitial(ref->fields);
+					res = (ResTarget *) palloc(sizeof(ResTarget));
+					res->type = ref->type;
+					res->name = field->val.str;
+					res->indirection = NIL; /* Unused for now */
+					res->val = (Node *) ref; /* Store the ColumnRef here if needed */
+					res->location = ref->location;
+
+					extra_restargets = lappend(extra_restargets, res);
+					break;
+				case T_BoolExpr:
+					extra_restargets = handle_where_clause_restargets_right(pstate, (Node *) arg, extra_restargets);
+					break;
+				default:
+					break;
+			}
+		}
+		return extra_restargets;
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+	}
+	return extra_restargets;
+}
 
 /*
  * Internal function used by procedure sys.sp_describe_undeclared_parameters
@@ -526,11 +851,14 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 		int numresults = 0;
 		int num_target_attnums = 0;
 		RawStmt    *parsetree;
-		InsertStmt *insert_stmt;
+		InsertStmt *insert_stmt = NULL;
+		UpdateStmt *update_stmt = NULL;
+		DeleteStmt *delete_stmt = NULL;
 		RangeVar *relation;
 		Oid relid;
 		Relation r;
 		List *target_attnums = NIL;
+		List *extra_restargets = NIL;
 		ParseState *pstate;
 		int relname_len;
 		List *cols;
@@ -585,26 +913,102 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 		}
 		list_item = list_head(raw_parsetree_list);
 		parsetree = lfirst_node(RawStmt, list_item);
-		if (nodeTag(parsetree->stmt) != T_InsertStmt)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
-		}
 
 		/*
-		 * Analyze the parsed InsertStmt to suggest types for undeclared
+		 * Analyze the parsed statement to suggest types for undeclared
 		 * parameters
 		 */
-		rewrite_object_refs(parsetree->stmt);
-		sql_dialect = sql_dialect_value_old;
-		insert_stmt = (InsertStmt *)parsetree->stmt;
-		relation = insert_stmt->relation;
-		relid = RangeVarGetRelid(relation, NoLock, false);
-		r = relation_open(relid, AccessShareLock);
-		pstate = (ParseState *) palloc(sizeof(ParseState));
-		pstate->p_target_relation = r;
-		cols = checkInsertTargets(pstate, insert_stmt->cols, &target_attnums);
+		switch(nodeTag(parsetree->stmt))
+		{
+			case T_InsertStmt:
+				rewrite_object_refs(parsetree->stmt);
+				sql_dialect = sql_dialect_value_old;
+				insert_stmt = (InsertStmt *)parsetree->stmt;
+				relation = insert_stmt->relation;
+				relid = RangeVarGetRelid(relation, NoLock, false);
+				r = relation_open(relid, AccessShareLock);
+				pstate = (ParseState *) palloc(sizeof(ParseState));
+				pstate->p_target_relation = r;
+				cols = checkInsertTargets(pstate, insert_stmt->cols, &target_attnums);
+				break;
+			case T_UpdateStmt:
+				rewrite_object_refs(parsetree->stmt);
+				sql_dialect = sql_dialect_value_old;
+				update_stmt = (UpdateStmt *)parsetree->stmt;
+				relation = update_stmt->relation;
+				relid = RangeVarGetRelid(relation, NoLock, false);
+				r = relation_open(relid, AccessShareLock);
+				pstate = (ParseState *) palloc(sizeof(ParseState));
+				pstate->p_target_relation = r;
+				cols = list_copy(update_stmt->targetList);
+
+				/*
+				 * Add attnums to cols based on targetList
+				 */
+				foreach(lc, cols)
+				{
+					ResTarget  *col = (ResTarget *) lfirst(lc);
+					char	   *name = col->name;
+					int			attrno;
+
+					attrno = attnameAttNum(pstate->p_target_relation, name, false);
+					if (attrno == InvalidAttrNumber)
+					{
+						ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						 errmsg("column \"%s\" of relation \"%s\" does not exist",
+								name,
+								RelationGetRelationName(pstate->p_target_relation))));
+					}
+					target_attnums = lappend_int(target_attnums, attrno);
+				}
+				target_attnums = handle_where_clause_attnums(pstate, update_stmt->whereClause, target_attnums);
+				extra_restargets = handle_where_clause_restargets_left(pstate, update_stmt->whereClause, extra_restargets);
+
+				cols = list_concat_copy(cols, extra_restargets);
+				break;
+			case T_DeleteStmt:
+				rewrite_object_refs(parsetree->stmt);
+				sql_dialect = sql_dialect_value_old;
+				delete_stmt = (DeleteStmt *)parsetree->stmt;
+				relation = delete_stmt->relation;
+				relid = RangeVarGetRelid(relation, NoLock, false);
+				r = relation_open(relid, AccessShareLock);
+				pstate = (ParseState *) palloc(sizeof(ParseState));
+				pstate->p_target_relation = r;
+				cols = NIL;
+
+				/*
+				 * Add attnums to cols based on targetList
+				 */
+				foreach(lc, cols)
+				{
+					ResTarget  *col = (ResTarget *) lfirst(lc);
+					char	   *name = col->name;
+					int			attrno;
+
+					attrno = attnameAttNum(pstate->p_target_relation, name, false);
+					if (attrno == InvalidAttrNumber)
+					{
+						ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						 errmsg("column \"%s\" of relation \"%s\" does not exist",
+								name,
+								RelationGetRelationName(pstate->p_target_relation))));
+					}
+					target_attnums = lappend_int(target_attnums, attrno);
+				}
+				target_attnums = handle_where_clause_attnums(pstate, delete_stmt->whereClause, target_attnums);
+				extra_restargets = handle_where_clause_restargets_left(pstate, delete_stmt->whereClause, extra_restargets);
+
+				cols = list_concat_copy(cols, extra_restargets);
+				break;
+			default:
+				ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+				break;
+		}
 
 		undeclaredparams->tablename = (char *) palloc(sizeof(char) * 64);
 		relname_len = strlen(relation->relname);
@@ -640,8 +1044,29 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 		pfree(pstate);
 
 		/* Parse the list of parameters, and determine which and how many are undeclared. */
-		select_stmt = (SelectStmt *)insert_stmt->selectStmt;
-		values_list = select_stmt->valuesLists;
+		switch(nodeTag(parsetree->stmt))
+		{
+			case T_InsertStmt:
+				select_stmt = (SelectStmt *)insert_stmt->selectStmt;
+				values_list = select_stmt->valuesLists;
+				break;
+			case T_UpdateStmt:
+				/* 
+				 * In an UPDATE statement, we could have both SET and WHERE with undeclared parameters. 
+				 * That's targetList (SET ...) and whereClause (WHERE ...)
+				 */
+				values_list = list_make1(handle_where_clause_restargets_right(pstate, update_stmt->whereClause, update_stmt->targetList));
+				break;
+			case T_DeleteStmt:
+				values_list = list_make1(handle_where_clause_restargets_right(pstate, delete_stmt->whereClause, NIL));
+				break;
+			default:
+				ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+				break;
+		}
+
 		if (list_length(values_list) > 1) {
 			ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -662,15 +1087,42 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 			}
 			foreach(sublc, sublist)
 			{
-				ColumnRef *columnref = lfirst(sublc);
+				ColumnRef *columnref = NULL;
+				ResTarget *res;
+				List *fields;
 				ListCell *fieldcell;
-				if (nodeTag(columnref) != T_ColumnRef)
+				/*
+				 * Tack on WHERE clause for the same as above, for
+				 * UPDATE and DELETE statements.
+				 */
+				switch(nodeTag(parsetree->stmt))
+				{
+					case T_InsertStmt:
+						columnref = lfirst(sublc);
+						break;
+					case T_UpdateStmt:
+					case T_DeleteStmt:
+						res = lfirst(sublc);
+						if (nodeTag(res->val) != T_ColumnRef)
+						{
+							ereport(ERROR,
+									(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
+						}
+						columnref = (ColumnRef *)res->val;
+						break;
+					default:
+						break;
+				}
+				fields = columnref->fields;
+				if (nodeTag(columnref) != T_ColumnRef && nodeTag(parsetree->stmt) != T_DeleteStmt)
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("Unsupported use case in sp_describe_undeclared_parameters")));
 				}
-				foreach(fieldcell, columnref->fields)
+				
+				foreach(fieldcell, fields)
 				{
 					Value *field = lfirst(fieldcell);
 					/* Make sure it's a parameter reference */
@@ -726,61 +1178,61 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 	"CAST( 0 AS INT ) " /* AS "parameter_ordinal"  -- Need to get correct ordinal number in code. */
 	", CAST( NULL AS sysname ) " /* AS "name"  -- Need to get correct parameter name in code. */
 	", CASE "
-		"WHEN T2.name = \'bigint\' THEN 127 "
-		"WHEN T2.name = \'binary\' THEN 173 "
-		"WHEN T2.name = \'bit\' THEN 104 "
-		"WHEN T2.name = \'char\' THEN 175 "
-		"WHEN T2.name = \'date\' THEN 40 "
-		"WHEN T2.name = \'datetime\' THEN 61 "
-		"WHEN T2.name = \'datetime2\' THEN 42 "
-		"WHEN T2.name = \'datetimeoffset\' THEN 43 "
-		"WHEN T2.name = \'decimal\' THEN 106 "
-		"WHEN T2.name = \'float\' THEN 62 "
-		"WHEN T2.name = \'image\' THEN 34 "
-		"WHEN T2.name = \'int\' THEN 56 "
-		"WHEN T2.name = \'money\' THEN 60 "
-		"WHEN T2.name = \'nchar\' THEN 239 "
-		"WHEN T2.name = \'ntext\' THEN 99 "
-		"WHEN T2.name = \'numeric\' THEN 108 "
-		"WHEN T2.name = \'nvarchar\' THEN 231 "
-		"WHEN T2.name = \'real\' THEN 59 "
-		"WHEN T2.name = \'smalldatetime\' THEN 58 "
-		"WHEN T2.name = \'smallint\' THEN 52 "
-		"WHEN T2.name = \'smallmoney\' THEN 122 "
-		"WHEN T2.name = \'text\' THEN 35 "
-		"WHEN T2.name = \'time\' THEN 41 "
-		"WHEN T2.name = \'tinyint\' THEN 48 "
-		"WHEN T2.name = \'uniqueidentifier\' THEN 36 "
-		"WHEN T2.name = \'varbinary\' THEN 165 "
-		"WHEN T2.name = \'varchar\' THEN 167 "
-		"WHEN T2.name =  \'xml\' THEN 241 "
+		"WHEN T2.name COLLATE sys.database_default = \'bigint\' THEN 127 "
+		"WHEN T2.name COLLATE sys.database_default = \'binary\' THEN 173 "
+		"WHEN T2.name COLLATE sys.database_default = \'bit\' THEN 104 "
+		"WHEN T2.name COLLATE sys.database_default = \'char\' THEN 175 "
+		"WHEN T2.name COLLATE sys.database_default = \'date\' THEN 40 "
+		"WHEN T2.name COLLATE sys.database_default = \'datetime\' THEN 61 "
+		"WHEN T2.name COLLATE sys.database_default = \'datetime2\' THEN 42 "
+		"WHEN T2.name COLLATE sys.database_default = \'datetimeoffset\' THEN 43 "
+		"WHEN T2.name COLLATE sys.database_default = \'decimal\' THEN 106 "
+		"WHEN T2.name COLLATE sys.database_default = \'float\' THEN 62 "
+		"WHEN T2.name COLLATE sys.database_default = \'image\' THEN 34 "
+		"WHEN T2.name COLLATE sys.database_default = \'int\' THEN 56 "
+		"WHEN T2.name COLLATE sys.database_default = \'money\' THEN 60 "
+		"WHEN T2.name COLLATE sys.database_default = \'nchar\' THEN 239 "
+		"WHEN T2.name COLLATE sys.database_default = \'ntext\' THEN 99 "
+		"WHEN T2.name COLLATE sys.database_default = \'numeric\' THEN 108 "
+		"WHEN T2.name COLLATE sys.database_default = \'nvarchar\' THEN 231 "
+		"WHEN T2.name COLLATE sys.database_default = \'real\' THEN 59 "
+		"WHEN T2.name COLLATE sys.database_default = \'smalldatetime\' THEN 58 "
+		"WHEN T2.name COLLATE sys.database_default = \'smallint\' THEN 52 "
+		"WHEN T2.name COLLATE sys.database_default = \'smallmoney\' THEN 122 "
+		"WHEN T2.name COLLATE sys.database_default = \'text\' THEN 35 "
+		"WHEN T2.name COLLATE sys.database_default = \'time\' THEN 41 "
+		"WHEN T2.name COLLATE sys.database_default = \'tinyint\' THEN 48 "
+		"WHEN T2.name COLLATE sys.database_default = \'uniqueidentifier\' THEN 36 "
+		"WHEN T2.name COLLATE sys.database_default = \'varbinary\' THEN 165 "
+		"WHEN T2.name COLLATE sys.database_default = \'varchar\' THEN 167 "
+		"WHEN T2.name COLLATE sys.database_default =  \'xml\' THEN 241 "
 		"ELSE C.system_type_id "
 	"END " /* AS "suggested_system_type_id" */
 	", CASE "
-		"WHEN T2.name = \'decimal\' THEN \'decimal(\' + CAST( C.precision AS sys.VARCHAR(10) ) + \',\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'numeric\' THEN \'numeric(\' + CAST( C.precision AS sys.VARCHAR(10) ) + \',\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'char\' THEN \'char(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'nchar\' THEN \'nchar(\' + CAST( C.max_length/2 AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'binary\' THEN \'binary(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'datetime2\' THEN \'datetime2(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'datetimeoffset\' THEN \'datetimeoffset(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'time\' THEN \'time(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
-		"WHEN T2.name = \'varchar\' THEN "
+		"WHEN T2.name COLLATE sys.database_default = \'decimal\' THEN \'decimal(\' + CAST( C.precision AS sys.VARCHAR(10) ) + \',\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'numeric\' THEN \'numeric(\' + CAST( C.precision AS sys.VARCHAR(10) ) + \',\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'char\' THEN \'char(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'nchar\' THEN \'nchar(\' + CAST( C.max_length/2 AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'binary\' THEN \'binary(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'datetime2\' THEN \'datetime2(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'datetimeoffset\' THEN \'datetimeoffset(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'time\' THEN \'time(\' + CAST( C.scale AS sys.VARCHAR(10) ) + \')\' "
+		"WHEN T2.name COLLATE sys.database_default = \'varchar\' THEN "
 			"CASE WHEN C.max_length = -1 THEN \'varchar(max)\' "
 				"ELSE \'varchar(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
 			"END "
-		"WHEN T2.name = \'nvarchar\' THEN "
+		"WHEN T2.name COLLATE sys.database_default = \'nvarchar\' THEN "
 			"CASE WHEN C.max_length = -1 THEN \'nvarchar(max)\' "
 			"ELSE \'nvarchar(\' + CAST( C.max_length/2 AS sys.VARCHAR(10) ) + \')\' "
 			"END "
-		"WHEN T2.name = \'varbinary\' THEN "
+		"WHEN T2.name COLLATE sys.database_default = \'varbinary\' THEN "
 		"CASE WHEN C.max_length = -1 THEN \'varbinary(max)\' "
 			"ELSE \'varbinary(\' + CAST( C.max_length AS sys.VARCHAR(10) ) + \')\' "
 			"END "
 		"ELSE T2.name "
 	"END " /* AS "suggested_system_type_name" */
 	", CASE "
-		"WHEN T2.name IN (\'image\', \'ntext\',\'text\') THEN -1 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'image\', \'ntext\',\'text\') THEN -1 "
 		"ELSE C.max_length "
 	"END  " /* AS "suggested_max_length" */
 	", C.precision " /* AS "suggested_precision" */
@@ -804,48 +1256,49 @@ sp_describe_undeclared_parameters_internal(PG_FUNCTION_ARGS)
 	", CAST( 0 AS BIT ) " /* AS "suggested_is_output" */
 	", CAST( NULL AS sysname ) " /* AS "formal_parameter_name" */
 	", CASE "
-		"WHEN T2.name IN (\'tinyint\', \'smallint\', \'int\', \'bigint\') THEN 38 "
-		"WHEN T2.name IN (\'float\', \'real\') THEN 109 "
-		"WHEN T2.name IN (\'smallmoney\', \'money\') THEN 110 "
-		"WHEN T2.name IN (\'smalldatetime\', \'datetime\') THEN 111 "
-		"WHEN T2.name = \'binary\' THEN 173 "
-		"WHEN T2.name = \'bit\' THEN 104 "
-		"WHEN T2.name = \'char\' THEN 175 "
-		"WHEN T2.name = \'date\' THEN 40 "
-		"WHEN T2.name = \'datetime2\' THEN 42 "
-		"WHEN T2.name = \'datetimeoffset\' THEN 43 "
-		"WHEN T2.name = \'decimal\' THEN 106 "
-		"WHEN T2.name = \'image\' THEN 34 "
-		"WHEN T2.name = \'nchar\' THEN 239 "
-		"WHEN T2.name = \'ntext\' THEN 99 "
-		"WHEN T2.name = \'numeric\' THEN 108 "
-		"WHEN T2.name = \'nvarchar\' THEN 231 "
-		"WHEN T2.name = \'text\' THEN 35 "
-		"WHEN T2.name = \'time\' THEN 41 "
-		"WHEN T2.name = \'uniqueidentifier\' THEN 36 "
-		"WHEN T2.name = \'varbinary\' THEN 165 "
-		"WHEN T2.name = \'varchar\' THEN 167 "
-		"WHEN T2.name =  \'xml\' THEN 241 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'tinyint\', \'smallint\', \'int\', \'bigint\') THEN 38 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'float\', \'real\') THEN 109 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'smallmoney\', \'money\') THEN 110 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'smalldatetime\', \'datetime\') THEN 111 "
+		"WHEN T2.name COLLATE sys.database_default = \'binary\' THEN 173 "
+		"WHEN T2.name COLLATE sys.database_default = \'bit\' THEN 104 "
+		"WHEN T2.name COLLATE sys.database_default = \'char\' THEN 175 "
+		"WHEN T2.name COLLATE sys.database_default = \'date\' THEN 40 "
+		"WHEN T2.name COLLATE sys.database_default = \'datetime2\' THEN 42 "
+		"WHEN T2.name COLLATE sys.database_default = \'datetimeoffset\' THEN 43 "
+		"WHEN T2.name COLLATE sys.database_default = \'decimal\' THEN 106 "
+		"WHEN T2.name COLLATE sys.database_default = \'image\' THEN 34 "
+		"WHEN T2.name COLLATE sys.database_default = \'nchar\' THEN 239 "
+		"WHEN T2.name COLLATE sys.database_default = \'ntext\' THEN 99 "
+		"WHEN T2.name COLLATE sys.database_default = \'numeric\' THEN 108 "
+		"WHEN T2.name COLLATE sys.database_default = \'nvarchar\' THEN 231 "
+		"WHEN T2.name COLLATE sys.database_default = \'text\' THEN 35 "
+		"WHEN T2.name COLLATE sys.database_default = \'time\' THEN 41 "
+		"WHEN T2.name COLLATE sys.database_default = \'uniqueidentifier\' THEN 36 "
+		"WHEN T2.name COLLATE sys.database_default= \'varbinary\' THEN 165 "
+		"WHEN T2.name COLLATE sys.database_default = \'varchar\' THEN 167 "
+		"WHEN T2.name COLLATE sys.database_default =  \'xml\' THEN 241 "
 		"ELSE C.system_type_id "
 	"END " /* AS "suggested_tds_type_id" */
 	", CASE "
-		"WHEN T2.name = \'nvarchar\' AND C.max_length = -1 THEN 65535 "
-		"WHEN T2.name = \'varbinary\' AND C.max_length = -1 THEN 65535 "
-		"WHEN T2.name = \'varchar\' AND C.max_length = -1 THEN 65535 "
-		"WHEN T2.name IN (\'decimal\', \'numeric\') THEN 17 "
-		"WHEN T2.name = \'xml\' THEN 8100 "
-		"WHEN T2.name in (\'image\', \'text\') THEN 2147483647"
-		"WHEN T2.name = \'ntext\' THEN 2147483646"
+		"WHEN T2.name COLLATE sys.database_default = \'nvarchar\' AND C.max_length = -1 THEN 65535 "
+		"WHEN T2.name COLLATE sys.database_default = \'varbinary\' AND C.max_length = -1 THEN 65535 "
+		"WHEN T2.name COLLATE sys.database_default = \'varchar\' AND C.max_length = -1 THEN 65535 "
+		"WHEN T2.name COLLATE sys.database_default IN (\'decimal\', \'numeric\') THEN 17 "
+		"WHEN T2.name COLLATE sys.database_default = \'xml\' THEN 8100 "
+		"WHEN T2.name COLLATE sys.database_default in (\'image\', \'text\') THEN 2147483647"
+		"WHEN T2.name COLLATE sys.database_default = \'ntext\' THEN 2147483646"
 		"ELSE CAST( C.max_length AS INT ) "
 	"END " /* AS "suggested_tds_length" */
 "FROM sys.objects O, sys.columns C, sys.types T, sys.types T2 "
 "WHERE O.object_id = C.object_id "
 "AND C.user_type_id = T.user_type_id "
-"AND C.name = \'%s\' " /* -- INPUT column name */
+"AND C.name = \'%s\' COLLATE sys.database_default " /* -- INPUT column name */
 "AND T.system_type_id = T2.user_type_id " /*  -- To get system dt name. */
-"AND O.name = \'%s\'  " /*  -- INPUT table name */
+"AND O.name = \'%s\' COLLATE sys.database_default " /*  -- INPUT table name */
 "AND O.schema_id = %d " /*  -- INPUT schema Oid */
 "AND O.type = \'U\'"; /* -- User tables only for the time being */
+
 		char *query = psprintf(tempq,
 				undeclaredparams->targetcolnames[undeclaredparams->paramindexes[call_cntr]],
 				undeclaredparams->tablename,
@@ -1023,4 +1476,589 @@ create_xp_instance_regread_in_master_dbo_internal(PG_FUNCTION_ARGS)
 	PG_END_TRY();
 
 	PG_RETURN_INT32(0);
+}
+
+Datum sp_addrole(PG_FUNCTION_ARGS)
+{
+	char *rolname, *lowercase_rolname, *ownername;
+	size_t len;
+	char *physical_role_name;
+	Oid role_oid;
+	List *parsetree_list;
+	ListCell *parsetree_item;
+	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true);
+
+	PG_TRY();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", "tsql",
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+
+		rolname = PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
+		ownername = PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
+
+		/* Role name is not NULL */
+		if (rolname == NULL)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Ensure the database name input argument is lower-case, as all Babel role names are lower-case */
+		lowercase_rolname = lowerstr(rolname);
+
+		/* Remove trailing whitespaces */
+		len = strlen(lowercase_rolname);
+		while(isspace(lowercase_rolname[len - 1]))
+			lowercase_rolname[--len] = 0;
+
+		/* check if role name is empty after removing trailing spaces*/
+		if (strlen(lowercase_rolname) == 0)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/*
+		 * @ownername is not yet supported in babelfish.
+		 * Throw an error if @ownername is passed either as an empty string or contains value
+		 */
+		if(ownername)
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("The @ownername argument is not yet supported in Babelfish.")));
+
+		/* Role name cannot contain '\' */
+		if (strchr(lowercase_rolname, '\\') != NULL)
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("'%s' is not a valid name because it contains invalid characters.", rolname)));
+
+		/* Map the logical role name to its physical name in the database.*/
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname);
+		role_oid = get_role_oid(physical_role_name, true);
+
+		/* Check if the user, group or role already exists */
+		if (role_oid)
+			ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("User, group, or role '%s' already exists in the current database.", rolname)));
+
+		/* Remove trailing whitespaces */
+		len = strlen(rolname);
+		while(isspace(rolname[len - 1])) rolname[--len] = 0;
+
+		/* Advance cmd counter to make the delete visible */
+		CommandCounterIncrement();
+
+		parsetree_list = gen_sp_addrole_subcmds(rolname);
+
+		/* Run all subcommands */
+		foreach(parsetree_item, parsetree_list)
+		{
+			Node *stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 16;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+				"(CREATE ROLE )",
+				false,
+				PROCESS_UTILITY_SUBCOMMAND,
+				NULL,
+				NULL,
+				None_Receiver,
+				NULL);
+
+			/* make sure later steps can see the object created here */
+			CommandCounterIncrement();
+		}
+	}
+	PG_CATCH();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	PG_RETURN_VOID();
+}
+
+static List *
+gen_sp_addrole_subcmds(const char *user)
+{
+	StringInfoData query;
+	List *res;
+	Node *stmt;
+	CreateRoleStmt *rolestmt;
+	List *user_options = NIL;
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "CREATE ROLE dummy; ");
+	res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	if (list_length(res) != 1)
+		ereport(ERROR,
+			(errcode(ERRCODE_SYNTAX_ERROR),
+			 errmsg("Expected 1 statement but get %d statements after parsing", list_length(res))));
+
+	stmt = parsetree_nth_stmt(res, 0);
+
+	rolestmt = (CreateRoleStmt *) stmt;
+	if (!IsA(rolestmt, CreateRoleStmt))
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a CreateRoleStmt")));
+
+	rolestmt->role = pstrdup(lowerstr(user));
+	rewrite_object_refs(stmt);
+
+	/*
+	 * Add original_user_name before hand because placeholder
+	 * query "(CREATE ROLE )" is being passed
+	 * that doesn't contain the user name.
+	 */
+	user_options = lappend(user_options,
+				makeDefElem("original_user_name",
+				(Node *) makeString((char *)user),
+						-1));
+	rolestmt->options = list_concat(rolestmt->options, user_options);
+
+	return res;
+}
+
+Datum sp_droprole(PG_FUNCTION_ARGS)
+{
+	char *rolname, *lowercase_rolname;
+	size_t len;
+	char *physical_role_name;
+	Oid role_oid;
+	List *parsetree_list;
+	ListCell *parsetree_item;
+	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true);
+
+	PG_TRY();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", "tsql",
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+
+		rolname = PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
+
+		/* Role name is not NULL */
+		if (rolname == NULL)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Ensure the database name input argument is lower-case, as all Babel role names are lower-case */
+		lowercase_rolname = lowerstr(rolname);
+
+		/* Remove trailing whitespaces */
+		len = strlen(lowercase_rolname);
+		while(isspace(lowercase_rolname[len - 1]))
+			lowercase_rolname[--len] = 0;
+
+		/* check if role name is empty after removing trailing spaces*/
+		if (strlen(lowercase_rolname) == 0)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Map the logical role name to its physical name in the database.*/
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname);
+		role_oid = get_role_oid(physical_role_name, true);
+
+		/* Check if the role does not exists*/
+		if(role_oid == InvalidOid || !is_role(role_oid))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("Cannot drop the role '%s', because it does not exist or you do not have permission.", rolname)));
+
+		/* Advance cmd counter to make the delete visible */
+		CommandCounterIncrement();
+
+		parsetree_list = gen_sp_droprole_subcmds(lowercase_rolname);
+
+		/* Run all subcommands */
+		foreach(parsetree_item, parsetree_list)
+		{
+			Node *stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 16;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+				"(DROP ROLE )",
+				false,
+				PROCESS_UTILITY_SUBCOMMAND,
+				NULL,
+				NULL,
+				None_Receiver,
+				NULL);
+
+			/* make sure later steps can see the object created here */
+			CommandCounterIncrement();
+		}
+	}
+	PG_CATCH();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	PG_RETURN_VOID();
+}
+
+static List *
+gen_sp_droprole_subcmds(const char *user)
+{
+	StringInfoData query;
+	List *res;
+	Node *stmt;
+	DropRoleStmt *dropstmt;
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "DROP ROLE dummy; ");
+	res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	if (list_length(res) != 1)
+		ereport(ERROR,
+			(errcode(ERRCODE_SYNTAX_ERROR),
+			 errmsg("Expected 1 statement but get %d statements after parsing", list_length(res))));
+
+	stmt = parsetree_nth_stmt(res, 0);
+	dropstmt = (DropRoleStmt *) stmt;
+
+	if (!IsA(dropstmt, DropRoleStmt))
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a DropRoleStmt")));
+
+	if (user && dropstmt->roles)
+	{
+		RoleSpec *tmp;
+
+		/* Update the statement with given role name */
+		tmp = (RoleSpec *) llast(dropstmt->roles);
+		tmp->rolename = pstrdup(user);
+	}
+	return res;
+}
+
+Datum sp_addrolemember(PG_FUNCTION_ARGS)
+{
+	char *rolname, *lowercase_rolname;
+	char *membername, *lowercase_membername;
+	size_t len;
+	char *physical_member_name;
+	char *physical_role_name;
+	Oid role_oid, member_oid;
+	List *parsetree_list;
+	ListCell *parsetree_item;
+	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true);
+
+	PG_TRY();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", "tsql",
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+
+		rolname = PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
+		membername = PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
+
+		/* Role name, member name is not NULL */
+		if (rolname == NULL || membername ==NULL)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Ensure the database name input argument is lower-case, as all Babel role names, user names are lower-case */
+		lowercase_rolname = lowerstr(rolname);
+		lowercase_membername = lowerstr(membername);
+
+		/* Remove trailing whitespaces in rolename and membername*/
+		len = strlen(lowercase_rolname);
+		while(isspace(lowercase_rolname[len - 1]))
+			lowercase_rolname[--len] = 0;
+		len = strlen(lowercase_membername);
+		while(isspace(lowercase_membername[len - 1]))
+			lowercase_membername[--len] = 0;
+
+		/* check if rolename/membername is empty after removing trailing spaces*/
+		if (strlen(lowercase_rolname) == 0 || strlen(lowercase_membername) == 0)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Throws an error if role name and member name are same*/
+		if(strcmp(lowercase_rolname,lowercase_membername)==0)
+			ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("Cannot make a role a member of itself.")));
+
+		/* Map the logical member name to its physical name in the database.*/
+		physical_member_name = get_physical_user_name(get_cur_db_name(), lowercase_membername);
+		member_oid = get_role_oid(physical_member_name, true);
+
+		/* Check if the user, group or role does not exists and given member name is an role or user*/
+		if(member_oid == InvalidOid || ( !is_role(member_oid) && !is_user(member_oid) ))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("User or role '%s' does not exist in this database.", membername)));
+
+		/* Map the logical role name to its physical name in the database.*/
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname);
+		role_oid = get_role_oid(physical_role_name, true);
+
+		/* Check if the role does not exists and given role name is an role*/
+		if(role_oid == InvalidOid || !is_role(role_oid))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("Cannot alter the role '%s', because it does not exist or you do not have permission.", rolname)));
+
+		/* Check if the member oid is already a member of given role oid*/
+		if(is_member_of_role_nosuper( role_oid, member_oid))
+			ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("Cannot make a role a member of itself.")));
+
+		/* Advance cmd counter to make the delete visible */
+		CommandCounterIncrement();
+
+		parsetree_list = gen_sp_addrolemember_subcmds(lowercase_rolname, lowercase_membername);
+
+		/* Run all subcommands */
+		foreach(parsetree_item, parsetree_list)
+		{
+			Node *stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 16;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+				"(ALTER ROLE )",
+				false,
+				PROCESS_UTILITY_SUBCOMMAND,
+				NULL,
+				NULL,
+				None_Receiver,
+				NULL);
+
+			/* make sure later steps can see the object created here */
+			CommandCounterIncrement();
+		}
+	}
+	PG_CATCH();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	PG_RETURN_VOID();
+}
+
+static List *
+gen_sp_addrolemember_subcmds(const char *user, const char *member)
+{
+	StringInfoData query;
+	List *res;
+	Node *stmt;
+	AccessPriv *granted;
+	RoleSpec *grantee;
+	GrantRoleStmt *grant_role;
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "ALTER ROLE dummy ADD MEMBER dummy; ");
+	res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	if (list_length(res) != 1)
+		ereport(ERROR,
+			(errcode(ERRCODE_SYNTAX_ERROR),
+			 errmsg("Expected 1 statement but get %d statements after parsing", list_length(res))));
+
+	stmt = parsetree_nth_stmt(res, 0);
+	grant_role = (GrantRoleStmt *) stmt;
+	granted = (AccessPriv *) linitial(grant_role->granted_roles);
+
+	/* This is ALTER ROLE statement */
+	grantee = (RoleSpec *) linitial(grant_role->grantee_roles);
+
+	/* Rewrite granted and grantee roles */
+	pfree(granted->priv_name);
+	granted->priv_name = (char *) user;
+
+	pfree(grantee->rolename);
+	grantee->rolename = (char *) member;
+
+	rewrite_object_refs(stmt);
+
+	return res;
+}
+
+Datum sp_droprolemember(PG_FUNCTION_ARGS)
+{
+	char *rolname, *lowercase_rolname;
+	char *membername, *lowercase_membername;
+	size_t len;
+	char *physical_name;
+	Oid role_oid;
+	List *parsetree_list;
+	ListCell *parsetree_item;
+	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true);
+
+	PG_TRY();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", "tsql",
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+
+		rolname = PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
+		membername = PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
+
+		/* Role name, member name is not NULL */
+		if (rolname == NULL || membername ==NULL)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Ensure the database name input argument is lower-case, as all Babel role names, user names are lower-case */
+		lowercase_rolname = lowerstr(rolname);
+		lowercase_membername = lowerstr(membername);
+
+		/* Remove trailing whitespaces in rolename and membername*/
+		len = strlen(lowercase_rolname);
+		while(isspace(lowercase_rolname[len - 1]))
+			lowercase_rolname[--len] = 0;
+		len = strlen(lowercase_membername);
+		while(isspace(lowercase_membername[len - 1]))
+			lowercase_membername[--len] = 0;
+
+		/* check if rolename/membername is empty after removing trailing spaces*/
+		if (strlen(lowercase_rolname) == 0 || strlen(lowercase_membername) == 0)
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("Name cannot be NULL.")));
+
+		/* Map the logical role name to its physical name in the database.*/
+		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname);
+		role_oid = get_role_oid(physical_name, true);
+
+		/* Throw an error id the given role name doesn't exist or isn't a role*/
+		if(role_oid == InvalidOid || !is_role(role_oid))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("Cannot alter the role '%s', because it does not exist or you do not have permission.", rolname)));
+
+		/* Map the logical member name to its physical name in the database.*/
+		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_membername);
+		role_oid = get_role_oid(physical_name, true);
+
+		/* Throw an error id the given member name doesn't exist or isn't a role or user*/
+		if(role_oid == InvalidOid || ( !is_role(role_oid) && !is_user(role_oid) ))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("Cannot drop the principal '%s', because it does not exist or you do not have permission.", membername)));
+
+		/* Advance cmd counter to make the delete visible */
+		CommandCounterIncrement();
+
+		parsetree_list = gen_sp_droprolemember_subcmds(lowercase_rolname, lowercase_membername);
+
+		/* Run all subcommands */
+		foreach(parsetree_item, parsetree_list)
+		{
+			Node *stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 16;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+				"(ALTER ROLE )",
+				false,
+				PROCESS_UTILITY_SUBCOMMAND,
+				NULL,
+				NULL,
+				None_Receiver,
+				NULL);
+
+			/* make sure later steps can see the object created here */
+			CommandCounterIncrement();
+		}
+	}
+	PG_CATCH();
+	{
+		set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
+							(superuser() ? PGC_SUSET : PGC_USERSET),
+							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	PG_RETURN_VOID();
+}
+
+static List *
+gen_sp_droprolemember_subcmds(const char *user, const char *member)
+{
+	StringInfoData query;
+	List *res;
+	Node *stmt;
+	AccessPriv *granted;
+	RoleSpec *grantee;
+	GrantRoleStmt *grant_role;
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "ALTER ROLE dummy DROP MEMBER dummy; ");
+	res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	if (list_length(res) != 1)
+		ereport(ERROR,
+			(errcode(ERRCODE_SYNTAX_ERROR),
+			 errmsg("Expected 1 statement but get %d statements after parsing", list_length(res))));
+
+	stmt = parsetree_nth_stmt(res, 0);
+	grant_role = (GrantRoleStmt *) stmt;
+	granted = (AccessPriv *) linitial(grant_role->granted_roles);
+
+	/* This is ALTER ROLE statement */
+	grantee = (RoleSpec *) linitial(grant_role->grantee_roles);
+
+	/* Rewrite granted and grantee roles */
+	pfree(granted->priv_name);
+	granted->priv_name = (char *) user;
+
+	pfree(grantee->rolename);
+	grantee->rolename = (char *) member;
+
+	rewrite_object_refs(stmt);
+	return res;
 }
