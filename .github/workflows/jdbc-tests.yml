@@ -65,6 +65,8 @@ jobs:
         shell: bash
 
       - name: Report code coverage for babelfishpg_tsql extension
+        id: code-coverage-comment-result
+        if: always()
         uses: zgosalvez/github-actions-report-lcov@v2
         with:
           coverage-files: lcov.*.info
