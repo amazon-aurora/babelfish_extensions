@@ -69,11 +69,10 @@ jobs:
         if: always()
         uses: zgosalvez/github-actions-report-lcov@v2
         with:
-          coverage-files: lcov_*.info
+          coverage-files: contrib/babelfishpg_tsql/lcov_*.info
           minimum-coverage: 10
           artifact-name: code-coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: contrib/babelfishpg_tsql/
 
       - name: Upload Log
         if: always() && steps.jdbc.outcome == 'failure'
