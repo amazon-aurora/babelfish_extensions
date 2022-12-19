@@ -8,7 +8,7 @@ user = jdbc_user
 password = 12345678
 
 # PATH TO INPUT TEST FILES FOLDER
-inputFilesPath = input
+inputFilesPath = input/datatypes
 
 # SPECIFY IF YOU WISH TO PRINT ALL THE SUMMARY LOGS/DIFF TO CONSOLE
 printLogsToConsole = false

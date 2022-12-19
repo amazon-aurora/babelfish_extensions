@@ -64,6 +64,15 @@ jobs:
           make coverage-html
         shell: bash
 
+      - name: Report code coverage for babelfishpg_tsql extension
+        uses: zgosalvez/github-actions-report-lcov@v2
+        with:
+          coverage-files: lcov.*.info
+          minimum-coverage: 10
+          artifact-name: code-coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: contrib/babelfishpg_tsql/
+
       - name: Upload Log
         if: always() && steps.jdbc.outcome == 'failure'
         uses: actions/upload-artifact@v2
