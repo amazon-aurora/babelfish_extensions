@@ -69,7 +69,7 @@ jobs:
         if: always()
         uses: zgosalvez/github-actions-report-lcov@v2
         with:
-          coverage-files: lcov.*.info
+          coverage-files: lcov_*.info
           minimum-coverage: 10
           artifact-name: code-coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}
