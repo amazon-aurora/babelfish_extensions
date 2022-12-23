@@ -150,7 +150,6 @@ extern bool is_tsql_rowversion_or_timestamp_datatype(Oid oid);
 static void revoke_type_permission_from_public(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree,
 		ProcessUtilityContext context, ParamListInfo params, QueryEnvironment *queryEnv, DestReceiver *dest, QueryCompletion *qc, List *type_name);
 static void set_current_query_is_create_tbl_check_constraint(Node *expr);
-static char* convertToUPN(char* input);
 
 PG_FUNCTION_INFO_V1(pltsql_inline_handler);
 
@@ -2081,61 +2080,6 @@ static inline bool process_utility_stmt_explain_only_mode(const char *queryStrin
 	return true;
 }
 
-/* 
-* This function is called to convert domain\user to user@DOMAIN
-*/
-
-static char* convertToUPN(char* input){
-	int i=0, pos_slash = -1, k=0, pos_at = -1;
-    char* output = malloc(strlen(input));
-    while(input[i]!='\0'){
-        if(input[i] == '\\'){
-            pos_slash = i;
-            break;
-        }
-        else if(input[i] == '@'){
-            pos_at = i;
-            break;
-        }
-        i++;
-    }
-
-    if(pos_slash == -1 && pos_at == -1)
-        return input;
-    
-    if(pos_slash != -1){
-        i = pos_slash + 1;
-        
-        while(input[i]!='\0'){
-            output[k] = tolower(input[i]);
-            i++;
-            k++;
-        }
-        output[k++] = '@';
-        i = 0;
-        while(i != pos_slash){
-        	output[k] = toupper(input[i]);
-            i++;
-            k++;
-        }
-    }
-        
-    else{
-        i = 0;
-        while(input[i] != '\0'){
-            if(i<pos_at)
-                output[i] = tolower(input[i]);
-            else if(i> pos_at)
-                output[i] = toupper(input[i]);
-            else
-                output[i] = input[i];
-            i++;
-        }
-    }
-
-    return output;
-}
-
 /*
  * Use this hook to handle utility statements that needs special treatment, and
  * use the standard ProcessUtility for other statements.
@@ -2989,7 +2933,24 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (HeapTupleIsValid(tuple))
 						roleform = (Form_pg_authid) GETSTRUCT(tuple);
 					else
-						continue;
+					{
+						/* Supplied login name might be in windows format i.e, domain\user form */
+						tuple = get_roleform_ext(role_name);
+						if (HeapTupleIsValid(tuple))
+						{
+							roleform = (Form_pg_authid) GETSTRUCT(tuple);
+							/*
+							 * This means that provided login name is in windows format 
+							 * so let's update role_name with UPN format.
+							 * TODO: Should we also update  rolspec->rolename here?
+							 */
+							role_name = pstrdup((roleform->rolname).data);
+							pfree(rolspec->rolename);
+							rolspec->rolename = role_name;
+						}
+						else
+							continue;
+					}
 
 					if (is_login(roleform->oid))
 						all_logins = true;

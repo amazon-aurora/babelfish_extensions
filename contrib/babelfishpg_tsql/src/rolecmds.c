@@ -43,6 +43,7 @@
 #include "utils/catcache.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/formatting.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
@@ -1688,3 +1689,97 @@ is_active_login(Oid role_oid)
 	return true;
 }
 
+/* 
+* This function is called to convert domain\user to user@DOMAIN
+*/
+char *
+convertToUPN(char* input)
+{
+	char *output = "";
+	char *pos_slash = NULL;
+
+	if ((pos_slash = strchr(input, '\\')) != NULL)
+	{
+		/* 
+		 * collation aware lower casing and upper casing should be done. 
+		 * But which collation should be used?
+		 */
+		output = psprintf("%s@%s", 
+				 str_tolower(pos_slash + 1, strlen(pos_slash + 1), C_COLLATION_OID),
+				 str_toupper(input, (pos_slash - input), C_COLLATION_OID));
+	}
+	return output;
+}
+
+/*
+ * get_roleform_ext - Useful when someone tries to drop login and that login is in
+ * the form of windows formate i.e, domain\user
+ */
+HeapTuple 
+get_roleform_ext(char *login)
+{
+	Relation	bbf_authid_login_ext_rel;
+	HeapTuple	tuple;
+	ScanKeyData	scanKey;
+	SysScanDesc	scan;
+	char		*upn_login;
+	TupleDesc	dsc;
+
+	if (!strchr(login, '\\'))
+		return NULL;
+
+	upn_login = convertToUPN(login);
+
+	/*
+	 * There are two ways to lookup provided windows user in babelfish_authid_login_ext catalog
+	 * 1. Using rolname column - we need to conver provided login to UPN form 
+	 * 2. Using orig_loginname column - this is newly added column but 
+	 *    1. we need to think upgrade scenario as well.
+	 *    2. Need to create index on that column to have a fast lookup. Alternative is to do
+	 *       whole catalog search which can be quite expansive.
+	 */
+	// Trying 1st approach in this POC.
+
+	/* Fetch the relation sys.babelfish_authid_login_ext */
+	bbf_authid_login_ext_rel = table_open(get_authid_login_ext_oid(),
+										  RowExclusiveLock);
+	dsc = RelationGetDescr(bbf_authid_login_ext_rel);
+
+	/* Search and drop on the role */
+	ScanKeyInit(&scanKey,
+				Anum_bbf_authid_login_ext_rolname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(upn_login));
+
+	scan = systable_beginscan(bbf_authid_login_ext_rel,
+							  get_authid_login_ext_idx_oid(),
+							  true, NULL, 1, &scanKey);
+
+	tuple = systable_getnext(scan);
+
+	if (HeapTupleIsValid(tuple))
+	{
+		char *type;
+		bool isnull = true;
+		Datum datum = heap_getattr(tuple, Anum_bbf_authid_login_ext_type, dsc, &isnull);
+		if (isnull)
+			tuple = NULL;
+		type = pstrdup(TextDatumGetCString(datum));
+		/* Not a windows login */
+		if (strcasecmp(type, "U") != 0)
+			tuple = NULL;
+		pfree(type);
+	}
+
+	systable_endscan(scan);
+	table_close(bbf_authid_login_ext_rel, AccessShareLock);
+
+	if (!HeapTupleIsValid(tuple))
+		return tuple;
+
+	/* It is proven that this rolename is indeed windows login */
+	tuple = SearchSysCache1(AUTHNAME, PointerGetDatum(upn_login));
+
+	/* Return tuple even if it is invalid tuple */
+	return tuple;
+}
