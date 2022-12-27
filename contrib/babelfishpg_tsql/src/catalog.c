@@ -1795,8 +1795,12 @@ get_login_rolname(HeapTuple tuple, TupleDesc dsc)
 static Datum
 get_default_database_name(HeapTuple tuple, TupleDesc dsc)
 {
-	Form_authid_login_ext authid = ((Form_authid_login_ext) GETSTRUCT(tuple));
-	return PointerGetDatum(&(authid->default_database_name));
+	// Form_authid_login_ext authid = ((Form_authid_login_ext) GETSTRUCT(tuple));
+	// return PointerGetDatum(&(authid->default_database_name));
+	bool isnull = true;
+	Datum datum = heap_getattr(tuple, 10, dsc, &isnull);
+	// TODO: isnull should not be true for valid tuple. Throw an error in that case.
+	return datum;
 }
 
 static Datum
