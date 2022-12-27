@@ -69,6 +69,7 @@ static void drop_bbf_authid_user_ext(ObjectAccessType access,
 										void *arg);
 static void drop_bbf_authid_user_ext_by_rolname(const char *rolname);
 static void grant_guests_to_login(const char *login);
+static void handle_windows_login(const char *login);
 
 void
 create_bbf_authid_login_ext(CreateRoleStmt *stmt)
@@ -166,7 +167,15 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 
 	/* Grant membership to guests */
 	if (!role_is_sa(roleid))
-		grant_guests_to_login(GetUserNameFromId(roleid, false));
+	{
+		char *rolname = GetUserNameFromId(roleid, false);
+
+		grant_guests_to_login(rolname);
+
+		/* Grant membership to <tbd> role for kerberos authentication */
+		if (from_windows)
+			handle_windows_login(rolname);
+	}
 }
 
 void
@@ -561,6 +570,72 @@ grant_guests_to_login(const char *login)
 	/* do this step */
 	ProcessUtility(wrapper,
 				   "(CREATE DATABASE )",
+				   false,
+				   PROCESS_UTILITY_SUBCOMMAND,
+				   NULL,
+				   NULL,
+				   None_Receiver,
+				   NULL);
+
+	/* make sure later steps can see the object created here */
+	CommandCounterIncrement();
+
+	pfree(query.data);
+}
+
+/*
+ * handle_windows_login - Adds newly created windows login to pre-defined role.
+ * To ensure interoperability for windows login ie. Any windows login created through TDS endpoint 
+ * could also be used with PSQL endpoint, we need to add newly created login to some predefined role
+ * say, <TBD>. And end user need to ensure that corresponding entry exists for this role in pg_hba.conf
+ */
+static void
+handle_windows_login(const char *login)
+{
+	StringInfoData	query;
+	List			*parsetree_list;
+	Node			*stmt;
+	RoleSpec		*tmp_role;
+	AccessPriv		*ad_role;
+	PlannedStmt		*wrapper;
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "GRANT dummy TO dummy; ");
+	parsetree_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	if (list_length(parsetree_list) != 1)
+		ereport(ERROR, 
+				(errcode(ERRCODE_SYNTAX_ERROR), 
+				 errmsg("Expected 1 statement but get %d statements after parsing",
+						list_length(parsetree_list))));
+
+	/* Update the dummy statement with real values */
+	stmt = parsetree_nth_stmt(parsetree_list, 0);
+
+	tmp_role = makeNode(RoleSpec);
+	tmp_role->roletype = ROLESPEC_CSTRING;
+	tmp_role->location = -1;
+	tmp_role->rolename = pstrdup(login);
+
+	ad_role = makeNode(AccessPriv);
+	/* This should be configurable via server level GUC or something else mechanism */
+	ad_role->priv_name = pstrdup("rds_ad");
+	ad_role->cols = NIL;
+
+	update_GrantRoleStmt(stmt, list_make1(ad_role), list_make1(tmp_role));
+
+	/* Run the built query */
+	/* need to make a wrapper PlannedStmt */
+	wrapper = makeNode(PlannedStmt);
+	wrapper->commandType = CMD_UTILITY;
+	wrapper->canSetTag = false;
+	wrapper->utilityStmt = stmt;
+	wrapper->stmt_location = 0;
+	wrapper->stmt_len = 20;
+
+	/* do this step */
+	ProcessUtility(wrapper,
+				  "GRANT dummy TO dummy",
 				   false,
 				   PROCESS_UTILITY_SUBCOMMAND,
 				   NULL,
