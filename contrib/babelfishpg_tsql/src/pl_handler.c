@@ -2528,10 +2528,24 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 						  ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT), 
 									  errmsg("The Server principal '%s' already exists", stmt->role)));
 
+					if (location_windows!=-1){
+						stmt->role = convertToUPN(orig_loginname);
+						if (get_role_oid(stmt->role, true) != InvalidOid)
+						  ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT), 
+									  errmsg("The Server principal '%s' already exists", stmt->role)));
+					}
+					
+
 					if (location_windows == -1){
 						if (strchr(stmt->role, '\\') != NULL){
 							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 									errmsg("'%s' is not a valid name because it contains invalid characters.", stmt->role)));	
+						}
+					}
+					else {
+						if (strchr(stmt->role, '@') == NULL && strchr(stmt->role, '\\') == NULL){
+							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+									errmsg("'%s' is not a valid Windows NT name. Give the complete name: <domain\\username>.", stmt->role)));
 						}
 					}
 
@@ -2539,9 +2553,6 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 					prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 					bbf_set_current_user("sysadmin");
-
-					if(location_windows!=-1)
-						stmt->role = convertToUPN(orig_loginname);
 
 					PG_TRY();
 					{
@@ -2557,8 +2568,6 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 						stmt->options = list_concat(stmt->options,
 													login_options);
 						create_bbf_authid_login_ext(stmt);
-						// if(location_windows!=-1)
-						// 	SPI_execute("GRANT rds_ad TO ")
 					}
 					PG_CATCH();
 					{
@@ -2728,11 +2737,11 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 						}
 					}
 
+					stmt->role->rolename = convertToUPN(stmt->role->rolename);
 					if (get_role_oid(stmt->role->rolename, true) == InvalidOid)
 						  ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT), 
 									  errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
-
-
+					
 					/* Set current user to sysadmin for alter permissions */
 					SetCurrentRoleId(datdba, false);
 
