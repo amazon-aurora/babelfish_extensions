@@ -1492,17 +1492,24 @@ is_alter_server_stmt(GrantRoleStmt *stmt)
 void
 check_alter_server_stmt(GrantRoleStmt *stmt)
 {
-	Oid grantee;
-	const char 	*grantee_name;
-	RoleSpec 	*spec;
-	CatCList   	*memlist;
-	Oid         sysadmin;
+	Oid			grantee;
+	char		*grantee_name;
+	RoleSpec	*spec;
+	CatCList	*memlist;
+	Oid			sysadmin;
 
 	spec = (RoleSpec *) linitial(stmt->grantee_roles);		
 	sysadmin = get_role_oid("sysadmin", false);
 
 	/* grantee MUST be a login */
-	grantee_name = spec->rolename;
+	grantee_name = convertToUPN(spec->rolename);
+	/* If spec->rolename was in windows format then update it. */
+	if (spec->rolename != grantee_name)
+	{
+		pfree(spec->rolename);
+		spec->rolename = grantee_name;
+	}
+
 	grantee = get_role_oid(grantee_name, false);  /* missing not OK */
 
 	if(!is_login(grantee))
