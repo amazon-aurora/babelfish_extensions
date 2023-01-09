@@ -54,7 +54,7 @@ tsql_CreateLoginStmt:
 					n->options = lappend(n->options,
 											 makeDefElem("name_location_windows",
 														 (Node *)makeInteger(@5),
-														 @3));
+														 @5));
 					$$ = (Node *)n;
 				}
 			| CREATE TSQL_LOGIN RoleId tsql_login_option_list1

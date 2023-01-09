@@ -2363,6 +2363,7 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 				char			*orig_loginname; // POC code - shameem
 				char 			*from_windows;
 				int location_windows = -1;
+				int login_from_windows = 0; // check whether the login is from windows 
 				/* Check if creating login or role. Expect islogin first */
 				if (stmt->options != NIL)
 				{
@@ -2458,6 +2459,7 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 										pfree(login->rolename);
 										login->rolename = upn_login;
 									}
+									login_from_windows = 1;
 								}
 							}
 						}
@@ -2477,6 +2479,15 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 												   makeDefElem("original_user_name",
 															   (Node *) makeString(orig_user_name),
 															   -1));
+							/*
+							* if the user name contains '\', check whether the login is from windows or not
+							*/
+							if (strchr(orig_user_name, '\\') != NULL)
+							{
+								if (!login_from_windows)
+									ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+									errmsg("'%s' is not a valid name because it contains invalid characters.", stmt->role)));
+							}
 						}
 					}
 					else if (strcmp(headel->defname, "isrole") == 0)
@@ -2545,24 +2556,20 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 									  errmsg("The Server principal '%s' already exists", stmt->role)));
 
 					if (location_windows!=-1){
+						if (strchr(stmt->role, '\\') == NULL){
+							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+									errmsg("'%s' is not a valid Windows NT name. Give the complete name: <domain\\username>.", stmt->role)));
+						}
 						stmt->role = convertToUPN(orig_loginname);
 						if (get_role_oid(stmt->role, true) != InvalidOid)
 						  ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT), 
 									  errmsg("The Server principal '%s' already exists", stmt->role)));
 					}
-					
-
-					if (location_windows == -1){
-						if (strchr(stmt->role, '\\') != NULL){
+					else
+					{
+						if (strchr(stmt->role, '\\') != NULL)
 							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 									errmsg("'%s' is not a valid name because it contains invalid characters.", stmt->role)));	
-						}
-					}
-					else {
-						if (strchr(stmt->role, '@') == NULL && strchr(stmt->role, '\\') == NULL){
-							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-									errmsg("'%s' is not a valid Windows NT name. Give the complete name: <domain\\username>.", stmt->role)));
-						}
 					}
 
 					/* Set current user to sysadmin for create permissions */
@@ -2598,6 +2605,13 @@ static void bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 				else if (isuser || isrole)
 				{
+					if (isrole)
+					{
+						if (strchr(stmt->role, '\\') != NULL)
+							ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+									errmsg("'%s' is not a valid name because it contains invalid characters.", stmt->role)));	
+					}
+					
 					/* Set current user to dbo user for create permissions */
 					prev_current_user = GetUserNameFromId(GetUserId(), false);
 
