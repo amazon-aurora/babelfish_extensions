@@ -196,10 +196,10 @@ void pltsql_declare_variable(Oid type, int32 typmod, char *name, char mode, Datu
 	(*fcinfo)->nargs++;
 	
 	/* Safety check */
-	if ((*fcinfo)->nargs > FUNC_MAX_ARGS)
+	if ((*fcinfo)->nargs - 2 > PREPARE_STMT_MAX_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_TOO_MANY_ARGUMENTS),
 				errmsg("cannot pass more than %d arguments to a procedure",
-				       FUNC_MAX_ARGS)));
+				       PREPARE_STMT_MAX_ARGS)));
 }
 
 /*
@@ -889,6 +889,15 @@ get_pltsql_function_signature(PG_FUNCTION_ARGS)
 
 	ReleaseSysCache(proctup);
 	PG_RETURN_TEXT_P(cstring_to_text(func_signature));
+}
+
+void
+report_info_or_warning(int elevel, char* message)
+{
+	ereport(WARNING, errmsg("%s", message));
+
+	if (*pltsql_protocol_plugin_ptr && (*pltsql_protocol_plugin_ptr)->send_info)
+		((*pltsql_protocol_plugin_ptr)->send_info) (0, 1, 0, message, 0);
 }
 
 void init_and_check_common_utility(void)
