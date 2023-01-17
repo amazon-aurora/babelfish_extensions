@@ -2891,3 +2891,18 @@ END;
 $$
 LANGUAGE 'pltsql';
 GRANT ALL ON PROCEDURE sys.sp_sproc_columns_100 TO PUBLIC;
+
+CREATE OR REPLACE PROCEDURE sys.sp_enum_oledb_providers()
+LANGUAGE 'pltsql'
+AS $$
+BEGIN
+  SELECT
+  CAST('tds_fdw' AS sys.nvarchar(255)) AS "Provider Name",
+  CAST('' AS sys.nvarchar(255)) AS "Parse Name",
+  CAST('TDS Foreign Data Wrapper for connectivity to MSSQL Database' AS sys.nvarchar(255)) AS "Provider Description"
+
+  RETURN 0;
+END;
+$$;
+GRANT EXECUTE ON PROCEDURE sys.sp_enum_oledb_providers()
+TO PUBLIC;

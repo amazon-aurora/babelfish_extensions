@@ -10,6 +10,8 @@
 #include "linked_servers.h"
 
 PG_FUNCTION_INFO_V1(openquery_imp);
+PG_FUNCTION_INFO_V1(sp_testlinkedserver_internal);
+PG_FUNCTION_INFO_V1(sp_serveroption_internal);
 
 void getOpenqueryTupdescFromMetadata(char* linked_server, char* query, TupleDesc *tupdesc);
 
@@ -1065,5 +1067,22 @@ openquery_imp(PG_FUNCTION_ARGS)
 	}
 	PG_END_TRY();
 
+	return (Datum)0;
+}
+
+Datum
+sp_testlinkedserver_internal(PG_FUNCTION_ARGS)
+{
+	LinkedServerProcess lsproc = NULL;
+
+	linked_server_establish_connection(PG_ARGISNULL(0) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(0)), &lsproc);
+
+	return (Datum)0;
+}
+
+/* Dummy implementation */
+Datum
+sp_serveroption_internal(PG_FUNCTION_ARGS)
+{
 	return (Datum)0;
 }

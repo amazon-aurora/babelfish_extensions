@@ -244,3 +244,21 @@ LANGUAGE C;
 GRANT EXECUTE ON PROCEDURE sys.sp_dropserver( IN "@server" sys.sysname,
                                                     IN "@droplogins" sys.bpchar(10))
 TO PUBLIC;
+
+CREATE OR REPLACE PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
+                                                    IN "@optname" sys.varchar(35),
+                                                    IN "@optvalue" sys.varchar(10))
+AS 'babelfishpg_tsql', 'sp_serveroption_internal'
+LANGUAGE C;
+
+GRANT EXECUTE ON PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
+                                                    IN "@optname" sys.varchar(35),
+                                                    IN "@optvalue" sys.varchar(10))
+TO PUBLIC;
+
+CREATE OR REPLACE PROCEDURE sys.sp_testlinkedserver( IN "@server" sys.sysname)
+AS 'babelfishpg_tsql', 'sp_testlinkedserver_internal'
+LANGUAGE C;
+
+GRANT EXECUTE ON PROCEDURE sys.sp_testlinkedserver( IN "@server" sys.sysname)
+TO PUBLIC;

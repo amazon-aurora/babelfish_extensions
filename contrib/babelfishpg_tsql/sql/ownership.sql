@@ -190,6 +190,20 @@ BEGIN
   LANGUAGE C;
 
   ALTER PROCEDURE master_dbo.sp_dropserver OWNER TO sysadmin;
+
+  CREATE OR REPLACE PROCEDURE master_dbo.sp_serveroption( IN "@server" sys.sysname,
+                                                      IN "@optname" sys.varchar(35),
+                                                      IN "@optvalue" sys.varchar(10))
+  AS 'babelfishpg_tsql', 'sp_serveroption_internal'
+  LANGUAGE C;
+
+  ALTER PROCEDURE master_dbo.sp_serveroption OWNER TO sysadmin;
+
+  CREATE OR REPLACE PROCEDURE master_dbo.sp_testlinkedserver( IN "@server" sys.sysname)
+  AS 'babelfishpg_tsql', 'sp_testlinkedserver_internal'
+  LANGUAGE C;
+
+  ALTER PROCEDURE master_dbo.sp_testlinkedserver OWNER TO sysadmin;
 END
 $$;
 
