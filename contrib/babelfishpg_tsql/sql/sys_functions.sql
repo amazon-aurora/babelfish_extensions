@@ -3271,3 +3271,10 @@ $$
     SELECT current_setting('application_name');
 $$
 LANGUAGE sql PARALLEL SAFE STABLE;
+
+CREATE OR REPLACE FUNCTION sys.openquery(
+IN linked_server text,
+IN query text)
+RETURNS SETOF RECORD
+AS 'babelfishpg_tsql', 'openquery_imp'
+LANGUAGE C VOLATILE;
