@@ -366,6 +366,7 @@ sys_server_principals_dep
 sys_database_principals_dep
 TestVariableDataLength
 BABEL-3801
+datediff_big
 app_name
 atn2
 case_insensitive_collation
@@ -380,4 +381,5 @@ AVG-Aggregate-Dep
 bbf_view_def
 BABEL_OBJECT_ID
 BABEL-3802
+datediff_internal_date
 BABEL_OBJECT_NAME
