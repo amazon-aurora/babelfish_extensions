@@ -1942,7 +1942,7 @@ Datum sp_droprolemember(PG_FUNCTION_ARGS)
 	Oid role_oid;
 	List *parsetree_list;
 	ListCell *parsetree_item;
-	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true);
+	const char *saved_dialect = GetConfigOption("babelfishpg_tsql.sql_dialect", true, true); // LCOV_EXCL_LINE
 
 	PG_TRY();
 	{
@@ -2272,7 +2272,7 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	 * 	'<remote server user name>', password '<remote server user password>')
 	 *
 	 */
-	appendStringInfo(&query, "CREATE USER MAPPING FOR CURRENT_USER SERVER \"%s\" ", servername);
+	appendStringInfo(&query, "CREATE USER MAPPING FOR CURRENT_ROLE SERVER \"%s\" ", servername);
 
 	/*
 	 * Add the relevant options
