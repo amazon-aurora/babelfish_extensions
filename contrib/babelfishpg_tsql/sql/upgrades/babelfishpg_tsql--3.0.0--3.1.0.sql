@@ -3175,6 +3175,20 @@ $BODY$
 LANGUAGE plpgsql
 STABLE;
 
+-- Mark babelfish_authid_user_ext as configuration table
+SELECT pg_catalog.pg_extension_config_dump('sys.babelfish_authid_user_ext', '');
+
+-- Function to unmark a configuration table.
+-- Currently PG has not exposed this as a function so we have implemented
+-- the following function as a wrapper over original PG function.
+CREATE OR REPLACE FUNCTION sys.pg_extension_config_remove()
+RETURNS VOID
+AS 'babelfishpg_tsql', 'pg_extension_config_remove'
+LANGUAGE C VOLATILE;
+
+-- Unmark babelfish_configurations as configuration table
+SELECT sys.pg_extension_config_remove('sys.babelfish_configurations');
+
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
 DROP PROCEDURE sys.babelfish_drop_deprecated_object(varchar, varchar, varchar);
