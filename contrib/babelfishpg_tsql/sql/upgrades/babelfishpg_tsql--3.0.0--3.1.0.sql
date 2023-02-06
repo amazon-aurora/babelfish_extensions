@@ -1453,6 +1453,40 @@ LEFT JOIN pg_foreign_data_wrapper AS w ON f.srvfdw = w.oid
 WHERE w.fdwname = 'tds_fdw';
 GRANT SELECT ON sys.linked_logins TO PUBLIC;
 
+/*
+ * SCHEMATA view
+ */
+CREATE OR REPLACE FUNCTION sys.bbf_is_shared_schema(IN schemaname TEXT)
+RETURNS BOOL
+AS 'babelfishpg_tsql', 'is_shared_schema_wrapper'
+LANGUAGE C STABLE STRICT;
+
+CREATE OR REPLACE VIEW information_schema_tsql.schemata AS
+	SELECT CAST(sys.db_name() AS sys.sysname) AS "CATALOG_NAME",
+	CAST(CASE WHEN np.nspname LIKE CONCAT(sys.db_name(),'%') THEN RIGHT(np.nspname, LENGTH(np.nspname) - LENGTH(sys.db_name()) - 1)
+	     ELSE np.nspname END AS sys.nvarchar(128)) AS "SCHEMA_NAME",
+	-- For system-defined schemas, schema-owner name will be same as schema_name
+	-- For user-defined schemas having default owner, schema-owner will be dbo
+	-- For user-defined schemas with explicit owners, rolname contains dbname followed
+	-- by owner name, so need to extract the owner name from rolname always.
+	CAST(CASE WHEN sys.bbf_is_shared_schema(np.nspname) = TRUE THEN np.nspname
+		  WHEN r.rolname LIKE CONCAT(sys.db_name(),'%') THEN
+			CASE WHEN RIGHT(r.rolname, LENGTH(r.rolname) - LENGTH(sys.db_name()) - 1) = 'db_owner' THEN 'dbo'
+			     ELSE RIGHT(r.rolname, LENGTH(r.rolname) - LENGTH(sys.db_name()) - 1) END ELSE 'dbo' END
+			AS sys.nvarchar(128)) AS "SCHEMA_OWNER",
+	CAST(null AS sys.varchar(6)) AS "DEFAULT_CHARACTER_SET_CATALOG",
+	CAST(null AS sys.varchar(3)) AS "DEFAULT_CHARACTER_SET_SCHEMA",
+	-- TODO: We need to first create mapping of collation name to char-set name;
+	-- Until then return null for DEFAULT_CHARACTER_SET_NAME
+	CAST(null AS sys.sysname) AS "DEFAULT_CHARACTER_SET_NAME"
+	FROM ((pg_catalog.pg_namespace np LEFT JOIN sys.pg_namespace_ext nc on np.nspname = nc.nspname)
+		LEFT JOIN pg_catalog.pg_roles r on r.oid = nc.nspowner) LEFT JOIN sys.babelfish_namespace_ext ext on nc.nspname = ext.nspname
+	WHERE (ext.dbid = cast(sys.db_id() as oid) OR np.nspname in ('sys', 'information_schema_tsql')) AND
+	      (pg_has_role(np.nspowner, 'USAGE') OR has_schema_privilege(np.oid, 'CREATE, USAGE'))
+	ORDER BY nc.nspname, np.nspname;
+
+GRANT SELECT ON information_schema_tsql.schemata TO PUBLIC;
+
 CREATE TABLE sys.babelfish_domain_mapping (
   netbios_domain_name sys.VARCHAR(15) NOT NULL, -- Netbios domain name
   fq_domain_name sys.VARCHAR(128) NOT NULL, -- DNS domain name
@@ -1778,6 +1812,43 @@ RETURNS INTEGER AS
 'babelfishpg_tsql', 'object_id'
 LANGUAGE C STABLE;
 
+CREATE OR REPLACE PROCEDURE sys.sp_helplinkedsrvlogin(
+	IN "@rmtsrvname" sysname DEFAULT NULL,
+	IN "@locallogin" sysname DEFAULT NULL
+)
+AS $$
+DECLARE @server_id INT;
+DECLARE @local_principal_id INT;
+BEGIN
+	IF @rmtsrvname IS NOT NULL
+		BEGIN
+			SELECT @server_id = server_id FROM sys.servers WHERE name = @rmtsrvname;
+
+			IF @server_id IS NULL
+				BEGIN
+					RAISERROR('The server ''%s'' does not exist', 16, 1, @rmtsrvname);
+        				RETURN 1;
+				END
+		END
+
+	IF @locallogin IS NOT NULL
+		BEGIN
+			SELECT @local_principal_id = usesysid FROM pg_user WHERE CAST(usename as sys.sysname) = @locallogin;
+		END
+	
+	SELECT
+		s.name AS "Linked Server",
+		CAST(u.usename as sys.sysname) AS "Local Login", 
+		CAST(0 as smallint) AS "Is Self Mapping", 
+		l.remote_name AS "Remote Login"
+	FROM sys.linked_logins AS l 
+	LEFT JOIN sys.servers AS s ON l.server_id = s.server_id
+	LEFT JOIN pg_user AS u ON l.local_principal_id = u.usesysid
+	WHERE (@server_id is NULL or @server_id = s.server_id) AND ((@local_principal_id is NULL AND @locallogin IS NULL) or @local_principal_id = l.local_principal_id);
+END;
+$$ LANGUAGE pltsql;
+GRANT EXECUTE ON PROCEDURE sys.sp_helplinkedsrvlogin TO PUBLIC;
+
 CREATE OR REPLACE PROCEDURE sys.babelfish_sp_rename_internal(
 	IN "@objname" sys.nvarchar(776),
 	IN "@newname" sys.SYSNAME,
@@ -1798,6 +1869,22 @@ BEGIN
 		BEGIN
 			THROW 33557097, N'Please provide @objtype that is supported in Babelfish', 1;
 		END
+	IF @objtype = 'COLUMN'
+		BEGIN
+			THROW 33557097, N'Feature not supported: renaming object type Column', 1;
+		END
+	IF @objtype = 'INDEX'
+		BEGIN
+			THROW 33557097, N'Feature not supported: renaming object type Index', 1;
+		END
+	IF @objtype = 'STATISTICS'
+		BEGIN
+			THROW 33557097, N'Feature not supported: renaming object type Statistics', 1;
+		END
+	IF @objtype = 'USERDATATYPE'
+		BEGIN
+			THROW 33557097, N'Feature not supported: renaming object type User-defined Data Type alias', 1;
+		END
 	IF @objtype IS NOT NULL AND (@objtype != 'OBJECT')
 		BEGIN
 			THROW 33557097, N'Provided @objtype is not currently supported in Babelfish', 1;
@@ -1817,8 +1904,6 @@ BEGIN
 				SELECT (ROW_NUMBER() OVER (ORDER BY NULL)) as row,*
 				FROM STRING_SPLIT(@objname, '.'))
 			SELECT @dbname = value FROM myTableWithRows WHERE row = 1;
-			PRINT 'db_name:  ';
-			PRINT sys.db_name();
 			IF @dbname != sys.db_name()
 				BEGIN
 					THROW 33557097, N'No item by the given @objname could be found in the current database', 1;
@@ -1867,6 +1952,7 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE on PROCEDURE sys.sp_rename(IN sys.nvarchar(776), IN sys.SYSNAME, IN sys.varchar(13)) TO PUBLIC;
+
 CREATE OR REPLACE VIEW sys.sp_fkeys_view AS
 SELECT
 CAST(nsp_ext2.dbname AS sys.sysname) AS PKTABLE_QUALIFIER,
@@ -1981,6 +2067,7 @@ END;
 $$
 LANGUAGE 'pltsql';
 GRANT EXECUTE ON PROCEDURE sys.sp_fkeys TO PUBLIC;
+
 CREATE OR REPLACE PROCEDURE sys.sp_linkedservers()
 AS $$
 BEGIN
@@ -2038,6 +2125,43 @@ LANGUAGE C;
 ALTER PROCEDURE master_dbo.sp_dropserver OWNER TO sysadmin;
 
 
+create or replace view sys.all_views as
+SELECT
+    CAST(c.relname AS sys.SYSNAME) as name
+  , CAST(c.oid AS INT) as object_id
+  , CAST(null AS INT) as principal_id
+  , CAST(c.relnamespace as INT) as schema_id
+  , CAST(0 as INT) as parent_object_id
+  , CAST('V' as sys.bpchar(2)) as type
+  , CAST('VIEW'as sys.nvarchar(60)) as type_desc
+  , CAST(null as sys.datetime) as create_date
+  , CAST(null as sys.datetime) as modify_date
+  , CAST(0 as sys.bit) as is_ms_shipped
+  , CAST(0 as sys.bit) as is_published
+  , CAST(0 as sys.bit) as is_schema_published
+  , CAST(0 as sys.BIT) AS is_replicated
+  , CAST(0 as sys.BIT) AS has_replication_filter
+  , CAST(0 as sys.BIT) AS has_opaque_metadata
+  , CAST(0 as sys.BIT) AS has_unchecked_assembly_data
+  , CAST(
+      CASE 
+        WHEN (v.check_option = 'NONE') 
+          THEN 0
+        ELSE 1
+      END
+    AS sys.BIT) AS with_check_option
+  , CAST(0 as sys.BIT) AS is_date_correlation_view
+FROM pg_catalog.pg_namespace AS ns
+INNER JOIN pg_class c ON ns.oid = c.relnamespace
+INNER JOIN information_schema.views v ON c.relname = v.table_name AND ns.nspname = v.table_schema
+WHERE c.relkind = 'v' AND ns.nspname in 
+  (SELECT nspname from sys.babelfish_namespace_ext where dbid = sys.db_id() UNION ALL SELECT CAST('sys' AS NAME))
+AND pg_is_other_temp_schema(ns.oid) = false
+AND (pg_has_role(c.relowner, 'USAGE') = true
+OR has_table_privilege(c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER') = true
+OR has_any_column_privilege(c.oid, 'SELECT, INSERT, UPDATE, REFERENCES') = true);
+GRANT SELECT ON sys.all_views TO PUBLIC;
+
 CREATE OR REPLACE PROCEDURE sys.sp_set_session_context ("@key" sys.sysname, 
 	"@value" sys.SQL_VARIANT, "@read_only" sys.bit = 0)
 AS 'babelfishpg_tsql', 'sp_set_session_context'
@@ -2048,6 +2172,17 @@ CREATE OR REPLACE FUNCTION sys.session_context ("@key" sys.sysname)
 	RETURNS sys.SQL_VARIANT AS 'babelfishpg_tsql', 'session_context' LANGUAGE C;
 GRANT EXECUTE ON FUNCTION sys.session_context TO PUBLIC;
 
+CREATE OR REPLACE PROCEDURE sys.sp_babelfish_volatility(IN "@function_name" sys.varchar DEFAULT NULL, IN "@volatility" sys.varchar DEFAULT NULL)
+AS 'babelfishpg_tsql', 'sp_babelfish_volatility' LANGUAGE C;
+GRANT EXECUTE on PROCEDURE sys.sp_babelfish_volatility(IN sys.varchar, IN sys.varchar) TO PUBLIC;
+
+CREATE OR REPLACE PROCEDURE sys.babel_create_guest_schemas()
+LANGUAGE C
+AS 'babelfishpg_tsql', 'create_guest_schema_for_all_dbs';
+
+CALL sys.babel_create_guest_schemas();
+
+DROP PROCEDURE sys.babel_create_guest_schemas();
 
 /* set sys functions as STABLE */
 ALTER FUNCTION sys.schema_id() STABLE;
@@ -2274,12 +2409,6 @@ ALTER FUNCTION sys.babelfish_conv_helper_to_time(IN arg anyelement, IN try BOOL,
 ALTER FUNCTION sys.babelfish_try_conv_to_time(IN arg anyelement) STABLE;
 ALTER FUNCTION sys.babelfish_conv_helper_to_datetime(IN arg TEXT, IN try BOOL, IN p_style NUMERIC) STABLE;
 ALTER FUNCTION sys.babelfish_try_conv_to_datetime(IN arg anyelement) STABLE;
-ALTER FUNCTION sys.babelfish_conv_helper_to_varchar(IN typename TEXT, IN arg TEXT, IN try BOOL, IN p_style NUMERIC) STABLE;
-ALTER FUNCTION sys.babelfish_conv_helper_to_varchar(IN typename TEXT, IN arg ANYELEMENT, IN try BOOL, IN p_style NUMERIC) STABLE;
-ALTER FUNCTION sys.babelfish_conv_to_varchar(IN typename TEXT, IN arg TEXT, IN p_style NUMERIC) STABLE;
-ALTER FUNCTION sys.babelfish_conv_to_varchar(IN typename TEXT, IN arg anyelement, IN p_style NUMERIC) STABLE;
-ALTER FUNCTION sys.babelfish_try_conv_to_varchar(IN typename TEXT, IN arg TEXT, IN p_style NUMERIC) STABLE;
-ALTER FUNCTION sys.babelfish_try_conv_to_varchar(IN typename TEXT, IN arg anyelement, IN p_style NUMERIC) STABLE;
 ALTER FUNCTION sys.babelfish_parse_helper_to_date(IN arg TEXT, IN try BOOL, IN culture TEXT) STABLE;
 ALTER FUNCTION sys.babelfish_parse_helper_to_time(IN arg TEXT, IN try BOOL, IN culture TEXT) STABLE;
 ALTER FUNCTION sys.babelfish_parse_helper_to_datetime(IN arg TEXT, IN try BOOL, IN culture TEXT) STABLE;
@@ -2370,6 +2499,191 @@ CREATE OR REPLACE FUNCTION sys.OBJECT_NAME(IN object_id INT, IN database_id INT 
 RETURNS sys.SYSNAME AS
 'babelfishpg_tsql', 'object_name'
 LANGUAGE C STABLE;
+
+create or replace view sys.indexes as
+select 
+  CAST(object_id as int)
+  , CAST(name as sys.sysname)
+  , CAST(type as sys.tinyint)
+  , CAST(type_desc as sys.nvarchar(60))
+  , CAST(is_unique as sys.bit)
+  , CAST(data_space_id as int)
+  , CAST(ignore_dup_key as sys.bit)
+  , CAST(is_primary_key as sys.bit)
+  , CAST(is_unique_constraint as sys.bit)
+  , CAST(fill_factor as sys.tinyint)
+  , CAST(is_padded as sys.bit)
+  , CAST(is_disabled as sys.bit)
+  , CAST(is_hypothetical as sys.bit)
+  , CAST(allow_row_locks as sys.bit)
+  , CAST(allow_page_locks as sys.bit)
+  , CAST(has_filter as sys.bit)
+  , CAST(filter_definition as sys.nvarchar)
+  , CAST(auto_created as sys.bit)
+  , CAST(index_id as int)
+from 
+(
+  -- Get all indexes from all system and user tables
+  select
+    X.indrelid as object_id
+    , I.relname as name
+    , case when X.indisclustered then 1 else 2 end as type
+    , case when X.indisclustered then 'CLUSTERED' else 'NONCLUSTERED' end as type_desc
+    , case when X.indisunique then 1 else 0 end as is_unique
+    , I.reltablespace as data_space_id
+    , 0 as ignore_dup_key
+    , case when X.indisprimary then 1 else 0 end as is_primary_key
+    , case when const.oid is null then 0 else 1 end as is_unique_constraint
+    , 0 as fill_factor
+    , case when X.indpred is null then 0 else 1 end as is_padded
+    , case when X.indisready then 0 else 1 end as is_disabled
+    , 0 as is_hypothetical
+    , 1 as allow_row_locks
+    , 1 as allow_page_locks
+    , 0 as has_filter
+    , null as filter_definition
+    , 0 as auto_created
+    , case when X.indisclustered then 1 else 1+row_number() over(partition by C.oid) end as index_id -- use rownumber to get index_id scoped on each objects
+  from (pg_index X 
+  -- get all the objects on which indexes can be created
+  join pg_class C on C.oid=X.indrelid and C.relkind in ('r', 'm', 'p')
+  -- get list of all indexes grouped by objects
+  cross join pg_class I  
+  )
+  -- to get namespace information
+  left join sys.schemas sch on I.relnamespace = sch.schema_id
+  -- check if index is a unique constraint
+  left join pg_constraint const on const.conindid = I.oid and const.contype = 'u'
+  where has_schema_privilege(I.relnamespace, 'USAGE')
+  and I.oid = X.indexrelid 
+  and I.relkind = 'i' 
+  -- index is active
+  and X.indislive 
+  -- filter to get all the objects that belong to sys or babelfish schemas
+  and (sch.schema_id is not null or I.relnamespace::regnamespace::text = 'sys')
+
+  union all 
+  
+-- Create HEAP entries for each system and user table
+  select distinct on (t.oid)
+    t.oid as object_id
+    , null as name
+    , 0 as type
+    , 'HEAP' as type_desc
+    , 0 as is_unique
+    , 1 as data_space_id
+    , 0 as ignore_dup_key
+    , 0 as is_primary_key
+    , 0 as is_unique_constraint
+    , 0 as fill_factor
+    , 0 as is_padded
+    , 0 as is_disabled
+    , 0 as is_hypothetical
+    , 1 as allow_row_locks
+    , 1 as allow_page_locks
+    , 0 as has_filter
+    , null as filter_definition
+    , 0 as auto_created
+    , 0 as index_id
+  from pg_class t
+  left join sys.schemas sch on t.relnamespace = sch.schema_id
+  where t.relkind = 'r'
+  -- filter to get all the objects that belong to sys or babelfish schemas
+  and (sch.schema_id is not null or t.relnamespace::regnamespace::text = 'sys')
+  and has_schema_privilege(t.relnamespace, 'USAGE')
+  and has_table_privilege(t.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
+
+) as indexes_select order by object_id, type_desc;
+GRANT SELECT ON sys.indexes TO PUBLIC;
+
+create or replace view  sys.sysindexes as
+select
+  i.object_id::integer as id
+  , null::integer as status
+  , null::binary(6) as first
+  , i.index_id::smallint as indid
+  , null::binary(6) as root
+  , 0::smallint as minlen
+  , 1::smallint as keycnt
+  , null::smallint as groupid
+  , 0 as dpages
+  , 0 as reserved
+  , 0 as used
+  , 0::bigint as rowcnt
+  , 0 as rowmodctr
+  , 0 as reserved3
+  , 0 as reserved4
+  , 0::smallint as xmaxlen
+  , null::smallint as maxirow
+  , 90::sys.tinyint as "OrigFillFactor"
+  , 0::sys.tinyint as "StatVersion"
+  , 0 as reserved2
+  , null::binary(6) as "FirstIAM"
+  , 0::smallint as impid
+  , 0::smallint as lockflags
+  , 0 as pgmodctr
+  , null::sys.varbinary(816) as keys
+  , i.name::sys.sysname as name
+  , null::sys.image as statblob
+  , 0 as maxlen
+  , 0 as rows
+from sys.indexes i;
+GRANT SELECT ON sys.sysindexes TO PUBLIC;
+
+CREATE OR REPLACE VIEW sys.sp_special_columns_view AS
+SELECT
+CAST(1 AS SMALLINT) AS SCOPE,
+CAST(coalesce (split_part(a.attoptions[1] COLLATE "C", '=', 2) ,a.attname) AS sys.sysname) AS COLUMN_NAME, -- get original column name if exists
+CAST(t6.data_type AS SMALLINT) AS DATA_TYPE,
+
+CASE -- cases for when they are of type identity. 
+	WHEN  a.attidentity <> ''::"char" AND (t1.name = 'decimal' OR t1.name = 'numeric')
+	THEN CAST(CONCAT(t1.name, '() identity') AS sys.sysname)
+	WHEN  a.attidentity <> ''::"char" AND (t1.name != 'decimal' AND t1.name != 'numeric')
+	THEN CAST(CONCAT(t1.name, ' identity') AS sys.sysname)
+	ELSE CAST(t1.name AS sys.sysname)
+END AS TYPE_NAME,
+
+CAST(sys.sp_special_columns_precision_helper(COALESCE(tsql_type_name, tsql_base_type_name), c1.precision, c1.max_length, t6."PRECISION") AS INT) AS PRECISION,
+CAST(sys.sp_special_columns_length_helper(coalesce(tsql_type_name, tsql_base_type_name), c1.precision, c1.max_length, t6."PRECISION") AS INT) AS LENGTH,
+CAST(sys.sp_special_columns_scale_helper(coalesce(tsql_type_name, tsql_base_type_name), c1.scale) AS SMALLINT) AS SCALE,
+CAST(1 AS smallint) AS PSEUDO_COLUMN,
+CASE
+	WHEN a.attnotnull
+	THEN CAST(0 AS INT)
+	ELSE CAST(1 AS INT) END
+AS IS_NULLABLE,
+CAST(nsp_ext.dbname AS sys.sysname) AS TABLE_QUALIFIER,
+CAST(s1.name AS sys.sysname) AS TABLE_OWNER,
+CAST(C.relname AS sys.sysname) AS TABLE_NAME,
+
+CASE 
+	WHEN X.indisprimary
+	THEN CAST('p' AS sys.sysname)
+	ELSE CAST('u' AS sys.sysname) -- if it is a unique index, then we should cast it as 'u' for filtering purposes
+END AS CONSTRAINT_TYPE,
+CAST(I.relname AS sys.sysname) CONSTRAINT_NAME,
+CAST(X.indexrelid AS int) AS INDEX_ID
+
+FROM( pg_index X
+JOIN pg_class C ON X.indrelid = C.oid
+JOIN pg_class I ON I.oid = X.indexrelid
+CROSS JOIN LATERAL unnest(X.indkey) AS ak(k)
+        LEFT JOIN pg_attribute a
+                       ON (a.attrelid = X.indrelid AND a.attnum = ak.k)
+)
+LEFT JOIN sys.pg_namespace_ext nsp_ext ON C.relnamespace = nsp_ext.oid
+LEFT JOIN sys.schemas s1 ON s1.schema_id = C.relnamespace
+LEFT JOIN sys.columns c1 ON c1.object_id = X.indrelid AND cast(a.attname AS sys.sysname) = c1.name COLLATE sys.database_default
+LEFT JOIN pg_catalog.pg_type AS T ON T.oid = c1.system_type_id
+LEFT JOIN sys.types AS t1 ON a.atttypid = t1.user_type_id
+LEFT JOIN sys.sp_datatype_info_helper(2::smallint, false) AS t6 ON T.typname = t6.pg_type_name OR T.typname = t6.type_name --need in order to get accurate DATA_TYPE value
+, sys.translate_pg_type_to_tsql(t1.user_type_id) AS tsql_type_name
+, sys.translate_pg_type_to_tsql(t1.system_type_id) AS tsql_base_type_name
+WHERE has_schema_privilege(s1.schema_id, 'USAGE')
+AND X.indislive ;
+
+GRANT SELECT ON sys.sp_special_columns_view TO PUBLIC; 
 
 CREATE OR REPLACE VIEW sys.server_principals
 AS SELECT
@@ -2483,12 +2797,288 @@ SELECT CAST(name as sys.sysname) as name
 FROM sys.types;
 GRANT SELECT ON sys.systypes TO PUBLIC;
 
+CREATE OR REPLACE FUNCTION OBJECT_DEFINITION(IN object_id INT)
+RETURNS sys.NVARCHAR(4000)
+AS $$
+DECLARE
+    definition sys.nvarchar(4000);
+BEGIN
+
+    definition = (SELECT cc.definition FROM sys.check_constraints cc WHERE cc.object_id = $1);
+    IF (definition IS NULL)
+    THEN
+        definition = (SELECT dc.definition FROM sys.default_constraints dc WHERE dc.object_id = $1);
+        IF (definition IS NULL)
+        THEN
+            definition = (SELECT asm.definition FROM sys.all_sql_modules asm WHERE asm.object_id = $1);
+            IF (definition IS NULL)
+            THEN
+                RETURN NULL;
+            END IF;
+        END IF;
+    END IF;
+
+    RETURN definition;
+END;
+$$
+LANGUAGE plpgsql STABLE;
+
 CREATE OR REPLACE FUNCTION sys.openquery(
 IN linked_server text,
 IN query text)
 RETURNS SETOF RECORD
 AS 'babelfishpg_tsql', 'openquery_internal'
 LANGUAGE C VOLATILE;
+
+CREATE OR REPLACE FUNCTION sys.OBJECT_SCHEMA_NAME(IN object_id INT, IN database_id INT DEFAULT NULL)
+RETURNS sys.SYSNAME AS
+'babelfishpg_tsql', 'object_schema_name'
+LANGUAGE C STABLE;
+
+CREATE OR REPLACE PROCEDURE sys.sp_helpuser("@name_in_db" sys.SYSNAME = NULL) AS
+$$
+BEGIN
+	-- If security account is not specified, return info about all users
+	IF @name_in_db IS NULL
+	BEGIN
+		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN 'db_owner' 
+					WHEN Ext2.orig_username IS NULL THEN 'public'
+					ELSE Ext2.orig_username END 
+					AS SYS.SYSNAME) AS 'RoleName',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN Base4.rolname
+					ELSE LogExt.orig_loginname END
+					AS SYS.SYSNAME) AS 'LoginName',
+			   CAST(LogExt.default_database_name AS SYS.SYSNAME) AS 'DefDBName',
+			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
+			   CAST(Base1.oid AS INT) AS 'UserID',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
+					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
+					ELSE CAST(Base3.oid AS INT) END
+					AS SYS.VARBINARY(85)) AS 'SID'
+		FROM sys.babelfish_authid_user_ext AS Ext1
+		INNER JOIN pg_catalog.pg_roles AS Base1 ON Base1.rolname = Ext1.rolname
+		LEFT OUTER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base1.oid = Authmbr.member
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base2 ON Base2.oid = Authmbr.roleid
+		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext2 ON Base2.rolname = Ext2.rolname
+		LEFT OUTER JOIN sys.babelfish_authid_login_ext As LogExt ON LogExt.rolname = Ext1.login_name
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base3 ON Base3.rolname = LogExt.rolname
+		LEFT OUTER JOIN sys.babelfish_sysdatabases AS Bsdb ON Bsdb.name = DB_NAME()
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
+		WHERE Ext1.database_name = DB_NAME()
+		AND Ext1.type != 'R'
+		AND Ext1.orig_username != 'db_owner'
+		ORDER BY UserName, RoleName;
+	END
+	-- If the security account is the db fixed role - db_owner
+    ELSE IF @name_in_db = 'db_owner'
+	BEGIN
+		-- TODO: Need to change after we can add/drop members to/from db_owner
+		SELECT CAST('db_owner' AS SYS.SYSNAME) AS 'Role_name',
+			   ROLE_ID('db_owner') AS 'Role_id',
+			   CAST('dbo' AS SYS.SYSNAME) AS 'Users_in_role',
+			   USER_ID('dbo') AS 'Userid';
+	END
+	-- If the security account is a db role
+	ELSE IF EXISTS (SELECT 1
+					FROM sys.babelfish_authid_user_ext
+					WHERE (orig_username = @name_in_db
+					OR lower(orig_username) = lower(@name_in_db))
+					AND database_name = DB_NAME()
+					AND type = 'R')
+	BEGIN
+		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'Role_name',
+			   CAST(Base1.oid AS INT) AS 'Role_id',
+			   CAST(Ext2.orig_username AS SYS.SYSNAME) AS 'Users_in_role',
+			   CAST(Base2.oid AS INT) AS 'Userid'
+		FROM sys.babelfish_authid_user_ext AS Ext2
+		INNER JOIN pg_catalog.pg_roles AS Base2 ON Base2.rolname = Ext2.rolname
+		INNER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base2.oid = Authmbr.member
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base1 ON Base1.oid = Authmbr.roleid
+		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext1 ON Base1.rolname = Ext1.rolname
+		WHERE Ext1.database_name = DB_NAME()
+		AND Ext2.database_name = DB_NAME()
+		AND Ext1.type = 'R'
+		AND Ext2.orig_username != 'db_owner'
+		AND (Ext1.orig_username = @name_in_db OR lower(Ext1.orig_username) = lower(@name_in_db))
+		ORDER BY Role_name, Users_in_role;
+	END
+	-- If the security account is a user
+	ELSE IF EXISTS (SELECT 1
+					FROM sys.babelfish_authid_user_ext
+					WHERE (orig_username = @name_in_db
+					OR lower(orig_username) = lower(@name_in_db))
+					AND database_name = DB_NAME()
+					AND type != 'R')
+	BEGIN
+		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN 'db_owner' 
+					WHEN Ext2.orig_username IS NULL THEN 'public' 
+					ELSE Ext2.orig_username END 
+					AS SYS.SYSNAME) AS 'RoleName',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN Base4.rolname
+					ELSE LogExt.orig_loginname END
+					AS SYS.SYSNAME) AS 'LoginName',
+			   CAST(LogExt.default_database_name AS SYS.SYSNAME) AS 'DefDBName',
+			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
+			   CAST(Base1.oid AS INT) AS 'UserID',
+			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
+					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
+					ELSE CAST(Base3.oid AS INT) END
+					AS SYS.VARBINARY(85)) AS 'SID'
+		FROM sys.babelfish_authid_user_ext AS Ext1
+		INNER JOIN pg_catalog.pg_roles AS Base1 ON Base1.rolname = Ext1.rolname
+		LEFT OUTER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base1.oid = Authmbr.member
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base2 ON Base2.oid = Authmbr.roleid
+		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext2 ON Base2.rolname = Ext2.rolname
+		LEFT OUTER JOIN sys.babelfish_authid_login_ext As LogExt ON LogExt.rolname = Ext1.login_name
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base3 ON Base3.rolname = LogExt.rolname
+		LEFT OUTER JOIN sys.babelfish_sysdatabases AS Bsdb ON Bsdb.name = DB_NAME()
+		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
+		WHERE Ext1.database_name = DB_NAME()
+		AND Ext1.type != 'R'
+		AND Ext1.orig_username != 'db_owner'
+		AND (Ext1.orig_username = @name_in_db OR lower(Ext1.orig_username) = lower(@name_in_db))
+		ORDER BY UserName, RoleName;
+	END
+	-- If the security account is not valid
+	ELSE 
+		RAISERROR ( 'The name supplied (%s) is not a user, role, or aliased login.', 16, 1, @name_in_db);
+END;
+$$
+LANGUAGE 'pltsql';
+GRANT EXECUTE on PROCEDURE sys.sp_helpuser TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_helper_to_varchar(IN typename TEXT,
+                                                        IN arg TEXT,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+BEGIN
+	IF try THEN
+	    RETURN sys.babelfish_try_conv_to_varchar(typename, arg, p_style);
+    ELSE
+	    RETURN sys.babelfish_conv_to_varchar(typename, arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_helper_to_varchar(IN typename TEXT,
+                                                        IN arg ANYELEMENT,
+                                                        IN try BOOL,
+                                                        IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+BEGIN
+	IF try THEN
+	    RETURN sys.babelfish_try_conv_to_varchar(typename, arg, p_style);
+    ELSE
+	    RETURN sys.babelfish_conv_to_varchar(typename, arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_to_varchar(IN typename TEXT,
+														IN arg TEXT,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+BEGIN
+    RETURN CAST(arg AS sys.VARCHAR);
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_to_varchar(IN typename TEXT,
+														IN arg anyelement,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+DECLARE
+	v_style SMALLINT;
+BEGIN
+	v_style := floor(p_style)::SMALLINT;
+
+	CASE pg_typeof(arg)
+	WHEN 'date'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.babelfish_try_conv_date_to_string(typename, arg);
+		ELSE
+			RETURN sys.babelfish_try_conv_date_to_string(typename, arg, p_style);
+		END IF;
+	WHEN 'time'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.babelfish_try_conv_time_to_string(typename, 'TIME', arg);
+		ELSE
+			RETURN sys.babelfish_try_conv_time_to_string(typename, 'TIME', arg, p_style);
+		END IF;
+	WHEN 'sys.datetime'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.babelfish_try_conv_datetime_to_string(typename, 'DATETIME', arg::timestamp);
+		ELSE
+			RETURN sys.babelfish_try_conv_datetime_to_string(typename, 'DATETIME', arg::timestamp, p_style);
+		END IF;
+	WHEN 'float'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.babelfish_try_conv_float_to_string(typename, arg);
+		ELSE
+			RETURN sys.babelfish_try_conv_float_to_string(typename, arg, p_style);
+		END IF;
+	WHEN 'sys.money'::regtype THEN
+		IF v_style = -1 THEN
+			RETURN sys.babelfish_try_conv_money_to_string(typename, arg::numeric(19,4)::pg_catalog.money);
+		ELSE
+			RETURN sys.babelfish_try_conv_money_to_string(typename, arg::numeric(19,4)::pg_catalog.money, p_style);
+		END IF;
+	ELSE
+		RETURN CAST(arg AS sys.VARCHAR);
+	END CASE;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_try_conv_to_varchar(IN typename TEXT,
+														IN arg TEXT,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+BEGIN
+    RETURN sys.babelfish_conv_to_varchar(typename, arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_try_conv_to_varchar(IN typename TEXT,
+														IN arg anyelement,
+														IN p_style NUMERIC DEFAULT -1)
+RETURNS sys.VARCHAR
+AS
+$BODY$
+BEGIN
+    RETURN sys.babelfish_conv_to_varchar(typename, arg, p_style);
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+STABLE;
 
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
