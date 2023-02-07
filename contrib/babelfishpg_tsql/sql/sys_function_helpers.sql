@@ -10351,7 +10351,7 @@ LANGUAGE C IMMUTABLE STRICT;
 -- Function to unmark a configuration table.
 -- Currently PG has not exposed this as a function so we have implemented
 -- the following function as a wrapper over original PG function.
-CREATE OR REPLACE FUNCTION sys.pg_extension_config_remove()
+CREATE OR REPLACE FUNCTION sys.pg_extension_config_remove(IN tableoid REGCLASS)
 RETURNS VOID
 AS 'babelfishpg_tsql', 'pg_extension_config_remove'
 LANGUAGE C VOLATILE;

@@ -3181,7 +3181,7 @@ SELECT pg_catalog.pg_extension_config_dump('sys.babelfish_authid_user_ext', '');
 -- Function to unmark a configuration table.
 -- Currently PG has not exposed this as a function so we have implemented
 -- the following function as a wrapper over original PG function.
-CREATE OR REPLACE FUNCTION sys.pg_extension_config_remove()
+CREATE OR REPLACE FUNCTION sys.pg_extension_config_remove(IN tableoid REGCLASS)
 RETURNS VOID
 AS 'babelfishpg_tsql', 'pg_extension_config_remove'
 LANGUAGE C VOLATILE;

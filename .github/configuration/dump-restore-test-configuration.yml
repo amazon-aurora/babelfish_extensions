@@ -1,10 +1,16 @@
 dump-restore-version: [[
   {
-    version: source.latest,
-    upgrade-type: null
+    version: 14.7,
   },
   { 
     version: target.latest,
-    upgrade-type: major
+  }
+],
+[
+  {
+    version: source.latest,
+  },
+  { 
+    version: target.latest,
   }
 ]]
