@@ -1905,7 +1905,8 @@ object_schema_name(PG_FUNCTION_ARGS)
 Datum
 pg_extension_config_remove(PG_FUNCTION_ARGS)
 {
-	Oid			tableoid = PG_GETARG_OID(0);
+	Oid 	tableoid = PG_GETARG_OID(0);
+	char	*tablename = get_rel_name(tableoid);
 
 	/*
 	 * We only allow this to be called from an extension's SQL script. We
@@ -1916,6 +1917,10 @@ pg_extension_config_remove(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("%s can only be called from an SQL script executed by CREATE EXTENSION",
 						"pg_extension_config_remove()")));
+	if (tablename == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_TABLE),
+				 errmsg("OID %u does not refer to a table", tableoid)));
 	if (getExtensionOfObject(RelationRelationId, tableoid) !=
 		CurrentExtensionObject)
 		ereport(ERROR,
