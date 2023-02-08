@@ -17,7 +17,7 @@ runs:
         printf 'name: "Dump and restore till final version and run verify tests"\nruns:\n  using: "composite"\n  steps:\n' > $dump_restore_version_dir_path/action.yml
 
         # Length of the dump-restore path
-        LEN=$(yq '."dump-restore-version"[${{ matrix.upgrade-path.id }}] | length' ${{ github.workspace }}/.github/configuration/upgrade-test-configuration.yml)
+        LEN=$(yq '."dump-restore-version"[${{ matrix.upgrade-path.id }}] | length' ${{ github.workspace }}/.github/configuration/dump-restore-test-configuration.yml)
         if [[ $LEN -le 1 ]]
         then
             echo "ERROR: Dump restore path length less than 2" 1>&2
@@ -32,7 +32,7 @@ runs:
         do
           # Computing input parameters that need to pass
           version_var=".\"dump-restore-version\"[${{ matrix.upgrade-path.id }}][$i].version"
-          dump_restore_version=$(yq $version_var ${{ github.workspace }}/.github/configuration/upgrade-test-configuration.yml)
+          dump_restore_version=$(yq $version_var ${{ github.workspace }}/.github/configuration/dump-restore-test-configuration.yml)
           dump_restore_version_engb=".\""${dump_restore_version}"\".engine_branch"
           engine_branch=$(yq $dump_restore_version_engb ${{ github.workspace }}/.github/template/version-branch-template.yml)
           dump_restore_version_extb=".\""${dump_restore_version}"\".extension_branch"
