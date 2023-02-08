@@ -91,6 +91,7 @@ jobs:
         id: test-file-rename
         if: always() && (steps.setup-base-version.outcome == 'failure' || steps.dump-restore-and-test.outcome == 'failure')
         run: |
+          cd ~/work/babelfish_extensions/babelfish_extensions/
           cd test/JDBC/Info
           timestamp=`ls -Art | tail -n 1`
           cd $timestamp
@@ -126,10 +127,7 @@ jobs:
         with:
           name: upgrade-logs-${{ matrix.upgrade-path.title }}
           path: |
-            ~/upgrade/*.log
-            ~/upgrade/*.diff
-            ~/upgrade/*.out
-            ~/upgrade/*.sql
+            ~/upgrade/*
             ~/psql*/data/logfile
             ~/failed-testscript-outputs
             

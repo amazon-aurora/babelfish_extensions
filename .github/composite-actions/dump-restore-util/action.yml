@@ -66,25 +66,25 @@ runs:
         sudo echo "host    all             all             $ipaddress/32            trust" >> pg_hba.conf
       shell: bash
 
-    - name: Dump old database
-      id: run-pg_dump
+    - name: Dump and restore database
+      id: run-pg_dump-restore
       if: always() && steps.setup-new-datadir.outcome == 'success'
       run: |
-        echo 'Starting pg_dump...'
+        echo 'Starting dump...'
         cd ~
         mkdir -p upgrade
         cd upgrade
-        # Run pg_dumpall and pg_dump
-        ~/${{ inputs.pg_new_dir }}/bin/pg_dumpall -username jdbc_user --globals-only --quote-all-identifiers --verbose -f pg_dump_globals.sql 2>>error.log
+        echo 'Runinng pg_dumpall and pg_dump'
+        ~/${{ inputs.pg_new_dir }}/bin/pg_dumpall --username jdbc_user --globals-only --quote-all-identifiers --verbose -f pg_dump_globals.sql 2>>error.log
         ~/${{ inputs.pg_new_dir }}/bin/pg_dump --username jdbc_user --column-inserts --quote-all-identifiers --verbose --file="pg_dump.sql" --dbname=jdbc_testdb 2>>error.log
         ~/${{ inputs.pg_old_dir }}/bin/pg_ctl -D ~/${{ inputs.pg_old_dir }}/data stop
-        echo 'pg_dump completed, proceeding to restore dumped SQL script on new server.'
-        # Restore from pg_dumpall
+        echo 'Done dumping the database, proceeding to restore dumped SQL script on new server.'
+        echo 'Restoring from pg_dumpall'
         ~/${{ inputs.pg_new_dir }}/bin/pg_ctl -D ~/${{ inputs.pg_new_dir }}/data -l ~/${{ inputs.pg_new_dir }}/data/logfile start
         sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d postgres -U runner -f pg_dump_globals.sql 2>>error.log
         sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d postgres -U runner -c "CREATE DATABASE jdbc_testdb OWNER jdbc_user;"
-        # Restore from pg_dump
-        sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d jdbc_testdb -U jdbc_user -f pg_upgrade_dump.sql 2>>error.log
+        echo 'Restoring from pg_dump'
+        sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d jdbc_testdb -U jdbc_user -f pg_dump.sql 2>>error.log
         sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d jdbc_testdb -U jdbc_user -c "GRANT ALL ON SCHEMA sys to jdbc_user;"
         sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d jdbc_testdb -U jdbc_user -c "GRANT CREATE, CONNECT, TEMPORARY ON DATABASE jdbc_testdb TO sysadmin WITH GRANT OPTION;"
         sudo ~/${{ inputs.pg_new_dir }}/bin/psql -d jdbc_testdb -U jdbc_user -c "ALTER USER jdbc_user CREATEDB;"
@@ -97,7 +97,7 @@ runs:
       shell: bash
 
     - name: Run JDBC Verify Tests
-      if: always() && steps.run-pg_dump.outcome == 'success' && inputs.is_final_ver == 'true'
+      if: always() && steps.run-pg_dump-restore.outcome == 'success' && inputs.is_final_ver == 'true'
       id: jdbc-verify-tests
       env:
         migr_mode: ${{ inputs.migration_mode }}
