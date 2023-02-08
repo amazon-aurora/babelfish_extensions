@@ -126,16 +126,16 @@ runs:
         export inputFilesPath=input
 
         # Temporarily disable certain tests until fixed
-        sed -i "s/BABEL-3513/d" upgrade/$base_dir/schedule
-        sed -i "s/BABEL_OBJECT_ID/d" upgrade/$base_dir/schedule
-        sed -i "s/ISC-Views/d" upgrade/$base_dir/schedule
-        sed -i "s/TestNotNull/d" upgrade/$base_dir/schedule
-        sed -i "s/TestSQLVariant/d" upgrade/$base_dir/schedule
-        sed -i "s/babel_datatype_sqlvariant/d" upgrade/$base_dir/schedule
-        sed -i "s/schema_resolution_proc/d" upgrade/$base_dir/schedule
-        sed -i "s/sp_tablecollations/d" upgrade/$base_dir/schedule
-        sed -i "s/sys-sql_modules/d" upgrade/$base_dir/schedule
-        sed -i "s/sys-system_sql_modules/d" upgrade/$base_dir/schedule
+        sed -i "/BABEL-3513/d" upgrade/$base_dir/schedule
+        sed -i "/BABEL_OBJECT_ID/d" upgrade/$base_dir/schedule
+        sed -i "/ISC-Views/d" upgrade/$base_dir/schedule
+        sed -i "/TestNotNull/d" upgrade/$base_dir/schedule
+        sed -i "/TestSQLVariant/d" upgrade/$base_dir/schedule
+        sed -i "/babel_datatype_sqlvariant/d" upgrade/$base_dir/schedule
+        sed -i "/schema_resolution_proc/d" upgrade/$base_dir/schedule
+        sed -i "/sp_tablecollations/d" upgrade/$base_dir/schedule
+        sed -i "/sys-sql_modules/d" upgrade/$base_dir/schedule
+        sed -i "/sys-system_sql_modules/d" upgrade/$base_dir/schedule
 
         for filename in $(grep -v "^ignore.*\|^#.*\|^cmd.*\|^all.*\|^$" upgrade/$base_dir/schedule); do
           sed -i "s/$filename[ ]*$/$filename-vu-verify\\n$filename-vu-cleanup/g" upgrade/$base_dir/schedule
