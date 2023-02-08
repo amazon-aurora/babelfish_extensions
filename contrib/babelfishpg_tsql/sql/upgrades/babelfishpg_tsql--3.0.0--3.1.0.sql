@@ -2006,6 +2006,7 @@ BEGIN
 	SELECT @currtype = type FROM sys.objects o1 INNER JOIN sys.schemas s1 ON o1.schema_id = s1.schema_id 
 	WHERE s1.name = @schemaname AND o1.name = @subname;
 	EXEC sys.babelfish_sp_rename_internal @subname, @newname, @schemaname, @currtype;
+	PRINT 'Caution: Changing any part of an object name could break scripts and stored procedures.';
 END;
 $$;
 GRANT EXECUTE on PROCEDURE sys.sp_rename(IN sys.nvarchar(776), IN sys.SYSNAME, IN sys.varchar(13)) TO PUBLIC;
@@ -3174,6 +3175,24 @@ END;
 $BODY$
 LANGUAGE plpgsql
 STABLE;
+
+create or replace view sys.index_columns
+as
+select i.indrelid::integer as object_id
+  , CAST(CASE WHEN i.indisclustered THEN 1 ELSE 1+row_number() OVER(PARTITION BY c.oid) END AS INTEGER) AS index_id
+  , a.attrelid::integer as index_column_id
+  , a.attnum::integer as column_id
+  , a.attnum::sys.tinyint as key_ordinal
+  , 0::sys.tinyint as partition_ordinal
+  , 0::sys.bit as is_descending_key
+  , 1::sys.bit as is_included_column
+from pg_index as i
+inner join pg_catalog.pg_attribute a on i.indexrelid = a.attrelid
+inner join pg_class c on i.indrelid = c.oid
+inner join sys.schemas sch on sch.schema_id = c.relnamespace
+where has_schema_privilege(sch.schema_id, 'USAGE')
+and has_table_privilege(c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER');
+GRANT SELECT ON sys.index_columns TO PUBLIC;
 
 -- Mark babelfish_authid_user_ext as configuration table
 SELECT pg_catalog.pg_extension_config_dump('sys.babelfish_authid_user_ext', '');
