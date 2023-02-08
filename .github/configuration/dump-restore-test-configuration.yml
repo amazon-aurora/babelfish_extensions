@@ -5,12 +5,4 @@ dump-restore-version: [[
   { 
     version: target.latest
   }
-],
-[
-  {
-    version: 14.7
-  },
-  { 
-    version: target.latest
-  }
 ]]
