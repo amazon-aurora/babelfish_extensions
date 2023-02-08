@@ -1,4 +1,4 @@
-upgrade-version: [[
+dump-restore-version: [[
   {
     version: 13.6,
     upgrade-type: null
