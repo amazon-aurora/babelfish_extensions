@@ -1915,7 +1915,7 @@ pg_extension_config_remove(PG_FUNCTION_ARGS)
 	if (!creating_extension)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s can only be called from an SQL script executed by CREATE EXTENSION",
+				 errmsg("%s can only be called from an SQL script executed by CREATE/ALTER EXTENSION",
 						"pg_extension_config_remove()")));
 	if (tablename == NULL)
 		ereport(ERROR,
