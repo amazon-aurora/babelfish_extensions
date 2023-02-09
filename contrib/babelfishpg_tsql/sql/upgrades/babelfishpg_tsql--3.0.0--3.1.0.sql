@@ -56,6 +56,11 @@ LANGUAGE plpgsql;
  * final behaviour.
  */
 
+CREATE OR REPLACE FUNCTION sys.babelfish_get_scope_identity()
+RETURNS INT8
+AS 'babelfishpg_tsql', 'get_scope_identity'
+LANGUAGE C STABLE;
+
 CREATE OR REPLACE VIEW sys.syslanguages
 AS
 SELECT
@@ -72,6 +77,13 @@ SELECT
     CAST(NULL AS SMALLINT) AS msglangid
 FROM sys.babelfish_syslanguages;
 GRANT SELECT ON sys.syslanguages TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION sys.scope_identity()
+RETURNS numeric(38,0) AS
+$BODY$
+ SELECT sys.babelfish_get_scope_identity()::numeric(38,0);
+$BODY$
+LANGUAGE SQL STABLE;
 
 create or replace view sys.views as 
 select 
