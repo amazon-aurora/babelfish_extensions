@@ -64,18 +64,29 @@ runs:
     # Temporary step
     - name: Temporarily disable failing tests
       if: always() && steps.run-pg_dump-restore.outcome == 'success' && inputs.is_final_ver == 'true'
+      env:
+        migr_mode: ${{ inputs.migration_mode }}
       run: |
+        if [[ "$migr_mode" == "multi-db" ]];then
+          base_dir=${{ matrix.upgrade-path.path[0] }}
+          if [[ "$base_dir" == *"latest"* ]]; then
+            base_dir="latest"
+          fi
+        else
+          base_dir="singledb"
+        fi
+
         # Temporarily disable certain tests until fixed
-        sed -i "/BABEL-3513/d" upgrade/$base_dir/schedule
-        sed -i "/BABEL_OBJECT_ID/d" upgrade/$base_dir/schedule
-        sed -i "/ISC-Views/d" upgrade/$base_dir/schedule
-        sed -i "/TestNotNull/d" upgrade/$base_dir/schedule
-        sed -i "/TestSQLVariant/d" upgrade/$base_dir/schedule
-        sed -i "/babel_datatype_sqlvariant/d" upgrade/$base_dir/schedule
-        sed -i "/schema_resolution_proc/d" upgrade/$base_dir/schedule
-        sed -i "/sp_tablecollations/d" upgrade/$base_dir/schedule
-        sed -i "/sys-sql_modules/d" upgrade/$base_dir/schedule
-        sed -i "/sys-system_sql_modules/d" upgrade/$base_dir/schedule
+        sed -i "/BABEL-3513/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/BABEL_OBJECT_ID/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/ISC-Views/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/TestNotNull/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/TestSQLVariant/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/babel_datatype_sqlvariant/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/schema_resolution_proc/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/sp_tablecollations/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/sys-sql_modules/d" test/JDBC/upgrade/$base_dir/schedule
+        sed -i "/sys-system_sql_modules/d" test/JDBC/upgrade/$base_dir/schedule
       shell: bash
 
     - name: Run Verify Tests
