@@ -33,7 +33,7 @@ runs:
 
     - name: Dump and restore database
       id: run-pg_dump-restore
-      if: always() && steps.setup-new-datadir.outcome == 'success'
+      if: always() && steps.setup-new-version.outcome == 'success'
       run: |
         echo 'Starting dump...'
         cd ~
