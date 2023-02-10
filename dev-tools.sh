@@ -38,6 +38,12 @@ if [ ! $1 ]; then
     echo "  minor_version_upgrade SOURCE_WS [TARGET_WS]"
     echo "      upgrade minor version using ALTER EXTENSION ... UPDATE"
     echo ""
+    echo "  pg_dump [TARGET_WS]"
+    echo "      dump [TARGET_WS using pg_dump"
+    echo ""
+    echo "  restore SOURCE_WS [TARGET_WS]"
+    echo "      restore dump files from SOURCE_WS on [TARGET_WS]"
+    echo ""
     echo "  dumprestore SOURCE_WS [TARGET_WS]"
     echo "      dump SOURCE_WS using pg_dump and restore it on TARGET_WS"
     exit 0
