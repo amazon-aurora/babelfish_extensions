@@ -1,8 +1,16 @@
 EXEC sp_dropserver 'bbf_server', 'droplogins'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_dropserver' is not currently supported in Babelfish)~~
+
 
 EXEC sp_dropserver 'bbf_server_unreachable', 'droplogins'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_dropserver' is not currently supported in Babelfish)~~
+
 
 -- psql
 DROP EXTENSION IF EXISTS tds_fdw CASCADE;
@@ -11,3 +19,7 @@ GO
 -- tsql
 DROP VIEW openquery_vu_prepare__openquery_view
 GO
+~~ERROR (Code: 3701)~~
+
+~~ERROR (Message: view "openquery_vu_prepare__openquery_view" does not exist)~~
+

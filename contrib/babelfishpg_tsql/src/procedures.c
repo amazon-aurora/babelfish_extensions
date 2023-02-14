@@ -2147,6 +2147,10 @@ sp_addlinkedserver_internal(PG_FUNCTION_ARGS)
 
 	bool provider_warning = false, provstr_warning = false;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FDW_ERROR),
+			errmsg("'sp_addlinkedserver' is not currently supported in Babelfish")));
+
 	if (linked_server == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_ERROR),
@@ -2257,8 +2261,12 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	char *locallogin = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(2));
 	char *username = PG_ARGISNULL(3) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(3));
 	char *password = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(4));
-
+			
 	StringInfoData query;
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FDW_ERROR),
+			errmsg("'sp_addlinkedsrvlogin' is not currently supported in Babelfish")));
 
 	if (servername == NULL)
 		ereport(ERROR,
@@ -2337,9 +2345,13 @@ sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 {
 	char *servername = PG_ARGISNULL(0) ? NULL : lowerstr(text_to_cstring(PG_GETARG_VARCHAR_PP(0)));
 	char *locallogin = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(1));
-
+			
 	StringInfoData query;
 
+	ereport(ERROR,
+		(errcode(ERRCODE_FDW_ERROR),
+			errmsg("'sp_droplinkedsrvlogin' is not currently supported in Babelfish")));
+			
 	if (servername == NULL)
 		ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2379,6 +2391,10 @@ sp_dropserver_internal(PG_FUNCTION_ARGS)
 	char *droplogins = PG_ARGISNULL(1) ? NULL : lowerstr(text_to_cstring(PG_GETARG_BPCHAR_PP(1)));
 
 	StringInfoData query;
+
+	ereport(ERROR,
+		(errcode(ERRCODE_FDW_ERROR),
+			errmsg("'sp_dropserver' is not currently supported in Babelfish")));
 
 	if (linked_srv == NULL)
 		ereport(ERROR,

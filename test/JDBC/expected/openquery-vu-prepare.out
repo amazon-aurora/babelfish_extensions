@@ -6,19 +6,39 @@ GO
 -- Add localhost as linked server
 EXEC sp_addlinkedserver  @server = N'bbf_server', @srvproduct=N'', @provider=N'SQLNCLI', @datasrc=N'localhost', @catalog=N'master'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_addlinkedserver' is not currently supported in Babelfish)~~
+
 
 -- Add jdbc_user as linked server login
 EXEC sp_addlinkedsrvlogin @rmtsrvname = 'bbf_server', @useself = 'FALSE', @rmtuser = 'jdbc_user', @rmtpassword = '12345678'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_addlinkedsrvlogin' is not currently supported in Babelfish)~~
+
 
 -- Add a linked server that cannot be connected to
 EXEC sp_addlinkedserver  @server = N'bbf_server_unreachable', @srvproduct=N'', @provider=N'SQLNCLI', @datasrc=N'blahblahblah', @catalog=N'master'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_addlinkedserver' is not currently supported in Babelfish)~~
+
 
 -- Add dummy as linked server login for this server
 EXEC sp_addlinkedsrvlogin @rmtsrvname = 'bbf_server_unreachable', @useself = 'FALSE', @rmtuser = 'dummy_usr', @rmtpassword = 'dummy_pwd'
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'sp_addlinkedsrvlogin' is not currently supported in Babelfish)~~
+
 
 -- Create a view dependent on OPENQUERY
 CREATE VIEW openquery_vu_prepare__openquery_view AS SELECT * FROM OPENQUERY(bbf_server, 'SELECT 1')
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: 'rowset function' is not currently supported in Babelfish)~~
+
