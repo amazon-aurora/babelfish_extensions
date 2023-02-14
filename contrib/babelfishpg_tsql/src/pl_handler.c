@@ -3752,6 +3752,51 @@ _PG_fini(void)
 }
 
 /*
+ * Drops all the temp tables, which were created for
+ * table variables.
+ */
+static void
+pltsql_clean_table_variables_after_error()
+{
+	ListCell *lc;
+	char *query;
+	int rc;
+	bool old_pltsql_explain_only = pltsql_explain_only;
+
+	PG_TRY();
+	{
+		pltsql_explain_only = false; /* Drop temporary table even in EXPLAIN ONLY mode */
+
+		foreach (lc, table_vars_to_cleanup)
+		{
+			query = psprintf("DROP TABLE ", (char *)lfirst(lc));
+
+			rc = SPI_execute(query, false, 0);
+			if (rc != SPI_OK_UTILITY)
+				elog(ERROR, "Failed to drop the underlying table %s belonging to a table variable",
+					(char *)lfirst(lc));
+
+			pfree(query);
+		}
+
+		if (old_pltsql_explain_only)
+		{
+			/* Restore EXPLAIN ONLY mode and append explain info */
+			pltsql_explain_only = true;
+			append_explain_info(NULL, query);
+		}
+		list_free(table_vars_to_cleanup);
+	}
+	PG_CATCH();
+	{
+		list_free(table_vars_to_cleanup);
+		pltsql_explain_only = old_pltsql_explain_only; /* Recover EXPLAIN ONLY mode */
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+}
+
+/*
  * Send error to client at batch end for failures
  * We use exec_state_call_stack to distinguish
  * top batch execution from sp_* execution.
@@ -3787,6 +3832,8 @@ static void terminate_batch(bool send_error, bool compile_error)
 	if (IS_TDS_CLIENT() && exec_state_call_stack == NULL)
 	{
 		elog(DEBUG3, "TSQL TXN finish command, PG procedures : %d rollback transaction : %d", pltsql_non_tsql_proc_entry_count, AbortCurTransaction);
+
+		// cleanup tvp here
 
 		pltsql_non_tsql_proc_entry_count = 0;
 		Assert(pltsql_sys_func_entry_count == 0);

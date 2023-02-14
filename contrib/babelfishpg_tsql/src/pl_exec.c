@@ -181,6 +181,8 @@ typedef struct					/* cast_hash table entry */
 static MemoryContext shared_cast_context = NULL;
 static HTAB *shared_cast_hash = NULL;
 
+List *table_vars_to_cleanup = NIL;
+
 /*
  * LOOP_RC_PROCESSING encapsulates common logic for looping statements to
  * handle return/exit/continue result codes from the loop body statement(s).
@@ -857,6 +859,8 @@ pltsql_exec_function(PLtsql_function *func, FunctionCallInfo fcinfo,
 	PG_CATCH();
 	{
 		/* The purpose of this try-catch to call clean-up routines for estate. Errors will be re-thrwon. */
+
+		pltsql_build_table_variable_cleanup_list();
 
 		/* Close/Deallocate LOCAL cursors */
 		pltsql_cleanup_local_cursors(&estate);
@@ -9992,6 +9996,31 @@ format_preparedparamsdata(PLtsql_execstate *estate,
 	MemoryContextSwitchTo(oldcontext);
 
 	return paramstr.data;
+}
+
+/* Builds a list of table names to be dropped after error rollback. */
+static void
+pltsql_build_table_variable_cleanup_list(PLtsql_execstate *estate, PLtsql_function *func)
+{
+	PLtsql_tbl *tbl;
+	ListCell *lc;
+
+	Assert(table_vars_to_cleanup == NIL);
+
+	foreach (lc, func->table_varnos)
+	{
+		n = lfirst_int(lc);
+		if (estate->datums[n]->dtype != PLTSQL_DTYPE_TBL)
+			elog(ERROR, "unrecognized dtype: %d", estate->datums[n]->dtype);
+		tbl = (PLtsql_tbl *) estate->datums[n];
+		if (!tbl->need_drop)
+			continue;
+
+		if (!table_vars_to_cleanup)
+			table_vars_to_cleanup = list_make1(pstrdup(tbl->tblname));
+		else
+			table_vars_to_cleanup = lappend(table_vars_to_cleanup, pstrdup(tbl->tblname));
+	}
 }
 
 /*

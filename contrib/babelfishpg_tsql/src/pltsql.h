@@ -1813,6 +1813,7 @@ extern char *bulk_load_table_name;
 extern int insert_bulk_rows_per_batch;
 extern int insert_bulk_kilobytes_per_batch;
 extern bool insert_bulk_keep_nulls;
+extern List *table_vars_to_cleanup;
 
 /**********************************************************************
  * Function declarations
