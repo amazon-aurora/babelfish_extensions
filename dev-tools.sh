@@ -156,7 +156,7 @@ pg_dump() {
     cd $1/postgres
     rm -f pg_dump_globals.sql pg_dump.sql error.log
     $1/postgres/bin/pg_dumpall --username jdbc_user --globals-only --quote-all-identifiers --verbose -f pg_dump_globals.sql 2>error.log
-    $1/postgres/bin/pg_dump --username jdbc_user --column-inserts --quote-all-identifiers --verbose --file="pg_dump.sql" --dbname=jdbc_testdb 2>>error.log
+    $1/postgres/bin/pg_dump --create --username jdbc_user --column-inserts --quote-all-identifiers --verbose --file="pg_dump.sql" --dbname=jdbc_testdb 2>>error.log
     stop $1
 }
 
@@ -167,13 +167,9 @@ restore() {
     rm -f error.log
     echo "Restoring from pg_dumpall"
     $2/postgres/bin/psql -d postgres -U $USER -f $1/postgres/pg_dump_globals.sql 2>error.log
-    $2/postgres/bin/psql -d postgres -U $USER -c "CREATE DATABASE jdbc_testdb OWNER jdbc_user;"
 
     echo "Restoring from pg_dump"
-    $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -f $1/postgres/pg_dump.sql 2>>error.log
-    $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -c "GRANT ALL ON SCHEMA sys to jdbc_user;"
-    $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -c "GRANT CREATE, CONNECT, TEMPORARY ON DATABASE jdbc_testdb TO sysadmin WITH GRANT OPTION;"
-    $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -c "ALTER USER jdbc_user CREATEDB;"
+    $2/postgres/bin/psql -d postgres -U jdbc_user -f $1/postgres/pg_dump.sql 2>>error.log
     $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -c "ALTER SYSTEM SET babelfishpg_tsql.database_name = 'jdbc_testdb';"
     $2/postgres/bin/psql -d jdbc_testdb -U jdbc_user -c "SELECT pg_reload_conf();"
 }
