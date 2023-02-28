@@ -43,6 +43,9 @@ jobs:
           )" && 
           echo "::set-output name=final-version::$(
             yq '."dump-restore-version"[${{ matrix.upgrade-path.id }}][-1].version' ${{ github.workspace }}/.github/configuration/dump-restore-test-configuration.yml
+          )" && 
+          echo "::set-output name=logical-database::$(
+            yq '."dump-restore-version"[${{ matrix.upgrade-path.id }}][-1].logical-database' ${{ github.workspace }}/.github/configuration/dump-restore-test-configuration.yml
           )"
 
       - name: Find Engine and Extension Branches for Base Version ${{ steps.read-base-and-final-version.outputs.base-version }}
@@ -66,6 +69,7 @@ jobs:
           extension_branch: ${{ steps.find-branch.outputs.base-extension-branch }}
           install_dir: ${{ steps.find-branch.outputs.base-dir }}
           migration_mode: 'multi-db'
+          logical_database: ${{ steps.read-base-and-final-version.outputs.logical-database }}
 
       - name: Setup Dump Restore Composite Action
         id: setup-dump-restore-ca
