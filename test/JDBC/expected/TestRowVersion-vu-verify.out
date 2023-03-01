@@ -185,6 +185,15 @@ increasing
 ~~END~~
 
 
+select case when rv::int = xmin::varchar::int then 'equal' else 'not-equal' end from babel_3139_t;
+GO
+~~START~~
+text
+equal
+equal
+equal
+~~END~~
+
 
 EXEC sp_babelfish_configure 'babelfishpg_tsql.escape_hatch_rowversion', 'strict';
 go

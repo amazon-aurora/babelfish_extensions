@@ -100,6 +100,8 @@ select case when dbts_after_insert > prev_dbts then 'increasing' else 'not incre
     where prev_dbts is not null;
 go
 
+select case when rv::int = xmin::varchar::int then 'equal' else 'not-equal' end from babel_3139_t;
+GO
 
 EXEC sp_babelfish_configure 'babelfishpg_tsql.escape_hatch_rowversion', 'strict';
 go
