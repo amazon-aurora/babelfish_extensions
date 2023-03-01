@@ -476,6 +476,7 @@ pltsql_pre_parse_analyze(ParseState *pstate, RawStmt *parseTree)
 				/* Get new DB ID. Need sysadmin to do that. */
 				prev_current_user = GetUserNameFromId(GetUserId(), false);
 				bbf_set_current_user("sysadmin");
+				/* For sysdatabases table we need to generate new dbid for the database we are currently restoring. */
 				if (relid == sysdatabases_oid)
 				{
 					if ((dbid = getAvailDbid()) == InvalidDbid)
@@ -483,6 +484,11 @@ pltsql_pre_parse_analyze(ParseState *pstate, RawStmt *parseTree)
 								(errcode(ERRCODE_INVALID_DATABASE_DEFINITION),
 								 errmsg("cannot find an available ID for new database.")));
 				}
+				/*
+				 * For all the other catalog tables which contain dbid column, get dbid using current value of the
+				 * babelfish_db_seq sequence. It is ok to fetch current value of the sequence here since we already
+				 * have generated new dbid while inserting into sysdatabases catalog.
+				 */
 				else
 				{
 					RangeVar	*sequence = makeRangeVarFromNameList(stringToQualifiedNameList("sys.babelfish_db_seq"));
