@@ -4352,9 +4352,12 @@ pltsql_validator(PG_FUNCTION_ARGS)
 	char	   *argmodes;
 	bool		is_dml_trigger = false;
 	bool		is_event_trigger = false;
+	bool		has_table_var = false;
+	char		prokind;
 	int			i;
 	/* Special handling is neede for Inline Table-Valued Functions */
 	bool 		is_itvf;
+	bool		is_mstvf = false;
 	char		*prosrc = NULL;
 	MemoryContext oldMemoryContext = CurrentMemoryContext;
 	int 		saved_dialect = sql_dialect;
@@ -4367,6 +4370,8 @@ pltsql_validator(PG_FUNCTION_ARGS)
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
+
+	prokind = proc->prokind;
 
 	/* Disallow text, ntext, and image type result */
 	if (!babelfish_dump_restore &&
@@ -4495,6 +4500,12 @@ pltsql_validator(PG_FUNCTION_ARGS)
 			} else
 				func = pltsql_compile(fake_fcinfo, true);
 
+			if(func && func->table_varnos)
+			{	
+				is_mstvf = func->is_mstvf;
+				has_table_var = true;
+			}
+
 			/*
 			 * Disconnect from SPI manager
 			 */
@@ -4503,6 +4514,43 @@ pltsql_validator(PG_FUNCTION_ARGS)
 		}
 
 		ReleaseSysCache(tuple);
+
+
+		/* If the function has TVP it should be declared as VOLATILE by default */
+		if(prokind == PROKIND_FUNCTION && !(is_mstvf || is_itvf || has_table_var || is_dml_trigger))
+		{
+			Relation rel;
+			HeapTuple tup;
+			HeapTuple oldtup;
+			bool nulls[Natts_pg_proc];
+			Datum values[Natts_pg_proc];
+			bool replaces[Natts_pg_proc];
+			TupleDesc tupDesc;
+			char volatility = PROVOLATILE_STABLE;
+
+			/* Existing atts in pg_proc entry - no need to replace */
+			for (i = 0; i < Natts_pg_proc; ++i)
+			{
+				nulls[i] = false;
+				values[i] = PointerGetDatum(NULL);
+				replaces[i] = false;
+			}
+
+			rel = table_open(ProcedureRelationId, RowExclusiveLock);
+			tupDesc = RelationGetDescr(rel);
+			oldtup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcoid));
+
+			values[Anum_pg_proc_provolatile - 1] = CharGetDatum(volatility);
+			replaces[Anum_pg_proc_provolatile - 1] = true;
+
+			tup = heap_modify_tuple(oldtup, tupDesc, values, nulls, replaces);
+			CatalogTupleUpdate(rel, &tup->t_self, tup);
+
+			ReleaseSysCache(oldtup);
+
+			heap_freetuple(tup);
+			table_close(rel, RowExclusiveLock);
+		}
 
 		/*
 		 * For inline table-valued function, we need to construct the column
