@@ -31,17 +31,6 @@ end
 $$
 LANGUAGE plpgsql;
 
-CREATE OR REPLACE PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
-                                                    IN "@optname" sys.varchar(35),
-                                                    IN "@optvalue" sys.varchar(10))
-AS 'babelfishpg_tsql', 'sp_serveroption_internal'
-LANGUAGE C;
-
-GRANT EXECUTE ON PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
-                                                    IN "@optname" sys.varchar(35),
-                                                    IN "@optvalue" sys.varchar(10))
-TO PUBLIC;
-
 -- please add your SQL here
 /*
  * Note: These SQL statements may get executed multiple times specially when some features get backpatched.
