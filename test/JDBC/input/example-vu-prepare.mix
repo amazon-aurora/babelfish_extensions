@@ -1,0 +1,16 @@
+-- psql
+CREATE EXTENSION IF NOT EXISTS tds_fdw;
+GO
+
+-- tsql
+EXEC sp_addlinkedserver  @server = N'mssql_server', @srvproduct=N'', @provider=N'tds_fdw', @datasrc=N'localhost', @catalog=N'master'
+GO
+
+EXEC sp_addlinkedsrvlogin @rmtsrvname = 'mssql_server', @useself = 'FALSE', @rmtuser = 'jdbc_user', @rmtpassword = '12345678'
+GO
+
+EXEC sp_serveroption @server = 'mssql_server', @optname = 'query timeout', @optvalue = '4'
+GO
+
+SELECT srvname, srvoptions FROM pg_foreign_server
+GO

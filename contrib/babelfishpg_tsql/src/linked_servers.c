@@ -701,6 +701,7 @@ linked_server_establish_connection(char* servername, LinkedServerProcess *lsproc
 	ListCell *option;
 	char *data_src = NULL;
 	char *database = NULL;
+	char *query_timeout = NULL;
 
 	if(!pltsql_enable_linked_servers)
 		ereport(ERROR,
@@ -771,6 +772,8 @@ linked_server_establish_connection(char* servername, LinkedServerProcess *lsproc
 				data_src = defGetString(element);
 			else if (strcmp(element->defname, "database") == 0)
 				database =  defGetString(element);
+			else if (strcmp(element->defname, "query_timeout") == 0)
+				query_timeout = defGetString(element);
 			else
 				ereport(ERROR,
 					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
@@ -785,6 +788,11 @@ linked_server_establish_connection(char* servername, LinkedServerProcess *lsproc
 			LINKED_SERVER_DEBUG("LINKED SERVER: Setting database as \"%s\" in login request", database);
 
 			LINKED_SERVER_SET_DBNAME(login, database);
+		}
+
+		if (query_timeout && strlen(query_timeout) > 0)
+		{
+			LINKED_SERVER_SET_QUERY_TIMEOUT(atoi(query_timeout));
 		}
 
 		LINKED_SERVER_DEBUG("LINKED SERVER: Connecting to remote server \"%s\"", data_src);
