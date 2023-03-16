@@ -1,7 +1,0 @@
-SELECT srvname, srvoptions FROM pg_foreign_server
-GO
-~~START~~
-varchar#!#varchar
-mssql_server_100#!#{servername=localhost,database=master,query_timeout=4}
-~~END~~
-
