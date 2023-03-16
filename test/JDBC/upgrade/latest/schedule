@@ -8,7 +8,6 @@
 
 # This should be the first test to check there are no duplicated object_ids
 
-example
 BABEL-3613
 
 babelfish_cast_floor

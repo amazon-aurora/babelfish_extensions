@@ -117,6 +117,17 @@ GO
 EXEC sp_addlinkedsrvlogin @rmtsrvname = 'mssql_server3', @useself = 'FALSE', @rmtpassword = 'only_password_no_user'
 GO
 
+EXEC sp_serveroption @server = 'mssql_server', @optname = 'query timeout', @optvalue = '4'
+GO
+
+SELECT srvname, srvoptions FROM pg_foreign_server WHERE srvname = 'mssql_server'
+GO
+~~START~~
+varchar#!#varchar
+mssql_server#!#{servername=localhost,database=master,query_timeout=4}
+~~END~~
+
+
 -- Creating a simple login which has lesser privilege than sysadmin role
 create login linked_server_login_861 with password = 'password_861'
 GO

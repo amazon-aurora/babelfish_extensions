@@ -22,6 +22,9 @@ SELECT * FROM @sp_helplinkedsrvlogin_var WHERE a <> 'bbf_server'
 SET NOCOUNT OFF
 GO
 
+SELECT srvname, srvoptions FROM pg_foreign_server WHERE srvname = 'mssql_server'
+GO
+
 -- Try to call sp_helplinkedsrvlogin with correct server name but invalid login name. Should return zero rows
 EXEC sp_helplinkedsrvlogin @rmtsrvname = 'mssql_server', @locallogin = 'testlogin'
 GO
