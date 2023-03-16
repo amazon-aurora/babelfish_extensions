@@ -1,4 +1,4 @@
-exec sp_dropserver @server= N'mssql_server', @droplogins='droplogins'
+exec sp_dropserver @server= N'mssql_server_100', @droplogins='droplogins'
 GO
 
 -- psql
