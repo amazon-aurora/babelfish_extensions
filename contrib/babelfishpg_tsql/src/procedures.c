@@ -11,15 +11,21 @@
 #include "access/tupdesc.h"
 #include "access/printtup.h"
 #include "access/relation.h"
+#include "access/table.h"
 #include "access/xact.h"
+#include "access/reloptions.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/indexing.h"
+#include "catalog/objectaccess.h"
 #include "commands/defrem.h"
 #include "commands/prepare.h"
 #include "common/string.h"
 #include "executor/spi.h"
 #include "fmgr.h"
 #include "funcapi.h"
+#include "foreign/foreign.h"
 #include "hooks.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -29,6 +35,7 @@
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/snapmgr.h"
 #include "pltsql_instr.h"
 #include "parser/parser.h"
 #include "parser/parse_relation.h"
@@ -63,6 +70,7 @@ PG_FUNCTION_INFO_V1(sp_addlinkedserver_internal);
 PG_FUNCTION_INFO_V1(sp_addlinkedsrvlogin_internal);
 PG_FUNCTION_INFO_V1(sp_droplinkedsrvlogin_internal);
 PG_FUNCTION_INFO_V1(sp_dropserver_internal);
+PG_FUNCTION_INFO_V1(sp_serveroption_internal);
 PG_FUNCTION_INFO_V1(sp_babelfish_volatility);
 PG_FUNCTION_INFO_V1(sp_rename_internal);
 
@@ -2444,6 +2452,184 @@ sp_dropserver_internal(PG_FUNCTION_ARGS)
 			(errcode(ERRCODE_FDW_ERROR),
 				errmsg("Invalid parameter value for @droplogins specified in procedure 'sys.sp_dropserver', acceptable values are 'droplogins' or NULL.")));
 	}
+
+	return (Datum) 0;
+}
+
+Datum sp_serveroption_internal(PG_FUNCTION_ARGS)
+{
+	char *servername = PG_ARGISNULL(0) ? NULL : lowerstr(text_to_cstring(PG_GETARG_VARCHAR_PP(0)));
+	char *optionname = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(1));
+	char *optionvalue = PG_ARGISNULL(2) ? NULL : lowerstr(text_to_cstring(PG_GETARG_VARCHAR_PP(2)));
+	AlterForeignServerStmt *stmt;
+	List *options = NIL;
+
+	if(!pltsql_enable_linked_servers)
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+				errmsg("'sp_serveroption' is not currently supported in Babelfish")));
+
+
+
+	if(strncmp(optionname, "query timeout", 13) == 0)
+	{
+		Relation	rel;
+		HeapTuple	tp;
+		Datum		repl_val[Natts_pg_foreign_server];
+		bool		repl_null[Natts_pg_foreign_server];
+		bool		repl_repl[Natts_pg_foreign_server];
+		Oid			srvId;
+		Form_pg_foreign_server srvForm;
+		
+		stmt = makeNode(AlterForeignServerStmt);
+		stmt->servername = servername;
+		options = lappend(options, makeDefElem("query_timeout", (Node *) makeString(optionvalue), -1));
+		stmt->options = options;
+
+		rel = table_open(ForeignServerRelationId, RowExclusiveLock);
+
+		tp = SearchSysCacheCopy1(FOREIGNSERVERNAME,
+							 	CStringGetDatum(stmt->servername));
+
+		if (!HeapTupleIsValid(tp))
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 	errmsg("server \"%s\" does not exist", stmt->servername)));
+
+		srvForm = (Form_pg_foreign_server) GETSTRUCT(tp);
+		srvId = srvForm->oid;
+
+		/*
+	 	* Only owner or a superuser can ALTER a SERVER.
+	 	*/
+		if (!pg_foreign_server_ownercheck(srvId, GetUserId()))
+			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FOREIGN_SERVER,
+					   		stmt->servername);
+
+		memset(repl_val, 0, sizeof(repl_val));
+		memset(repl_null, false, sizeof(repl_null));
+		memset(repl_repl, false, sizeof(repl_repl));
+
+		if (stmt->has_version)
+		{
+			/*
+		 	* Change the server VERSION string.
+		 	*/
+			if (stmt->version)
+				repl_val[Anum_pg_foreign_server_srvversion - 1] =
+					CStringGetTextDatum(stmt->version);
+			else
+				repl_null[Anum_pg_foreign_server_srvversion - 1] = true;
+
+			repl_repl[Anum_pg_foreign_server_srvversion - 1] = true;
+		}
+
+		if (stmt->options)
+		{
+			ForeignDataWrapper *fdw = GetForeignDataWrapper(srvForm->srvfdw);
+			Datum	datum;
+			bool	isnull;
+
+			/* Extract the current srvoptions */
+			datum = SysCacheGetAttr(FOREIGNSERVEROID,
+									tp,
+									Anum_pg_foreign_server_srvoptions,
+									&isnull);
+			if(isnull)
+				datum = PointerGetDatum(NULL);
+
+			/* Prepare the options array */
+			if(!strncmp(fdw->fdwname, "tds_fdw", 7))
+			{
+				List *resultOptions = untransformRelOptions(datum);
+				ListCell   *optcell;
+				ArrayBuildState *astate = NULL;
+				ListCell   *cell;
+				/*
+		 		* Find the query timeout in resultOptions.  We need this for validation in
+		 		* all cases.
+		 		*/
+				foreach(optcell, stmt->options)
+				{
+					DefElem *od = lfirst(optcell);
+					ListCell   *cell;
+
+					foreach(cell, resultOptions)
+					{
+						DefElem *def = lfirst(cell);
+
+						if (strcmp(def->defname, od->defname) == 0)
+						{
+							resultOptions = list_delete_cell(resultOptions, cell);
+							cell = NULL;
+							break;
+						}
+					}
+
+					if(!cell)
+						resultOptions = lappend(resultOptions, od);
+				}
+
+				// optionListToArray
+
+				foreach(cell, resultOptions)
+				{
+					DefElem    *def = lfirst(cell);
+					const char *value;
+					Size		len;
+					text	   *t;
+
+					value = defGetString(def);
+					len = VARHDRSZ + strlen(def->defname) + 1 + strlen(value);
+					t = palloc(len + 1);
+					SET_VARSIZE(t, len);
+					sprintf(VARDATA(t), "%s=%s", def->defname, value);
+
+					astate = accumArrayResult(astate, PointerGetDatum(t),
+								  			false, TEXTOID,
+								  			CurrentMemoryContext);
+				}
+
+				if(astate)
+					datum = makeArrayResult(astate, CurrentMemoryContext);
+				// datum = optionListToArray(resultOptions);
+
+				if (PointerIsValid(DatumGetPointer(datum)))
+					repl_val[Anum_pg_foreign_server_srvoptions - 1] = datum;
+				else
+					repl_null[Anum_pg_foreign_server_srvoptions - 1] = true;
+
+				repl_repl[Anum_pg_foreign_server_srvoptions - 1] = true;
+				
+				/* Everything looks good - update the tuple */
+				tp = heap_modify_tuple(tp, RelationGetDescr(rel),
+						   				repl_val, repl_null, repl_repl);
+
+				CatalogTupleUpdate(rel, &tp->t_self, tp);
+				InvokeObjectPostAlterHook(ForeignServerRelationId, srvId, 0);
+				heap_freetuple(tp);
+				table_close(rel, RowExclusiveLock);
+			}
+			else
+			{
+				//error out saying that it is invalid foreign data wrapper
+			}
+		}
+
+	}
+	else
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+				errmsg("Invalid option")));
+
+	if(servername)
+		pfree(servername);
+	
+	if(optionname)
+		pfree(optionname);
+
+	if(optionvalue)
+		pfree(optionvalue);
 
 	return (Datum) 0;
 }

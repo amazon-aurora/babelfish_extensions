@@ -264,6 +264,17 @@ END;
 $BODY$
 LANGUAGE plpgsql STABLE;
 
+CREATE OR REPLACE PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
+                                                    IN "@optname" sys.varchar(35),
+                                                    IN "@optvalue" sys.varchar(10))
+AS 'babelfishpg_tsql', 'sp_serveroption_internal'
+LANGUAGE C;
+
+GRANT EXECUTE ON PROCEDURE sys.sp_serveroption( IN "@server" sys.sysname,
+                                                    IN "@optname" sys.varchar(35),
+                                                    IN "@optvalue" sys.varchar(10))
+TO PUBLIC;
+
 
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
