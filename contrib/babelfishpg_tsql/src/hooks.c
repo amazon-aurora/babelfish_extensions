@@ -3549,6 +3549,9 @@ modify_RangeTblFunction_tupdesc(char *funcname, Node *expr, TupleDesc *tupdesc)
 	if (!funcname || (strlen(funcname) != 9) || (strncasecmp(funcname, "openquery", 9) != 0))
 		return;
 
+	if (babelfish_dump_restore)
+		return;
+
 	funcexpr = (FuncExpr *) expr;
 	arg_list = funcexpr->args;
 
