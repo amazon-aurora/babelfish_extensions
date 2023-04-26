@@ -14,5 +14,5 @@ GO
 
 -- Create a view dependent on OPENQUERY
 -- Commenting this out until we figure out a way to support CREATE VIEW with OPENQUERY in MVU
--- CREATE VIEW openquery_vu_prepare__openquery_view AS SELECT * FROM OPENQUERY(bbf_server, 'SELECT 1')
+CREATE VIEW openquery_vu_prepare__openquery_view AS SELECT * FROM OPENQUERY(bbf_server, 'SELECT 1')
 GO
