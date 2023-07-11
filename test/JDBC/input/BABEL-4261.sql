@@ -21,6 +21,16 @@ GO
 SET BABELFISH_STATISTICS PROFILE ON
 GO
 
+-- show explicitly this is a parallel query plan
+select set_config('babelfishpg_tsql.explain_timing', 'off', false);
+GO
+
+select set_config('babelfishpg_tsql.explain_summary', 'off', false);
+GO
+
+SET BABELFISH_STATISTICS PROFILE ON
+GO
+
 select a, count(*) from t_babel4261 group by a order by 2; -- should not crash
 GO
 

@@ -25,7 +25,6 @@ text
 ~~END~~
 
 
-
 -- show explicitly this is a parallel query plan
 select set_config('babelfishpg_tsql.explain_timing', 'off', false);
 GO
@@ -73,8 +72,11 @@ Sort  (cost=38.27..38.77 rows=200 width=8) (actual rows=0 loops=1)
 ~~END~~
 
 
+<<<<<<< HEAD
 
 -- set configurations back
+=======
+>>>>>>> 85843cc1 (add statistics profile to show it's a parellel plan)
 SET BABELFISH_STATISTICS PROFILE OFF
 GO
 
@@ -93,11 +95,14 @@ text
 on
 ~~END~~
 
+<<<<<<< HEAD
 
 -- Commiting sets parallel_setup_cost, parallel_tuple_cost, min_parallel_table_scan_size back to default
 COMMIT TRAN BABEL4261_T1;
 GO
 
+=======
+>>>>>>> 85843cc1 (add statistics profile to show it's a parellel plan)
 
 DROP TABLE t_babel4261;
 GO
