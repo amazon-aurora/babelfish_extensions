@@ -42,4 +42,3 @@ GO
 
 DROP TABLE t_babel4261;
 GO
-
