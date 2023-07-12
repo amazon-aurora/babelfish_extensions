@@ -21,6 +21,7 @@ GO
 SET BABELFISH_STATISTICS PROFILE ON
 GO
 
+
 -- show explicitly this is a parallel query plan
 select set_config('babelfishpg_tsql.explain_timing', 'off', false);
 GO
