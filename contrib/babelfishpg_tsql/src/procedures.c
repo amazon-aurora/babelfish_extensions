@@ -2493,11 +2493,7 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	 * We prepare the following query to create a user mapping. This will be
 	 * executed using ProcessUtility():
 	 *
-<<<<<<< HEAD
-	 * CREATE USER MAPPING FOR CURRENT_USER SERVER <servername> OPTIONS
-=======
 	 * CREATE USER MAPPING FOR PUBLIC SERVER <servername> OPTIONS
->>>>>>> 3d28d7f9a (OPENQUERY for Linked Servers does not work when used from user created database (#1592))
 	 * (username '<remote server user name>', password '<remote server user
 	 * password>')
 	 *
@@ -2571,14 +2567,11 @@ sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("Only @locallogin = NULL is supported. Configuring remote server access specific to local login is not yet supported")));
 
-<<<<<<< HEAD
-=======
 	remove_trailing_spaces(servername);
 
 	/* Check if servername is valid */
 	get_foreign_server_oid(servername, false);
 
->>>>>>> 3d28d7f9a (OPENQUERY for Linked Servers does not work when used from user created database (#1592))
 	initStringInfo(&query);
 
 	/*
