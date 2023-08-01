@@ -374,7 +374,12 @@ GRANT EXECUTE ON FUNCTION sys.getdate() TO PUBLIC;
 CREATE OR REPLACE FUNCTION sys.getutcdate() RETURNS sys.datetime
     AS $$select date_trunc('millisecond', statement_timestamp() AT TIME ZONE 'UTC'::pg_catalog.text)::sys.datetime;$$
     LANGUAGE SQL STABLE;
-GRANT EXECUTE ON FUNCTION sys.getutcdate() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION sys.getutcdate() TO PUBLIC;\
+
+CREATE OR REPLACE FUNCTION sys.len(expr sys.BBF_BINARY) RETURNS INTEGER AS
+'babelfishpg_common', 'varbinary_length'
+STRICT
+LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
 CREATE OR REPLACE PROCEDURE sys.bbf_sleep_for(IN sleep_time DATETIME)
 AS $$
