@@ -170,6 +170,14 @@ RETURNS DOUBLE PRECISION
 AS 'babelfishpg_common', 'binaryfloat8'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION sys.varbinary2binary(sys.BBF_VARBINARY, integer, boolean)
+RETURNS SYS.BBF_BINARY
+AS 'babelfishpg_common', 'binary'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE CAST (sys.BBF_VARBINARY AS sys.BBF_BINARY) 
+WITH FUNCTION sys.varbinary2binary (sys.BBF_VARBINARY, integer, boolean) AS ASSIGNMENT;
+
 CREATE DOMAIN sys.IMAGE AS sys.BBF_VARBINARY;
 
 SET enable_domain_typmod = TRUE;

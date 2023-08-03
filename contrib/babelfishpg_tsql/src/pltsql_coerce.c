@@ -104,7 +104,7 @@ tsql_cast_raw_info_t tsql_cast_raw_infos[] =
 	{PG_CAST_ENTRY, "sys", "bbf_varbinary", "pg_catalog", "int4", NULL, 'i', 'f'},
 	{PG_CAST_ENTRY, "sys", "bbf_varbinary", "pg_catalog", "int2", NULL, 'i', 'f'},
 	{TSQL_CAST_ENTRY, "sys", "bbf_varbinary", "sys", "rowversion", "varbinaryrowversion", 'i', 'f'},
-	{TSQL_CAST_ENTRY, "sys", "bbf_varbinary", "sys", "bbf_binary", "binary", 'i', 'f'},
+	{TSQL_CAST_ENTRY, "sys", "bbf_varbinary", "sys", "bbf_binary", "varbinary2binary", 'i', 'f'},
 /*  binary     {only allow to cast to integral data type) */
 	{PG_CAST_ENTRY, "sys", "bbf_binary", "pg_catalog", "int8", NULL, 'i', 'f'},
 	{PG_CAST_ENTRY, "sys", "bbf_binary", "pg_catalog", "int4", NULL, 'i', 'f'},

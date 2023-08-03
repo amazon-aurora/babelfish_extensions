@@ -32,5 +32,13 @@ CREATE OPERATOR sys./ (
     COMMUTATOR = /
 );
 
+CREATE OR REPLACE FUNCTION sys.varbinary2binary(sys.BBF_VARBINARY, integer, boolean)
+RETURNS SYS.BBF_BINARY
+AS 'babelfishpg_common', 'binary'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE CAST (sys.BBF_VARBINARY AS sys.BBF_BINARY) 
+WITH FUNCTION sys.varbinary2binary (sys.BBF_VARBINARY, integer, boolean) AS ASSIGNMENT;
+
 -- Reset search_path to not affect any subsequent scripts
 SELECT set_config('search_path', trim(leading 'sys, ' from current_setting('search_path')), false);
