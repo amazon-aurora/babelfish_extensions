@@ -149,6 +149,8 @@ extern char *construct_unique_index_name(char *index_name, char *relation_name);
 extern int	CurrentLineNumber;
 static non_tsql_proc_entry_hook_type prev_non_tsql_proc_entry_hook = NULL;
 static void pltsql_non_tsql_proc_entry(int proc_count, int sys_func_count);
+static non_tsql_proc_hook_type prev_non_tsql_proc_hook = NULL;
+static bool pltsql_non_tsql_proc(void);
 static bool get_attnotnull(Oid relid, AttrNumber attnum);
 static void set_procid(Oid oid);
 static bool is_rowversion_column(ParseState *pstate, ColumnDef *column);
@@ -3725,6 +3727,9 @@ _PG_init(void)
 	prev_non_tsql_proc_entry_hook = non_tsql_proc_entry_hook;
 	non_tsql_proc_entry_hook = pltsql_non_tsql_proc_entry;
 
+	prev_non_tsql_proc_hook = non_tsql_proc_hook;
+	non_tsql_proc_hook = pltsql_non_tsql_proc;
+
 	prev_get_func_language_oids_hook = get_func_language_oids_hook;
 	get_func_language_oids_hook = get_func_language_oids;
 	coalesce_typmod_hook = coalesce_typmod_hook_impl;
@@ -3755,6 +3760,7 @@ _PG_fini(void)
 	guc_push_old_value_hook = prev_guc_push_old_value_hook;
 	validate_set_config_function_hook = prev_validate_set_config_function_hook;
 	non_tsql_proc_entry_hook = prev_non_tsql_proc_entry_hook;
+	non_tsql_proc_hook = prev_non_tsql_proc_hook;
 	get_func_language_oids_hook = prev_get_func_language_oids_hook;
 	tsql_has_linked_srv_permissions_hook = prev_tsql_has_linked_srv_permissions_hook;
 
@@ -3876,6 +3882,13 @@ pltsql_non_tsql_proc_entry(int proc_count, int sys_func_count)
 
 	pltsql_non_tsql_proc_entry_count += proc_count;
 	pltsql_sys_func_entry_count += sys_func_count;
+}
+
+static bool
+pltsql_non_tsql_proc(void)
+{
+	Assert(pltsql_non_tsql_proc_entry_count >= 0 && pltsql_sys_func_entry_count >= 0);
+	return (pltsql_non_tsql_proc_entry_count || pltsql_sys_func_entry_count);
 }
 
 bool
