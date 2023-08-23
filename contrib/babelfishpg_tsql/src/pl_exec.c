@@ -10092,55 +10092,33 @@ format_preparedparamsdata(PLtsql_execstate *estate,
 	return paramstr.data;
 }
 
-/*
- * Drop the underlying table of each table variable in a function execution.
- */
+
+
 static void
 pltsql_clean_table_variables(PLtsql_execstate *estate, PLtsql_function *func)
 {
-	ListCell   *lc;
-	int			n;
-	int			rc;
-	PLtsql_tbl *tbl;
-	bool		old_pltsql_explain_only = pltsql_explain_only;
-	const char *query_fmt = "DROP TABLE %s";
-	const char *query;
+	ListCell *lc;
 	bool old_abort_curr_txn = AbortCurTransaction;
 
 	PG_TRY();
 	{
-		/*
-		 * Temporarily set this to false to allow DROP to continue.
-		 * Othewise, DROP would not be allowed to acquire xlock on the
-		 * relation.
-		 */
 		AbortCurTransaction = false;
-
-		foreach(lc, func->table_varnos)
+		foreach (lc, func->table_varnos)
 		{
-			n = lfirst_int(lc);
+			PLtsql_tbl *tbl;
+			EphemeralNamedRelation enr;
+
+			int n = lfirst_int(lc);
 			if (estate->datums[n]->dtype != PLTSQL_DTYPE_TBL)
 				elog(ERROR, "unrecognized dtype: %d", estate->datums[n]->dtype);
 			tbl = (PLtsql_tbl *) estate->datums[n];
 			if (!tbl->need_drop)
 				continue;
 
-			query = psprintf(query_fmt, tbl->tblname);
+			enr = get_ENR(currentQueryEnv, tbl->tblname);
+			Assert(enr);
 
-			pltsql_explain_only = false;	/* Drop temporary table even in
-											 * EXPLAIN ONLY mode */
-
-			rc = SPI_execute(query, false, 0);
-			if (rc != SPI_OK_UTILITY)
-				elog(ERROR, "Failed to drop the underlying table %s of table variable %s",
-					 tbl->tblname, tbl->refname);
-
-			if (old_pltsql_explain_only)
-			{
-				/* Restore EXPLAIN ONLY mode and append explain info */
-				pltsql_explain_only = true;
-				append_explain_info(NULL, query);
-			}
+			ENRDropTable(enr);
 		}
 
 		Assert(!AbortCurTransaction); /* engine should not change this value */
@@ -10151,9 +10129,7 @@ pltsql_clean_table_variables(PLtsql_execstate *estate, PLtsql_function *func)
 		Assert(!AbortCurTransaction); /* engine should not change this value */
 		AbortCurTransaction = old_abort_curr_txn;
 
-		pltsql_explain_only = old_pltsql_explain_only;	/* Recover EXPLAIN ONLY
-														 * mode */
-		PG_RE_THROW();
+		//PG_RE_THROW();
 	}
 	PG_END_TRY();
 }

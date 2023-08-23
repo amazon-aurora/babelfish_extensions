@@ -84,7 +84,6 @@ Query Text: EXEC babel_2903_outer_proc @a, @b
         ->  Seq Scan on babel_2903_t1  (cost=0.00..32.60 rows=2260 width=8)
   Query Text: select * from "@t"
   ->  Seq Scan on "@t_1"  (cost=0.00..32.60 rows=2260 width=8)
-  Query Text: DROP TABLE @t_1
 Query Text: select "@a", "@b"
 Result  (cost=0.00..0.01 rows=1 width=8)
 ~~END~~
