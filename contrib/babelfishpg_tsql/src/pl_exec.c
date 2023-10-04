@@ -4606,6 +4606,8 @@ is_impl_txn_required_for_execsql(PLtsql_stmt_execsql *stmt)
  * needs to use that, fix those callers to push/pop stmt_mcontext.
  * ----------
  */
+
+static bool count = false;
 static int
 exec_stmt_execsql(PLtsql_execstate *estate,
 				  PLtsql_stmt_execsql *stmt)
@@ -4615,9 +4617,8 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 	int			rc;
 	PLtsql_expr *expr = stmt->sqlstmt;
 	Portal		portal = NULL;
-	static bool count = false;
 	ListCell   *lc;
-	CachedPlan *cp;
+	CachedPlan *cp = NULL;
 	bool		is_returning = false;
 	bool		is_select = true;
 
@@ -4713,7 +4714,7 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		/*
 		 * Check whether the statement is an INSERT/DELETE with RETURNING
 		 */
-		if(strcasestr(stmt->sqlstmt->query, " COLUMNS_UPDATED"))
+		if(strcasestr(stmt->sqlstmt->query, " COLUMNS_UPDATED") || estate->trigdata)
 		{			
 			count = true;
 		}			
