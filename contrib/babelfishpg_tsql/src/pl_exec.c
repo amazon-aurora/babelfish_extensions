@@ -4615,6 +4615,7 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 	int			rc;
 	PLtsql_expr *expr = stmt->sqlstmt;
 	Portal		portal = NULL;
+	static bool count = false;
 	ListCell   *lc;
 	CachedPlan *cp;
 	bool		is_returning = false;
@@ -4712,7 +4713,11 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		/*
 		 * Check whether the statement is an INSERT/DELETE with RETURNING
 		 */
-		if((strcasestr(stmt->sqlstmt->query, "OUTPUT")) || strcasestr(stmt->sqlstmt->query, "UPDATE"))
+		if(strcasestr(stmt->sqlstmt->query, " COLUMNS_UPDATED"))
+		{			
+			count = true;
+		}			
+		if((strcasestr(stmt->sqlstmt->query, "OUTPUT"))|| strcasestr(stmt->sqlstmt->query, "UPDATE") || count)
 		{
 			cp = SPI_plan_get_cached_plan(expr->plan);
 		}
