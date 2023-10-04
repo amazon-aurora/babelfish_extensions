@@ -195,8 +195,12 @@ get_tsql_error_details(ErrorData *edata,
 
 		/* Possible infinite loop of errors. Do not touch it further. */
 		if (!error_stack_full())
+		{
+			HOLD_INTERRUPTS();
 			elog(LOG, "Unmapped error found. Code: %d, Message: %s, File: %s, Line: %d, Context: %s",
 				 edata->sqlerrcode, edata->message, edata->filename, edata->lineno, error_context);
+			RESUME_INTERRUPTS();
+		}
 
 		return false;
 	}
@@ -267,8 +271,12 @@ get_tsql_error_details(ErrorData *edata,
 
 			/* Possible infinite loop of errors. Do not touch it further. */	
 			if (!error_stack_full())
+			{
+				HOLD_INTERRUPTS();
 				elog(LOG, "Unmapped error found. Code: %d, Message: %s, File: %s, Line: %d, Context: %s",
 					 edata->sqlerrcode, edata->message, edata->filename, edata->lineno, error_context);
+				RESUME_INTERRUPTS();
+			}
 
 			*tsql_error_code = ERRCODE_PLTSQL_ERROR_NOT_MAPPED;
 			*tsql_error_severity = 16;

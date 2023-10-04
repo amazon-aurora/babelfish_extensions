@@ -715,6 +715,7 @@ tdsstat_read_current_status(void)
 			if (pgstat_read_activity_complete(before_changecount, after_changecount))
 				break;
 
+			elog(LOG, "tds.c : 718, CHECK_FOR_INTERRUPTS");
 			/* Make sure we can break out of loop if stuck... */
 			CHECK_FOR_INTERRUPTS();
 		}
@@ -898,6 +899,8 @@ TdsSetAtAtStatVariable(const char *at_at_var, int intVal, uint64 bigintVal)
 	volatile TdsStatus *vtdsentry = MyTdsStatusEntry;
 
 	PGSTAT_BEGIN_WRITE_ACTIVITY(vtdsentry);
+
+	elog(LOG, "setting up @@ variable");
 
 	if (strcmp(at_at_var, "rowcount") == 0)
 		vtdsentry->rowcount = bigintVal;

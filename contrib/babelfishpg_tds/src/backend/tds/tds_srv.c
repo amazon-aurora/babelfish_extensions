@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/parallel.h"
 #include "commands/defrem.h"
 #include "common/ip.h"
 #include "miscadmin.h"
@@ -366,7 +367,13 @@ pe_mainfunc(Port *port)
 static void
 pe_send_message(ErrorData *edata)
 {
-	if (edata->output_to_client)
+	if (IsParallelWorker())
+	{
+		//printf("using send_message_to_frontend from tds");
+		send_message_to_frontend(edata);
+		return;
+	}
+	else if (edata->output_to_client)
 		emit_tds_log(edata);
 }
 

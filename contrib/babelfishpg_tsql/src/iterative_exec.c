@@ -1311,8 +1311,11 @@ dispatch_stmt_handle_error(PLtsql_execstate *estate,
 			PG_RE_THROW();
 		}
 
+		elog(LOG, "copying error data");
 		edata = CopyErrorData();
+		elog(LOG, "Trying to get tsql error code");
 		error_mapped = get_tsql_error_code(edata, &last_error);
+		elog(LOG, "Trying to set @@ variable ");
 		exec_set_error(estate, last_error, edata->sqlerrcode, !error_mapped);
 		if (internal_sp_started &&
 			before_lxid == MyProc->lxid &&
