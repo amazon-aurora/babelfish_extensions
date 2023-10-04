@@ -4712,7 +4712,7 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		/*
 		 * Check whether the statement is an INSERT/DELETE with RETURNING
 		 */
-		if((pg_strcasecmp(stmt->sqlstmt->query, "OUTPUT")) || pg_strcasecmp(stmt->sqlstmt->query, "UPDATE"))
+		if((strcasestr(stmt->sqlstmt->query, "OUTPUT")) || strcasestr(stmt->sqlstmt->query, "UPDATE"))
 		{
 			cp = SPI_plan_get_cached_plan(expr->plan);
 		}
