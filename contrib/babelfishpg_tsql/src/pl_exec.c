@@ -4714,7 +4714,8 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		/*
 		 * Check whether the statement is an INSERT/DELETE with RETURNING
 		 */
-		if(strcasestr(stmt->sqlstmt->query, " COLUMNS_UPDATED") || estate->trigdata || strcasestr(stmt->sqlstmt->query, " TRIGGER"))
+		if(strcasestr(stmt->sqlstmt->query, " COLUMNS_UPDATED") || estate->trigdata || strcasestr(stmt->sqlstmt->query, " TRIGGER") 
+				|| stmt->insert_exec)
 		{			
 			count = true;
 		}			
