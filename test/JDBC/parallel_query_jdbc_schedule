@@ -39,13 +39,13 @@ ignore#!#babel_format_standard_numeric
 ignore#!#format-vu-verify
 
 # Group 3: “could not access file "pg_hint_plan": No such file or directory" BABEL-4395
-ignore#!#BABEL-3291
-ignore#!#BABEL-3292
-ignore#!#BABEL-3293
-ignore#!#BABEL-3294
-ignore#!#BABEL-3512
-ignore#!#BABEL-3592
-ignore#!#BABEL-4294-vu-verify
+# ignore#!#BABEL-3291
+# ignore#!#BABEL-3292
+# ignore#!#BABEL-3293
+# ignore#!#BABEL-3294
+# ignore#!#BABEL-3512
+# ignore#!#BABEL-3592
+# ignore#!#BABEL-4294-vu-verify
 
 # Group 4: Incorrect precision BABEL-4396
 ignore#!#BABEL-3943
