@@ -1,4 +1,16 @@
-use pivot_test
+use pivot_test;
+GO
+
+drop table OSTable;
+GO
+
+drop table STable;
+GO
+
+drop table seating_tbl;
+GO
+
+drop view StoreReceipt_view;
 GO
 
 drop table pivot_insert_into;
@@ -13,14 +25,12 @@ GO
 drop function test_table_valued_function;
 GO
 
-drop view pivot_view;
-GO
-
 drop table StoreReceipt;
 GO
 
-use master
+use master;
 GO
 
-drop database pivot_test
+drop database pivot_test;
 GO
+
