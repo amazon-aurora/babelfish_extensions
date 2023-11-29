@@ -1,5 +1,5 @@
 name: Babelfish Smoke Tests
-on: [push, pull_request]
+on: [push]
 
 jobs:
   isolation-tests:
