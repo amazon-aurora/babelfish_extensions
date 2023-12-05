@@ -31,11 +31,9 @@
  * NB: include gramparse.h after including gram-backend.h so that pgtsql token number is used properly
  * Community has hidden gramparse.h from header symbols, so manually import all its definitions here
  */
+
 #ifndef GRAMPARSE_H
 #define GRAMPARSE_H
-
-#include "nodes/parsenodes.h"
-#include "parser/scanner.h"
 
 /*
  * The YY_EXTRA data that a flex scanner allows us to pass around.  Private
