@@ -4479,8 +4479,8 @@ static Node* optimize_explicit_cast(ParseState *pstate, Node *node)
 		OpExpr *opExpr = (OpExpr*) node;
 		Form_pg_operator form;
 		HeapTuple	tuple;
-		Node* node = optimize_explicit_cast(pstate, linitial(opExpr->args));
 		Node* result = NULL;
+		node = optimize_explicit_cast(pstate, linitial(opExpr->args));
 		if (node != linitial(opExpr->args))
 		{
 			char	   *opname;

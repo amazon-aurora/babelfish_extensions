@@ -515,7 +515,7 @@ pltsql_pre_parse_analyze(ParseState *pstate, RawStmt *parseTree)
 					/* Skip if dbid and owner column already exists */
 					foreach(lc, stmt->cols)
 					{
-						ResTarget  *col = (ResTarget *) lfirst(lc);
+						col = (ResTarget *) lfirst(lc);
 
 						if (pg_strcasecmp(col->name, "dbid") == 0)
 							dbid_found = true;
@@ -1015,6 +1015,7 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 										{
 											char	*colname = NULL;
 											int		 colname_len = 0;
+											ListCell *elements2;
 
 											/* T-SQL Parser might have directly prepared IndexElem instead of String*/
 											if (nodeTag(lfirst(lc)) == T_IndexElem) {
@@ -1026,12 +1027,12 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 												colname_len = strlen(colname);
 											}
 
-											foreach(elements, stmt->tableElts)
+											foreach(elements2, stmt->tableElts)
 											{
-												Node	*element = lfirst(elements);
-												if (nodeTag(element) == T_ColumnDef)
+												Node	*element2 = lfirst(elements2);
+												if (nodeTag(element2) == T_ColumnDef)
 												{
-													ColumnDef* def = (ColumnDef *) element;
+													ColumnDef* def = (ColumnDef *) element2;
 
 													if (strlen(def->colname) == colname_len && 
 														strncmp(def->colname, colname, colname_len) == 0 && 
@@ -4281,59 +4282,51 @@ pltsql_call_handler(PG_FUNCTION_ARGS)
 		scope_level = pltsql_new_scope_identity_nest_level();
 
 		prev_procid = procid_var;
-		PG_TRY();
-		{
-			set_procid(func->fn_oid);
+		set_procid(func->fn_oid);
 
-			/*
-			 * Determine if called as function or trigger and call appropriate
-			 * subhandler
-			 */
-			if (CALLED_AS_TRIGGER(fcinfo))
+		/*
+			* Determine if called as function or trigger and call appropriate
+			* subhandler
+			*/
+		if (CALLED_AS_TRIGGER(fcinfo))
+		{
+			if (!pltsql_recursive_triggers && save_cur_estate != NULL
+				&& is_recursive_trigger(save_cur_estate))
 			{
-				if (!pltsql_recursive_triggers && save_cur_estate != NULL
-					&& is_recursive_trigger(save_cur_estate))
-				{
-					retval = (Datum) 0;
-				}
-				else
-				{
-					pltsql_trigger_depth++;
-					retval = PointerGetDatum(pltsql_exec_trigger(func,
-																 (TriggerData *) fcinfo->context));
-					pltsql_trigger_depth = save_pltsql_trigger_depth;
-				}
-			}
-			else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
-			{
-				pltsql_exec_event_trigger(func,
-										  (EventTriggerData *) fcinfo->context);
 				retval = (Datum) 0;
 			}
 			else
-				retval = pltsql_exec_function(func, fcinfo, NULL, false);
-
-			set_procid(prev_procid);
+			{
+				pltsql_trigger_depth++;
+				retval = PointerGetDatum(pltsql_exec_trigger(func,
+																(TriggerData *) fcinfo->context));
+				pltsql_trigger_depth = save_pltsql_trigger_depth;
+			}
 		}
-		PG_CATCH();
+		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 		{
-			set_procid(prev_procid);
-			/* Decrement use-count, restore cur_estate, and propagate error */
-			pltsql_trigger_depth = save_pltsql_trigger_depth;
-			func->use_count--;
-			func->cur_estate = save_cur_estate;
-			pltsql_remove_current_query_env();
-			pltsql_revert_guc(save_nestlevel);
-			pltsql_revert_last_scope_identity(scope_level);
-			terminate_batch(true /* send_error */ , false /* compile_error */ );
-			sql_dialect = saved_dialect;
-			return retval;
+			pltsql_exec_event_trigger(func,
+										(EventTriggerData *) fcinfo->context);
+			retval = (Datum) 0;
 		}
-		PG_END_TRY();
+		else
+			retval = pltsql_exec_function(func, fcinfo, NULL, false);
+
+		set_procid(prev_procid);
 	}
-	PG_FINALLY();
+	PG_CATCH();
 	{
+		set_procid(prev_procid);
+		/* Decrement use-count, restore cur_estate, and propagate error */
+		pltsql_trigger_depth = save_pltsql_trigger_depth;
+		func->use_count--;
+		func->cur_estate = save_cur_estate;
+		pltsql_remove_current_query_env();
+		pltsql_revert_guc(save_nestlevel);
+		pltsql_revert_last_scope_identity(scope_level);
+		terminate_batch(true /* send_error */ , false /* compile_error */ );
 		sql_dialect = saved_dialect;
+		return retval;
 	}
 	PG_END_TRY();
 

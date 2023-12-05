@@ -1508,7 +1508,7 @@ exec_stmt_iterative(PLtsql_execstate *estate, ExecCodes *exec_codes, ExecConfig_
 				{
 					int			err_handler_pc;
 					int			i;
-					PLtsql_errctx *cur_err_ctx = *(PLtsql_errctx **) vec_at(estate->err_ctx_stack,
+					cur_err_ctx = *(PLtsql_errctx **) vec_at(estate->err_ctx_stack,
 																			estate->cur_err_ctx_idx);
 
 					/* restore error context */

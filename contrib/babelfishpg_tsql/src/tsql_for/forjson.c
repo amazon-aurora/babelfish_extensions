@@ -324,7 +324,7 @@ tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values)
 
 		found = false;
 		if (num > 1)	{
-			for (int i = num - 1; i >= 0; i--)	{
+			for (i = num - 1; i >= 0; i--)	{
 				hashKey = build_key(parts, i);
 
 				// Check if the current key exists in the hashTable

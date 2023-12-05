@@ -172,19 +172,10 @@ get_identity_current(PG_FUNCTION_ARGS)
 
 		seqid = get_table_identity(tableOid);
 
-		PG_TRY();
-		{
-			/* Check the tuple directly. Catch error if NULL */
-			sql_dialect = prev_sql_dialect;
-			return DirectFunctionCall1(pg_sequence_last_value,
-									   ObjectIdGetDatum(seqid));
-		}
-		PG_CATCH();
-		{
-			FlushErrorState();
-			sql_dialect = SQL_DIALECT_TSQL;
-		}
-		PG_END_TRY();
+		/* Check the tuple directly. Catch error if NULL */
+		sql_dialect = prev_sql_dialect;
+		return DirectFunctionCall1(pg_sequence_last_value,
+									ObjectIdGetDatum(seqid));
 
 		/* If the relation exists, return the seed */
 		if (seqid != InvalidOid)
@@ -206,6 +197,7 @@ get_identity_current(PG_FUNCTION_ARGS)
 	PG_CATCH();
 	{
 		FlushErrorState();
+		sql_dialect = SQL_DIALECT_TSQL;
 	}
 	PG_END_TRY();
 

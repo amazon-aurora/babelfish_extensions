@@ -1774,7 +1774,6 @@ pltsql_dumptree(PLtsql_function *func)
 			case PLTSQL_DTYPE_ROW:
 				{
 					PLtsql_row *row = (PLtsql_row *) d;
-					int			i;
 
 					printf("ROW %-16s fields", row->refname);
 					for (i = 0; i < row->nfields; i++)

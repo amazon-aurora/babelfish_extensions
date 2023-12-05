@@ -4925,8 +4925,6 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 
 		if (columns_updated_list != NIL && 0 == pltsql_trigger_depth)
 		{
-			ListCell   *lc;
-
 			foreach(lc, columns_updated_list)
 			{
 				List	   *list = (List *) lfirst(lc);

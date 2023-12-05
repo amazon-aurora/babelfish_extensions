@@ -1238,7 +1238,7 @@ SPUnprepare(TDSRequestSP req)
 	/* Just to satisfy argument requirement */
 	MemSet(fcinfo, 0, SizeForFunctionCallInfo(1));
 	fcinfo->nargs = 1;
-	fcinfo->args[0].value = PointerGetDatum(req->handle);
+	fcinfo->args[0].value = (Datum) req->handle;
 	fcinfo->args[0].isnull = false;
 
 	TDSStatementBeginCallback(NULL, NULL);
@@ -2890,7 +2890,7 @@ HandleSPCursorRequest(TDSRequestSP req)
 	PG_TRY();
 	{
 		StringInfo	buf = makeStringInfo();
-		ParameterToken token = req->cursorExtraArg3;
+		token = req->cursorExtraArg3;
 
 		TdsReadUnicodeDataFromTokenCommon(req->messageData, token, buf);
 		appendStringInfoCharMacro(buf, '\0');

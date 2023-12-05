@@ -2121,9 +2121,6 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
 				int			save_nestlevel;
 				int			scope_level;
 				InlineCodeBlockArgs *args = NULL;
@@ -2139,10 +2136,7 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 				if (stmt->param_def)
 				{
 					Datum		paramdef;
-					Oid			restype;
-					int32		restypmod;
 					char	   *paramdefstr;
-					bool		isnull;
 
 					/*
 					 * Evaluate the parameter definition
@@ -2218,9 +2212,6 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
 				InlineCodeBlockArgs *args = NULL;
 				Datum		paramdef;
 				char	   *paramdefstr;
