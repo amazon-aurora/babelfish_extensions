@@ -378,22 +378,22 @@ version(PG_FUNCTION_ARGS)
 
 Datum sysutcdatetime(PG_FUNCTION_ARGS)
 {
-    return DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
-                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp()));
+    PG_RETURN_TIMESTAMP(DatumGetTimestamp(DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
+                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp()))));
     
 }
 
 Datum getutcdate(PG_FUNCTION_ARGS)
 {
-    return DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
-                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp())));
+    PG_RETURN_TIMESTAMP(DatumGetTimestamp(DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
+                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp())))));
     
 }
 
 Datum getdate_internal(PG_FUNCTION_ARGS)
 {
-	return DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),
-						TimestampTzGetDatum(GetCurrentStatementStartTimestamp()));
+	PG_RETURN_TIMESTAMP(DatumGetTimestamp(DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),
+						TimestampTzGetDatum(GetCurrentStatementStartTimestamp()))));
 	
 }
 
@@ -406,8 +406,8 @@ Datum sysdatetimeoffset(PG_FUNCTION_ARGS)
 {
 	
 
-	return (DirectFunctionCall1(common_utility_plugin_ptr->timestamp_datetimeoffset,
-							TimestampTzGetDatum(GetCurrentStatementStartTimestamp())));
+	PG_RETURN_TIMESTAMP(DatumGetTimestamp(DirectFunctionCall1(common_utility_plugin_ptr->timestamp_datetimeoffset,
+							TimestampTzGetDatum(GetCurrentStatementStartTimestamp()))));
 }
 
 void *
@@ -2013,7 +2013,7 @@ type_name(PG_FUNCTION_ARGS)
     tsql_typename = (*common_utility_plugin_ptr->translate_pg_type_to_tsql) (fcinfo1);
     if (tsql_typename)
     {
-        return tsql_typename;
+        PG_RETURN_DATUM(tsql_typename);
     }
     else
     {   

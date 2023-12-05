@@ -499,9 +499,9 @@ tsql_varchar_substr(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
 		PG_RETURN_NULL();
 
-	return DirectFunctionCall3(text_substr, PG_GETARG_DATUM(0),
+	PG_RETURN_VARCHAR_P(DatumGetVarCharPP(DirectFunctionCall3(text_substr, PG_GETARG_DATUM(0),
 											PG_GETARG_INT32(1),
-											PG_GETARG_INT32(2));
+											PG_GETARG_INT32(2))));
 }
 
 /*

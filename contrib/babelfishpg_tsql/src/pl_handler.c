@@ -4282,12 +4282,20 @@ pltsql_call_handler(PG_FUNCTION_ARGS)
 		scope_level = pltsql_new_scope_identity_nest_level();
 
 		prev_procid = procid_var;
+	}
+	PG_FINALLY();
+	{
+		sql_dialect = saved_dialect;
+	}
+	PG_END_TRY();
+	PG_TRY();
+	{
 		set_procid(func->fn_oid);
 
 		/*
-			* Determine if called as function or trigger and call appropriate
-			* subhandler
-			*/
+		 * Determine if called as function or trigger and call appropriate
+		 * subhandler
+		 */
 		if (CALLED_AS_TRIGGER(fcinfo))
 		{
 			if (!pltsql_recursive_triggers && save_cur_estate != NULL

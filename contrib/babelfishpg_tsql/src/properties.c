@@ -496,7 +496,7 @@ serverproperty(PG_FUNCTION_ARGS)
 		 * SV_HDR_1B(result); SV_SET_METADATA(svhdr, DATETIME_T, HDR_VER);
 		 */
 
-		return DirectFunctionCall1(common_utility_plugin_ptr->datetime2sqlvariant, data);
+		PG_RETURN_BYTEA_P(DatumGetByteaPP(DirectFunctionCall1(common_utility_plugin_ptr->datetime2sqlvariant, data)));
 	}
 	else if (strcasecmp(property, "ResourceVersion") == 0)
 	{
@@ -523,7 +523,7 @@ serverproperty(PG_FUNCTION_ARGS)
 		 * HDR_VER);
 		 */
 
-		return DirectFunctionCall1(common_utility_plugin_ptr->tinyint2sqlvariant, data);
+		PG_RETURN_BYTEA_P(DatumGetByteaPP(DirectFunctionCall1(common_utility_plugin_ptr->tinyint2sqlvariant, data)));
 	}
 	else if (strcasecmp(property, "SqlCharSetName") == 0)
 	{
