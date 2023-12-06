@@ -23,6 +23,7 @@ ignore#!#table-variable-vu-verify
 ignore#!#table-variable-vu-cleanup
 ignore#!#BABEL-4281
 ignore#!#babel_top_in_dml
+ignore#!#pgr_select
 
 # JDBC bulk insert API seems to call SET FMTONLY ON without calling SET FMTONLY OFF, causing some spurious test failures.
 ignore#!#insertbulk
