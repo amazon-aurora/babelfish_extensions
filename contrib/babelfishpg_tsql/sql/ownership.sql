@@ -6,7 +6,7 @@ CREATE TABLE sys.babelfish_sysdatabases (
 	status2 INT NOT NULL,
 	owner NAME NOT NULL,
 	default_collation NAME NOT NULL,
-	name TEXT NOT NULL COLLATE "C",
+	name TEXT NOT NULL,
 	crdate timestamptz NOT NULL,
 	properties TEXT NOT NULL COLLATE "C",
 	PRIMARY KEY (name)
@@ -15,6 +15,7 @@ CREATE TABLE sys.babelfish_sysdatabases (
 GRANT SELECT on sys.babelfish_sysdatabases TO PUBLIC;
 
 -- BABELFISH_FUNCTION_EXT
+
 CREATE TABLE sys.babelfish_function_ext (
 	nspname NAME NOT NULL,
 	funcname NAME NOT NULL,
@@ -45,7 +46,7 @@ GRANT SELECT ON sys.babelfish_namespace_ext TO PUBLIC;
 -- SYSDATABASES
 CREATE OR REPLACE VIEW sys.sysdatabases AS
 SELECT
-t.name,
+CAST(t.name as SYS.SYSNAME),
 sys.db_id(t.name) AS dbid,
 CAST(CAST(r.oid AS int) AS SYS.VARBINARY(85)) AS sid,
 CAST(0 AS SMALLINT) AS mode,
@@ -302,7 +303,7 @@ $$;
 CREATE TABLE sys.babelfish_authid_login_ext (
 rolname NAME NOT NULL, -- pg_authid.rolname
 is_disabled INT NOT NULL DEFAULT 0, -- to support enable/disable login
-type CHAR(1) NOT NULL DEFAULT 'S',
+type sys.bpchar(1) NOT NULL DEFAULT 'S',
 credential_id INT NOT NULL,
 owning_principal_id INT NOT NULL,
 is_fixed_role INT NOT NULL DEFAULT 0,
@@ -321,7 +322,7 @@ AS SELECT
 CAST(Ext.orig_loginname AS sys.SYSNAME) AS name,
 CAST(Base.oid As INT) AS principal_id,
 CAST(CAST(Base.oid as INT) as sys.varbinary(85)) AS sid,
-CAST(Ext.type AS CHAR(1)) as type,
+Ext.type as type,
 CAST(
   CASE
     WHEN Ext.type = 'S' THEN 'SQL_LOGIN'
@@ -351,7 +352,7 @@ GRANT SELECT ON sys.server_principals TO PUBLIC;
 CREATE TABLE sys.babelfish_authid_user_ext (
 rolname NAME NOT NULL,
 login_name NAME NOT NULL,
-type CHAR(1) NOT NULL DEFAULT 'S',
+type sys.bpchar(1) NOT NULL DEFAULT 'S',
 owning_principal_id INT,
 is_fixed_role INT NOT NULL DEFAULT 0,
 authentication_type INT,
@@ -382,7 +383,7 @@ CREATE OR REPLACE VIEW sys.database_principals AS
 SELECT
 CAST(Ext.orig_username AS SYS.SYSNAME) AS name,
 CAST(Base.oid AS INT) AS principal_id,
-CAST(Ext.type AS CHAR(1)) as type,
+Ext.type as type,
 CAST(
   CASE
     WHEN Ext.type = 'S' THEN 'SQL_USER'

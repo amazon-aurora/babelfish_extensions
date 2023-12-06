@@ -18,7 +18,7 @@ select
   , CAST(NULL as int) as principal_id
   , CAST(t.relnamespace  as int) as schema_id
   , 0 as parent_object_id
-  , CAST('U' as CHAR(2)) as type
+  , CAST('U' as sys.bpchar(2)) as type
   , CAST('USER_TABLE' as sys.nvarchar(60)) as type_desc
   , CAST((select string_agg(
                   case
@@ -106,13 +106,13 @@ GRANT SELECT ON sys.shipped_objects_not_in_sys TO PUBLIC;
 
 create or replace view sys.views as 
 select 
-  t.relname as name
+  CAST(t.relname as sys.sysname) as name
   , t.oid as object_id
   , null::integer as principal_id
   , sch.schema_id as schema_id
   , 0 as parent_object_id
-  , 'V'::varchar(2) as type 
-  , 'VIEW'::varchar(60) as type_desc
+  , 'V'::sys.bpchar(2) as type
+  , 'VIEW'::sys.nvarchar(60) as type_desc
   , vd.create_date::timestamp as create_date
   , vd.create_date::timestamp as modify_date
   , 0 as is_ms_shipped 
@@ -709,7 +709,7 @@ SELECT
 , CAST(NULL AS INT) AS principal_id
 , CAST(sch.schema_id AS INT) AS schema_id
 , CAST(c.conrelid AS INT) AS parent_object_id
-, CAST('F' AS CHAR(2)) AS type
+, CAST('F' AS sys.bpchar(2)) AS type
 , CAST('FOREIGN_KEY_CONSTRAINT' AS NVARCHAR(60)) AS type_desc
 , CAST(NULL AS sys.DATETIME) AS create_date
 , CAST(NULL AS sys.DATETIME) AS modify_date
@@ -917,12 +917,10 @@ SELECT
   , CAST(0 AS INT) AS principal_id
   , CAST(sch.schema_id AS INT) AS schema_id
   , CAST(c.conrelid AS INT) AS parent_object_id
-  , CAST(
-    (CASE contype
-      WHEN 'p' THEN 'PK'
-      WHEN 'u' THEN 'UQ'
-    END) 
-    AS CHAR(2)) AS type
+  , CASE contype
+      WHEN 'p' THEN CAST('PK' as sys.bpchar(2))
+      WHEN 'u' THEN CAST('UQ' as sys.bpchar(2))
+    END AS type
   , CAST(
     (CASE contype
       WHEN 'p' THEN 'PRIMARY_KEY_CONSTRAINT'
@@ -987,8 +985,7 @@ GRANT SELECT ON sys.procedures TO PUBLIC;
 
 create or replace view sys.sysforeignkeys as
 select
-  c.conname as name
-  , c.oid as object_id
+  c.oid as constid
   , c.conrelid as fkeyid
   , c.confrelid as rkeyid
   , a_con.attnum as fkey
@@ -1043,8 +1040,8 @@ select
   , coalesce(blocking_activity.pid, 0) as blocked
   , null::bytea as waittype
   , 0 as waittime
-  , a.wait_event_type as lastwaittype
-  , null::text as waitresource
+  , CAST(a.wait_event_type as sys.nchar(32)) as lastwaittype
+  , null::sys.nchar(256) as waitresource
   , coalesce(t.database_id, 0)::oid as dbid
   , a.usesysid as uid
   , 0 as cpu
@@ -1054,17 +1051,17 @@ select
   , a.query_start as last_batch
   , 0 as ecid
   , 0 as open_tran
-  , a.state as status
+  , CAST(a.state as sys.nchar(30)) as status
   , null::bytea as sid
   , CAST(t.host_name AS sys.nchar(128)) as hostname
-  , a.application_name as program_name
-  , t.client_pid::varchar(10) as hostprocess
-  , a.query as cmd
-  , null::varchar(128) as nt_domain
-  , null::varchar(128) as nt_username
-  , null::varchar(12) as net_address
-  , null::varchar(12) as net_library
-  , a.usename as loginname
+  , CAST(a.application_name as sys.nchar(128)) as program_name
+  , t.client_pid::sys.nchar(10) as hostprocess
+  , CAST(a.query as sys.nchar(52)) as cmd
+  , null::sys.nchar(128) as nt_domain
+  , null::sys.nchar(128) as nt_username
+  , null::sys.nchar(12) as net_address
+  , null::sys.nchar(12) as net_library
+  , CAST(a.usename as sys.nchar(128)) as loginname
   , t.context_info::bytea as context_info
   , null::bytea as sql_handle
   , 0 as stmt_start
@@ -1091,8 +1088,8 @@ GRANT SELECT ON sys.sysprocesses TO PUBLIC;
 
 create or replace view sys.types As
 -- For System types
-select 
-  tsql_type_name as name
+select
+  CAST(tsql_type_name as sys.sysname) as name
   , t.oid as system_type_id
   , t.oid as user_type_id
   , s.oid as schema_id
@@ -1102,7 +1099,7 @@ select
   , cast(sys.tsql_type_scale_helper(tsql_type_name, t.typtypmod, false) as int) as scale
   , CASE c.collname
     WHEN 'default' THEN default_collation_name
-    ELSE  c.collname
+    ELSE  CAST(c.collname as sys.sysname)
     END as collation_name
   , case when typnotnull then cast(0 as sys.bit) else cast(1 as sys.bit) end as is_nullable
   , 0 as is_user_defined
@@ -1114,14 +1111,14 @@ from pg_type t
 inner join pg_namespace s on s.oid = t.typnamespace
 left join pg_collation c on c.oid = t.typcollation
 , sys.translate_pg_type_to_tsql(t.oid) AS tsql_type_name
-,cast(current_setting('babelfishpg_tsql.server_collation_name') as name) as default_collation_name
+,cast(current_setting('babelfishpg_tsql.server_collation_name') as sys.sysname) as default_collation_name
 where
-tsql_type_name IS NOT NULL  
+tsql_type_name IS NOT NULL
 and pg_type_is_visible(t.oid)
 and (s.nspname = 'pg_catalog' OR s.nspname = 'sys')
 union all 
 -- For User Defined Types
-select cast(t.typname as text) as name
+select cast(t.typname as sys.sysname) as name
   , t.typbasetype as system_type_id
   , t.oid as user_type_id
   , t.typnamespace as schema_id
@@ -1131,7 +1128,7 @@ select cast(t.typname as text) as name
   , case when tt.typrelid is not null then 0::smallint else cast(sys.tsql_type_scale_helper(tsql_base_type_name, t.typtypmod, false) as int) end as scale
   , CASE c.collname
     WHEN 'default' THEN default_collation_name
-    ELSE  c.collname 
+    ELSE  CAST(c.collname as sys.sysname)
     END as collation_name
   , case when tt.typrelid is not null then cast(0 as sys.bit)
          else case when typnotnull then cast(0 as sys.bit) else cast(1 as sys.bit) end
@@ -1149,7 +1146,7 @@ left join pg_collation c on c.oid = t.typcollation
 left join sys.table_types_internal tt on t.typrelid = tt.typrelid
 , sys.translate_pg_type_to_tsql(t.oid) AS tsql_type_name
 , sys.translate_pg_type_to_tsql(t.typbasetype) AS tsql_base_type_name
-, cast(current_setting('babelfishpg_tsql.server_collation_name') as name) as default_collation_name
+, cast(current_setting('babelfishpg_tsql.server_collation_name') as sys.sysname) as default_collation_name
 -- we want to show details of user defined datatypes created under babelfish database
 where 
  tsql_type_name IS NULL
@@ -1224,7 +1221,7 @@ select CAST(('DF_' || tab.name || '_' || d.oid) as sys.sysname) as name
   , CAST(null as int) as principal_id
   , CAST(tab.schema_id as int) as schema_id
   , CAST(d.adrelid as int) as parent_object_id
-  , CAST('D' as char(2)) as type
+  , CAST('D' as sys.bpchar(2)) as type
   , CAST('DEFAULT_CONSTRAINT' as sys.nvarchar(60)) AS type_desc
   , CAST(null as sys.datetime) as create_date
   , CAST(null as sys.datetime) as modified_date
@@ -1248,7 +1245,7 @@ SELECT CAST(c.conname as sys.sysname) as name
   , CAST(NULL as integer) as principal_id 
   , CAST(c.connamespace as integer) as schema_id
   , CAST(conrelid as integer) as parent_object_id
-  , CAST('C' as char(2)) as type
+  , CAST('C' as sys.bpchar(2)) as type
   , CAST('CHECK_CONSTRAINT' as sys.nvarchar(60)) as type_desc
   , CAST(null as sys.datetime) as create_date
   , CAST(null as sys.datetime) as modify_date
@@ -1674,7 +1671,11 @@ left join sys.shipped_objects_not_in_sys nis on nis.name = ('TT_' || tt.name || 
 GRANT SELECT ON sys.all_objects TO PUBLIC;
 
 create or replace view sys.system_objects as
-select * from sys.all_objects o
+select
+  name, object_id, principal_id, schema_id, 
+  parent_object_id, type, type_desc, create_date, 
+  modify_date, is_ms_shipped, is_published, is_schema_published
+ from sys.all_objects o
 inner join pg_namespace s on s.oid = o.schema_id
 where s.nspname = 'sys';
 GRANT SELECT ON sys.system_objects TO PUBLIC;
@@ -2203,7 +2204,7 @@ SELECT out_name as name
      case out_is_identity::int when 1 then 128  else 0 end)::sys.tinyint as status
   , out_system_type_id as type
   , (case when out_user_type_id < 32767 then out_user_type_id else null end)::smallint as usertype
-  , null::varchar(255) as printfmt
+  , null::sys.varchar(255) as printfmt
   , out_precision::smallint as prec
   , out_scale::int as scale
   , out_is_computed::int as iscomputed
@@ -2318,9 +2319,9 @@ create or replace view sys.dm_exec_connections
    , null::sys.datetime as last_read
    , null::sys.datetime as last_write
    , d.packet_size as net_packet_size
-   , a.client_addr::varchar(48) as client_net_address
+   , a.client_addr::sys.varchar(48) as client_net_address
    , a.client_port as client_tcp_port
-   , null::varchar(48) as local_net_address
+   , null::sys.varchar(48) as local_net_address
    , null::int as local_tcp_port
    , null::sys.uniqueidentifier as connection_id
    , null::sys.uniqueidentifier as parent_connection_id
@@ -2447,7 +2448,7 @@ AS
 SELECT 
   CAST('PRIMARY' as SYSNAME) AS name,
   CAST(1 as INT) AS data_space_id,
-  CAST('FG' as CHAR(2)) AS type,
+  CAST('FG' as sys.bpchar(2)) AS type,
   CAST('ROWS_FILEGROUP' as NVARCHAR(60)) AS type_desc,
   CAST(1 as sys.BIT) AS is_default,
   CAST(0 as sys.BIT) AS is_system;
@@ -2583,7 +2584,7 @@ SELECT
   , CAST(idx.filter_definition AS sys.nvarchar(4000)) AS filter_definition
   , CAST(idx.auto_created AS sys.bit) AS auto_created
   , CAST(NULL AS INT) AS using_xml_index_id
-  , CAST(NULL AS char(1)) AS secondary_type
+  , CAST(NULL AS sys.bpchar(1)) AS secondary_type
   , CAST(NULL AS sys.nvarchar(60)) AS secondary_type_desc
   , CAST(0 AS sys.tinyint) AS xml_index_type
   , CAST(NULL AS sys.nvarchar(60)) AS xml_index_type_description
@@ -2801,7 +2802,7 @@ SELECT
    CAST(0 as sys.BIT) AS is_incremental,
    CAST(0 as sys.BIT) AS has_persisted_sample,
    CAST(0 as INT) AS stats_generation_method,
-   CAST('' as VARCHAR(255)) AS stats_generation_method_desc
+   CAST('' as sys.VARCHAR(255)) AS stats_generation_method_desc
 WHERE FALSE;
 GRANT SELECT ON sys.stats TO PUBLIC;
 
