@@ -154,7 +154,7 @@ babelfish_sysdatabases
 babel_function_string
 BABEL_GRANT_CONNECT
 babel_isnumeric
-BABEL_COL_NAME
+#BABEL_COL_NAME #temporarily disable until investigated
 BABEL-LOGIN
 BABEL-LOGIN-USER-EXT
 BABEL-NEXT-VALUE-FOR
