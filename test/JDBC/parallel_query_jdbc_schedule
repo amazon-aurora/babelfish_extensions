@@ -11,7 +11,6 @@ ignore#!#BABEL-3293
 ignore#!#BABEL-4294-vu-prepare
 ignore#!#BABEL-4294-vu-verify
 ignore#!#BABEL-4294-vu-cleanup
-ignore#!#545_1
 
 # Group 1: BABEL-4481
 ignore#!#Test-sp_addrolemember-vu-prepare
