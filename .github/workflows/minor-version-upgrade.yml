@@ -1,5 +1,5 @@
 name: Minor Version Upgrade Tests for empty database
-on: [push]
+on: deployment # disable this test until 16 branch is fully published
 
 jobs:
   extension-tests:
