@@ -2637,6 +2637,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							stmt->options = list_concat(stmt->options,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
+
+							/* in PG16, when creating a role the creator automatically becomes a 
+							 * member of that role. We need to revoke that membership in order to
+							 * mimic SQL Server behavior.
+							 */
+							revoke_role_from_sysadmin(stmt->role);
 						}
 						PG_CATCH();
 						{

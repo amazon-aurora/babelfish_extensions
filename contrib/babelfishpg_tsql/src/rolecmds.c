@@ -2342,3 +2342,85 @@ check_windows_logon_length(char *input)
 	else
 		return false;
 }
+
+/*
+ * Revoke a given role from sysadmin role.
+ */
+void
+revoke_role_from_sysadmin(const char *role)
+{
+	StringInfoData	query;
+	List			*res;
+	GrantRoleStmt	*stmt;
+	PlannedStmt		*wrapper;
+	int				old_sql_dialect = sql_dialect;
+	char			*old_user_name = GetUserNameFromId(GetUserId(), false);
+
+	PG_TRY();
+	{
+		sql_dialect = SQL_DIALECT_PG;
+
+		/* Need to set the current user to BOOTSTRAP_SUPERUSER, or else we can't actually revoke the grant. */
+		bbf_set_current_user(GetUserNameFromId(BOOTSTRAP_SUPERUSERID, false));
+
+		initStringInfo(&query);
+		appendStringInfo(&query, "REVOKE dummy FROM sysadmin");
+		res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+		if (list_length(res) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("Expected 1 statement but get %d statements after parsing",
+							list_length(res))));
+
+		stmt = (GrantRoleStmt *) parsetree_nth_stmt(res, 0);
+		if (!IsA(stmt, GrantRoleStmt))
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a GrantRoleStmt")));
+		
+		if (role && stmt->granted_roles)
+		{
+			/*
+			* Delete the first element if it's is_role flag, in this way we won't
+			* need to rewrite the role names during internal call.
+			*/
+			AccessPriv   *tmp = (AccessPriv *) linitial(stmt->granted_roles);
+
+			if (strcmp(tmp->priv_name, "is_role") == 0)
+				stmt->granted_roles = list_delete_cell(stmt->granted_roles, list_head(stmt->granted_roles));
+
+			if (!stmt->granted_roles)
+				return;
+
+			/* Update the statement with given role name */
+			tmp = (AccessPriv *) llast(stmt->granted_roles);
+			tmp->priv_name = pstrdup(role);
+		}
+
+		/* need to make a wrapper PlannedStmt */
+		wrapper = makeNode(PlannedStmt);
+		wrapper->commandType = CMD_UTILITY;
+		wrapper->canSetTag = false;
+		wrapper->utilityStmt = (Node *) stmt;
+		wrapper->stmt_location = 0;
+		wrapper->stmt_len = 0;
+
+		/* do this step */
+		standard_ProcessUtility(wrapper,
+						"(REVOKE )",
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
+
+		/* make sure later steps can see the object created here */
+		CommandCounterIncrement();
+	}
+	PG_FINALLY();
+	{
+		bbf_set_current_user(old_user_name);
+		sql_dialect = old_sql_dialect;
+	}
+	PG_END_TRY();
+}

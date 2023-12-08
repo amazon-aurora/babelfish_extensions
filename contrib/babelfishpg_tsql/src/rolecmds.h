@@ -80,6 +80,7 @@ extern char *convertToUPN(char *input);
 extern bool windows_login_contains_invalid_chars(char *input);
 extern bool windows_domain_contains_invalid_chars(char *input);
 extern bool check_windows_logon_length(char *input);
+extern void revoke_role_from_sysadmin(const char *role);
 
 
 #endif
