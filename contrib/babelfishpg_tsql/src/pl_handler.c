@@ -2638,11 +2638,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
 
-							/* in PG16, when creating a role the creator automatically becomes a 
+							/*
+							 * in PG16, when creating a role the creator automatically becomes a 
 							 * member of that role. We need to revoke that membership in order to
 							 * mimic SQL Server behavior.
 							 */
-							revoke_role_from_sysadmin(stmt->role);
+							revoke_role_from_user(stmt->role, "sysadmin", false);
 						}
 						PG_CATCH();
 						{
@@ -2688,6 +2689,18 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * corresponding login and a schema name
 							 */
 							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
+
+							/*
+							 * in PG16, when creating a role the creator automatically becomes a 
+							 * member of that role. We need to revoke that membership in order to
+							 * mimic SQL Server behavior.
+							 */
+							if (isrole)
+							{
+								revoke_role_from_user(stmt->role, get_dbo_role_name(get_cur_db_name()), true);
+								// add_user_to_role(stmt->role, get_dbo_role_name(get_cur_db_name()));
+							}
+							
 						}
 						PG_CATCH();
 						{
