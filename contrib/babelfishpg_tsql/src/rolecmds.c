@@ -1843,10 +1843,10 @@ is_rolemember(PG_FUNCTION_ARGS)
 	 * principal. Note that if given principal is current user, we'll always
 	 * have permissions.
 	 */
-	if (!is_role(role_oid))// ||
-		// (principal_oid != cur_user_oid)) &&
-		//  (!has_privs_of_role(cur_user_oid, role_oid) ||
-		//   !has_privs_of_role(cur_user_oid, principal_oid))))
+	if (!is_role(role_oid) ||
+		((principal_oid != cur_user_oid) &&
+		 (!has_privs_of_role(cur_user_oid, role_oid) ||
+		  !has_privs_of_role(cur_user_oid, principal_oid))))
 		PG_RETURN_NULL();
 
 	/*
@@ -2439,84 +2439,84 @@ revoke_role_from_user(const char *role, const char *user, bool cascade)
 /*
  * Add a user to a given role.
  */
-// void
-// add_user_to_role(const char *role, const char *user)
-// {
-// 	StringInfoData	query;
-// 	List			*res;
-// 	GrantRoleStmt	*stmt;
-// 	PlannedStmt		*wrapper;
-// 	int				old_sql_dialect = sql_dialect;
-// 	char			*old_user_name = GetUserNameFromId(GetUserId(), false);
+void
+add_user_to_role(const char *role, const char *user)
+{
+	StringInfoData	query;
+	List			*res;
+	GrantRoleStmt	*stmt;
+	PlannedStmt		*wrapper;
+	int				old_sql_dialect = sql_dialect;
+	char			*old_user_name = GetUserNameFromId(GetUserId(), false);
 
-// 	PG_TRY();
-// 	{
-// 		sql_dialect = SQL_DIALECT_PG;
+	PG_TRY();
+	{
+		sql_dialect = SQL_DIALECT_PG;
 
-// 		/* Need to set the current user to BOOTSTRAP_SUPERUSER, or else we can't actually add the grant. */
-// 		bbf_set_current_user(GetUserNameFromId(BOOTSTRAP_SUPERUSERID, false));
+		/* Need to set the current user to BOOTSTRAP_SUPERUSER, or else we can't actually add the grant. */
+		bbf_set_current_user(GetUserNameFromId(BOOTSTRAP_SUPERUSERID, false));
 
-// 		initStringInfo(&query);
-// 		appendStringInfo(&query, "GRANT dummy TO dummy");
-// 		res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+		initStringInfo(&query);
+		appendStringInfo(&query, "GRANT dummy TO dummy");
+		res = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
-// 		if (list_length(res) != 1)
-// 			ereport(ERROR,
-// 					(errcode(ERRCODE_SYNTAX_ERROR),
-// 					errmsg("Expected 1 statement but get %d statements after parsing",
-// 							list_length(res))));
+		if (list_length(res) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("Expected 1 statement but get %d statements after parsing",
+							list_length(res))));
 
-// 		stmt = (GrantRoleStmt *) parsetree_nth_stmt(res, 0);
-// 		if (!IsA(stmt, GrantRoleStmt))
-// 			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a GrantRoleStmt")));
+		stmt = (GrantRoleStmt *) parsetree_nth_stmt(res, 0);
+		if (!IsA(stmt, GrantRoleStmt))
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a GrantRoleStmt")));
 		
-// 		if (role && stmt->granted_roles && stmt->grantee_roles)
-// 		{
-// 			/*
-// 			* Delete the first element if it's is_role flag, in this way we won't
-// 			* need to rewrite the role names during internal call.
-// 			*/
-// 			AccessPriv	*ap = (AccessPriv *) linitial(stmt->granted_roles);
-// 			RoleSpec	*rs = (RoleSpec *) linitial(stmt->grantee_roles);
+		if (role && stmt->granted_roles && stmt->grantee_roles)
+		{
+			/*
+			* Delete the first element if it's is_role flag, in this way we won't
+			* need to rewrite the role names during internal call.
+			*/
+			AccessPriv	*ap = (AccessPriv *) linitial(stmt->granted_roles);
+			RoleSpec	*rs = (RoleSpec *) linitial(stmt->grantee_roles);
 
-// 			if (strcmp(ap->priv_name, "is_role") == 0)
-// 				stmt->granted_roles = list_delete_cell(stmt->granted_roles, list_head(stmt->granted_roles));
+			if (strcmp(ap->priv_name, "is_role") == 0)
+				stmt->granted_roles = list_delete_cell(stmt->granted_roles, list_head(stmt->granted_roles));
 
-// 			if (!stmt->granted_roles)
-// 				return;
+			if (!stmt->granted_roles)
+				return;
 
-// 			/* Update the statement with given role and user name */
-// 			ap = (AccessPriv *) llast(stmt->granted_roles);
-// 			ap->priv_name = pstrdup(role);
+			/* Update the statement with given role and user name */
+			ap = (AccessPriv *) llast(stmt->granted_roles);
+			ap->priv_name = pstrdup(role);
 
-// 			rs->rolename = pstrdup(user);
-// 		}
+			rs->rolename = pstrdup(user);
+		}
 
-// 		/* need to make a wrapper PlannedStmt */
-// 		wrapper = makeNode(PlannedStmt);
-// 		wrapper->commandType = CMD_UTILITY;
-// 		wrapper->canSetTag = false;
-// 		wrapper->utilityStmt = (Node *) stmt;
-// 		wrapper->stmt_location = 0;
-// 		wrapper->stmt_len = 0;
+		/* need to make a wrapper PlannedStmt */
+		wrapper = makeNode(PlannedStmt);
+		wrapper->commandType = CMD_UTILITY;
+		wrapper->canSetTag = false;
+		wrapper->utilityStmt = (Node *) stmt;
+		wrapper->stmt_location = 0;
+		wrapper->stmt_len = 0;
 
-// 		/* do this step */
-// 		standard_ProcessUtility(wrapper,
-// 						"(GRANT )",
-// 						false,
-// 						PROCESS_UTILITY_SUBCOMMAND,
-// 						NULL,
-// 						NULL,
-// 						None_Receiver,
-// 						NULL);
+		/* do this step */
+		standard_ProcessUtility(wrapper,
+						"(GRANT )",
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
 
-// 		/* make sure later steps can see the object created here */
-// 		CommandCounterIncrement();
-// 	}
-// 	PG_FINALLY();
-// 	{
-// 		bbf_set_current_user(old_user_name);
-// 		sql_dialect = old_sql_dialect;
-// 	}
-// 	PG_END_TRY();
-// }
+		/* make sure later steps can see the object created here */
+		CommandCounterIncrement();
+	}
+	PG_FINALLY();
+	{
+		bbf_set_current_user(old_user_name);
+		sql_dialect = old_sql_dialect;
+	}
+	PG_END_TRY();
+}
