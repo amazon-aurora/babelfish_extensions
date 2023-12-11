@@ -11,11 +11,11 @@ do
 $$
 DECLARE temprow RECORD;
 BEGIN
-    raise warning 'GRANTING CREATEROLE to dbo_owners';
     FOR temprow IN
         SELECT sys.suser_sname(owner_sid) AS db_owner FROM sys.databases
     LOOP
         PERFORM format('ALTER ROLE %I WITH CREATEROLE;', temprow.db_owner);
+        raise warning 'GRANTING CREATEROLE to %', temprow.db_owner;
     END LOOP;
 END
 $$;
