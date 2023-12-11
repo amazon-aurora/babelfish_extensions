@@ -2637,13 +2637,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							stmt->options = list_concat(stmt->options,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
-
-							/*
-							 * in PG16, when creating a role the creator automatically becomes a 
-							 * member of that role. We need to revoke that membership in order to
-							 * mimic SQL Server behavior.
-							 */
-							//revoke_role_from_user(stmt->role, "sysadmin", false);
 						}
 						PG_CATCH();
 						{
@@ -2656,7 +2649,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						return;
 					}
-					else if (isuser)
+					else if (isuser || isrole)
 					{
 						/*
 						 * check whether sql user name and role name contains
@@ -2668,7 +2661,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						/* Set current user to dbo user for create permissions */
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
-						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
+						bbf_set_current_user(get_dbo_role_name(get_cur_db_name()));
 
 						PG_TRY();
 						{
@@ -2689,63 +2682,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * corresponding login and a schema name
 							 */
 							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
-							
-						}
-						PG_CATCH();
-						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-
-						return;
-					}
-					else if (isrole)
-					{
-						/*
-						 * check whether sql user name and role name contains
-						 * '\' or not
-						 */
-						if (isrole || !from_windows)
-							validateUserAndRole(stmt->role);
-
-						/* Set current user to dbo user for create permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-													params, queryEnv, dest,
-													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-
-							stmt->options = list_concat(stmt->options,
-														user_options);
-
-							/*
-							 * If the stmt is CREATE USER, it must have a
-							 * corresponding login and a schema name
-							 */
-							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
-
-							/*
-							 * in PG16, when creating a role the creator automatically becomes a 
-							 * member of that role. We need to revoke that membership in order to
-							 * mimic SQL Server behavior.
-							 */
-							if (isrole)
-							{
-								//revoke_role_from_user(stmt->role, "sysadmin", true);
-								//add_user_to_role(stmt->role, get_dbo_role_name(get_cur_db_name()));
-							}
 							
 						}
 						PG_CATCH();
