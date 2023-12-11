@@ -12,11 +12,14 @@ $$
 DECLARE temprow RECORD;
 BEGIN
     FOR temprow IN
-        SELECT sys.suser_sname(owner_sid) AS db_owner FROM sys.databases
+        SELECT name FROM sys.databases
     LOOP
-        PERFORM format('ALTER ROLE %I WITH CREATEROLE;', temprow.db_owner);
-        raise warning 'GRANTING CREATEROLE to %', temprow.db_owner;
+        PERFORM format('ALTER ROLE %I_db_owner WITH CREATEROLE;', temprow.name);
+        raise warning 'GRANTING CREATEROLE to %_db_owner', temprow.db_owner;
     END LOOP;
+    -- for singledb, also do 'db_owner'
+    ALTER ROLE db_owner WITH CREATEROLE;
+    raise warning 'GRANTING CREATEROLE to db_owner';
 END
 $$;
 
