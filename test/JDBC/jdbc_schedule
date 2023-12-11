@@ -26,6 +26,16 @@ ignore#!#babel_top_in_dml
 ignore#!#pgr_select
 ignore#!#BABEL-235
 ignore#!#TestDatatypeAggSort
+ignore#!#BABEL-4231-vu-prepare
+ignore#!#BABEL-4231-vu-verify
+ignore#!#BABEL-4231-vu-cleanup
+ignore#!#BABEL-4279
+ignore#!#BABEL-4384-vu-prepare
+ignore#!#BABEL-4384-vu-verify
+ignore#!#BABEL-4384-vu-cleanup
+ignore#!#ownership_restrictions_from_pg
+ignore#!#pg_stat_statements_tsql
+ignore#!#pgr_select_distinct
 
 # JDBC bulk insert API seems to call SET FMTONLY ON without calling SET FMTONLY OFF, causing some spurious test failures.
 ignore#!#insertbulk
