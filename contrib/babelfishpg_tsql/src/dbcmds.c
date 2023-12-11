@@ -113,7 +113,7 @@ gen_createdb_subcmds(const char *schema, const char *dbo, const char *db_owner, 
 	 */
 	initStringInfo(&query);
 
-	appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
+	appendStringInfo(&query, "CREATE ROLE dummy CREATEROLE INHERIT; ");
 	appendStringInfo(&query, "CREATE ROLE dummy INHERIT CREATEROLE ROLE sysadmin IN ROLE dummy; ");
 	appendStringInfo(&query, "GRANT CREATE, CONNECT, TEMPORARY ON DATABASE dummy TO dummy; ");
 
