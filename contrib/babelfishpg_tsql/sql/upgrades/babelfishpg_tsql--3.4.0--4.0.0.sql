@@ -20,6 +20,8 @@ BEGIN
     -- for singledb, also do 'db_owner'
     ALTER ROLE db_owner WITH CREATEROLE;
     raise warning 'GRANTING CREATEROLE to db_owner';
+    EXCEPTION WHEN OTHERS THEN
+        raise warning 'Error when trying to ALTER db_owner';
 END
 $$;
 
