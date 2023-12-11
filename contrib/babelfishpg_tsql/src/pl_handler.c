@@ -3002,7 +3002,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			{
 				if (sql_dialect == SQL_DIALECT_TSQL)
 				{
-					const char *prev_current_user;
 					DropRoleStmt *stmt = (DropRoleStmt *) parsetree;
 					bool		drop_user = false;
 					bool		drop_role = false;
@@ -3013,6 +3012,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					char	   *role_name = NULL;
 					bool		other = false;
 					ListCell   *item;
+					const char *db_owner_name;
+					char	   *db_name;
+					const char *prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 					/* Check if roles are users that need role name mapping */
 					if (stmt->roles != NIL)
@@ -3028,8 +3030,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (drop_user || drop_role)
 						{
-							char	   *db_name = NULL;
-
 							stmt->roles = list_delete_cell(stmt->roles,
 														   list_head(stmt->roles));
 							pfree(headrol);
@@ -3185,42 +3185,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									(errcode(ERRCODE_OBJECT_IN_USE),
 									 errmsg("Could not drop login '%s' as the user is currently logged in.", role_name)));
 					}
-					else if (drop_user || drop_role)
-					{
-						const char *db_owner_name;
-						char	   *db_name;
-						Oid			db_owner_id;
-						Oid			prev_current_user = GetUserId();
-
-						db_name = get_cur_db_name();
-						db_owner_name = get_db_owner_name(db_name);
-						db_owner_id = get_role_oid(db_owner_name, false);
-
-						/* Set current user to db_owner for drop permissions */
-						SetCurrentRoleId(db_owner_id, false);
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-													params, queryEnv, dest,
-													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-						}
-						PG_CATCH();
-						{
-							SetCurrentRoleId(prev_current_user, false);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						SetCurrentRoleId(prev_current_user, false);
-
-						return;
-					}
 
 					if (all_logins || all_users || all_roles)
 					{
@@ -3259,6 +3223,35 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						bbf_set_current_user(prev_current_user);
 
+						return;
+					}
+					else
+					{
+						db_name = get_cur_db_name();
+						db_owner_name = get_db_owner_name(db_name);
+
+						/* Set current user to db_owner for drop permissions */
+						bbf_set_current_user(db_owner_name);
+
+						PG_TRY();
+						{
+							if (prev_ProcessUtility)
+								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+													params, queryEnv, dest,
+													qc);
+							else
+								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+														params, queryEnv, dest,
+														qc);
+						}
+						PG_CATCH();
+						{
+							bbf_set_current_user(prev_current_user);
+							PG_RE_THROW();
+						}
+						PG_END_TRY();
+
+						bbf_set_current_user(prev_current_user);
 						return;
 					}
 				}
