@@ -2661,7 +2661,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						/* Set current user to dbo user for create permissions */
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
-						bbf_set_current_user(get_dbo_role_name(get_cur_db_name()));
+						bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
 
 						PG_TRY();
 						{
@@ -2908,15 +2908,16 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 					else if (isuser || isrole)
 					{
-						const char *dbo_name;
+						const char *dbo_name, *db_owner_name;
 						char	   *db_name;
 						char	   *user_name;
 						char	   *cur_user;
-						Oid			dbo_id;
+						Oid			db_owner_id;
 
 						db_name = get_cur_db_name();
 						dbo_name = get_dbo_role_name(db_name);
-						dbo_id = get_role_oid(dbo_name, false);
+						db_owner_name = get_db_owner_name(db_name);
+						db_owner_id = get_role_oid(db_owner_name, false);
 						user_name = stmt->role->rolename;
 						cur_user = GetUserNameFromId(GetUserId(), false);
 
@@ -2959,8 +2960,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							}
 						}
 
-						/* Set current user to dbo for alter permissions */
-						SetCurrentRoleId(dbo_id, false);
+						/* Set current user to db_owner for alter permissions */
+						SetCurrentRoleId(db_owner_id, false);
 
 						PG_TRY();
 						{
@@ -3191,11 +3192,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 						/*
-						 * Only use dbo if dropping a user/role in a Babelfish
+						 * Only use db_owner if dropping a user/role in a Babelfish
 						 * session.
 						 */
 						if (drop_user || drop_role)
-							bbf_set_current_user(get_dbo_role_name(get_cur_db_name()));
+							bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
 						else
 							bbf_set_current_user("sysadmin");
 

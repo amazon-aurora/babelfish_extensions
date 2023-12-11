@@ -1714,31 +1714,23 @@ bool
 is_empty_role(Oid roleid)
 {
 	CatCList   *memlist;
-	char       *db_name = get_cur_db_name();
-	Oid         db_owner_oid, dbo_oid;
-	int         i;
 
-	if (roleid == InvalidOid || db_name == NULL || strcmp(db_name, "") == 0)
+	if (roleid == InvalidOid)
 		return true;
 
 	memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
 								  ObjectIdGetDatum(roleid));
-	
-	if (memlist->n_members == 0)
-	{
-		ReleaseSysCacheList(memlist);
-		return true;
-	}
 
-	db_owner_oid = get_role_oid(get_db_owner_name(db_name), true);
-	dbo_oid = get_role_oid(get_dbo_role_name(db_name), true);
-
-	for (i = 0; i < memlist->n_members; i++)
+	if (memlist->n_members == 1)
 	{
-		HeapTuple	tup = &memlist->members[i]->tuple;
+		HeapTuple	tup = &memlist->members[0]->tuple;
 		Oid			member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
+		char	   *db_name = get_cur_db_name();
 
-		if (member == db_owner_oid || member == dbo_oid)
+		if (db_name == NULL || strcmp(db_name, "") == 0)
+			return true;
+
+		if (member == get_role_oid(get_db_owner_name(db_name), true))
 		{
 			ReleaseSysCacheList(memlist);
 			return true;
