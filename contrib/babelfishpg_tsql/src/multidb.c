@@ -329,12 +329,38 @@ rewrite_object_refs(Node *stmt)
 					if (strcmp(headel->defname, "isuser") == 0 ||
 						strcmp(headel->defname, "isrole") == 0)
 					{
+						ListCell   *option;
 						char	   *user_name;
 						char	   *db_name = get_cur_db_name();
 
 						user_name = get_physical_user_name(db_name, create_role->role);
 						pfree(create_role->role);
 						create_role->role = user_name;
+
+						foreach(option, create_role->options)
+						{
+							DefElem    *defel = (DefElem *) lfirst(option);
+
+							if (strcmp(defel->defname, "rolemembers") == 0)
+							{
+								RoleSpec   *spec;
+
+								spec = makeNode(RoleSpec);
+								spec->roletype = ROLESPEC_CSTRING;
+								spec->location = -1;
+								spec->rolename = pstrdup(get_db_owner_name(db_name));
+
+								if (defel->arg == NULL)
+									defel->arg = (Node *) list_make1(spec);
+								else
+								{
+									List	   *rolemembers = NIL;
+
+									rolemembers = (List *) defel->arg;
+									rolemembers = lappend(rolemembers, spec);
+								}
+							}
+						}
 					}
 				}
 				break;

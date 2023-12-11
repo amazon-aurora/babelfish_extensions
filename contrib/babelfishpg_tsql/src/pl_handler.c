@@ -2618,7 +2618,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("The Server principal '%s' already exists", stmt->role)));
 
-						/* Set current user to sysadmin for create permissions */
+						/* Set current user to session user for create permissions */
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
@@ -2818,6 +2818,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (islogin)
 					{
 						Oid			datdba;
+						const char *prev_current_user;
 						bool		has_password = false;
 						char	   *temp_login_name = NULL;
 
@@ -2877,8 +2878,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
 
-						/* Set current user to sysadmin for alter permissions */
-						SetCurrentRoleId(datdba, false);
+						/* Set current user to session user for alter permissions */
+						prev_current_user = GetUserNameFromId(GetUserId(), false);
+
+						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
 
 						PG_TRY();
 						{
@@ -2897,12 +2900,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						}
 						PG_CATCH();
 						{
-							SetCurrentRoleId(prev_current_user, false);
+							bbf_set_current_user(prev_current_user);
 							PG_RE_THROW();
 						}
 						PG_END_TRY();
 
-						SetCurrentRoleId(prev_current_user, false);
+						bbf_set_current_user(prev_current_user);
 
 						return;
 					}
@@ -3198,7 +3201,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						if (drop_user || drop_role)
 							bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
 						else
-							bbf_set_current_user("sysadmin");
+							bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
 
 						PG_TRY();
 						{
