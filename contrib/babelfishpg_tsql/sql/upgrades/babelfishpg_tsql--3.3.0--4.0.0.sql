@@ -11,6 +11,7 @@ do
 $$
 DECLARE temprow RECORD;
 BEGIN
+    raise warning 'GRANTING CREATEROLE to dbo_owners';
     FOR temprow IN
         SELECT sys.suser_sname(owner_sid) AS db_owner FROM sys.databases
     LOOP
