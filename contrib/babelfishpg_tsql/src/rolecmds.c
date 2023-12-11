@@ -1713,33 +1713,41 @@ check_alter_role_stmt(GrantRoleStmt *stmt)
 bool
 is_empty_role(Oid roleid)
 {
-	CatCList   *memlist;
+    CatCList   *memlist;
+    char       *db_name = get_cur_db_name();
+    Oid         db_owner_oid, dbo_oid;
+    int         i;
 
-	if (roleid == InvalidOid)
-		return true;
+    if (roleid == InvalidOid || db_name == NULL || strcmp(db_name, "") == 0)
+        return true;
 
-	memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
-								  ObjectIdGetDatum(roleid));
+    memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
+                                  ObjectIdGetDatum(roleid));
 
-	if (memlist->n_members == 1)
-	{
-		HeapTuple	tup = &memlist->members[0]->tuple;
-		Oid			member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
-		char	   *db_name = get_cur_db_name();
+    if (memlist->n_members == 0)
+    {
+        ReleaseSysCacheList(memlist);
+        return true;
+    }
 
-		if (db_name == NULL || strcmp(db_name, "") == 0)
-			return true;
+    db_owner_oid = get_role_oid(get_db_owner_name(db_name), true);
+    dbo_oid = get_role_oid(get_dbo_role_name(db_name), true);
 
-		if (member == get_role_oid(get_db_owner_name(db_name), true))
-		{
-			ReleaseSysCacheList(memlist);
-			return true;
-		}
-	}
+    for (i = 0; i < memlist->n_members; i++)
+    {
+        HeapTuple   tup = &memlist->members[i]->tuple;
+        Oid         member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
 
-	ReleaseSysCacheList(memlist);
+        if (member != db_owner_oid && member != dbo_oid)
+        {
+            ReleaseSysCacheList(memlist);
+            return false;
+        }
+    }
 
-	return false;
+    ReleaseSysCacheList(memlist);
+
+    return true;
 }
 
 PG_FUNCTION_INFO_V1(role_id);
