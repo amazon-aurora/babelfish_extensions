@@ -15,7 +15,7 @@ BEGIN
         SELECT name FROM sys.databases
     LOOP
         PERFORM format('ALTER ROLE %I_db_owner WITH CREATEROLE;', temprow.name);
-        raise warning 'GRANTING CREATEROLE to %_db_owner', temprow.db_owner;
+        raise warning 'GRANTING CREATEROLE to %_db_owner', temprow.name;
     END LOOP;
     -- for singledb, also do 'db_owner'
     ALTER ROLE db_owner WITH CREATEROLE;
