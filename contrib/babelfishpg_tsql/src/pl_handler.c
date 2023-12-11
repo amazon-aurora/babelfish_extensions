@@ -3168,7 +3168,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/* If not user or role, then login */
-					if (!drop_user && !drop_role)
+					if (drop_login)
 					{
 						int			role_oid = get_role_oid(role_name, true);
 
@@ -3184,6 +3184,46 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR,
 									(errcode(ERRCODE_OBJECT_IN_USE),
 									 errmsg("Could not drop login '%s' as the user is currently logged in.", role_name)));
+					}
+					else if (drop_user || drop_role)
+					{
+						const char *db_owner_name;
+						char	   *db_name;
+						Oid			db_owner_id;
+						Oid			prev_current_user = GetUserId();
+
+						db_name = get_cur_db_name();
+						db_owner_name = get_db_owner_name(db_name);
+						db_owner_id = get_role_oid(db_owner_name, false);
+
+						/* Set current user to db_owner for drop permissions */
+						SetCurrentRoleId(db_owner_id, false);
+
+						PG_TRY();
+						{
+							if (prev_ProcessUtility)
+								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+													params, queryEnv, dest,
+													qc);
+							else
+								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+														params, queryEnv, dest,
+														qc);
+
+							stmt->options = list_concat(stmt->options,
+														user_options);
+							alter_bbf_authid_user_ext(stmt);
+						}
+						PG_CATCH();
+						{
+							SetCurrentRoleId(prev_current_user, false);
+							PG_RE_THROW();
+						}
+						PG_END_TRY();
+
+						SetCurrentRoleId(prev_current_user, false);
+
+						return;
 					}
 
 					if (all_logins || all_users || all_roles)
