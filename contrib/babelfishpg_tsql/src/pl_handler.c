@@ -3209,10 +3209,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 														params, queryEnv, dest,
 														qc);
-
-							stmt->options = list_concat(stmt->options,
-														user_options);
-							alter_bbf_authid_user_ext(stmt);
 						}
 						PG_CATCH();
 						{
