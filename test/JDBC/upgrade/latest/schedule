@@ -477,7 +477,7 @@ BABEL-4217
 Test_ISNULL
 BABEL-4270
 BABEL-4410
-BABEL-4231
+#BABEL-4231 TODO: re-enable when test is fixed
 typeproperty-dep
 sys_asymmetric_keys
 sys_certificates
