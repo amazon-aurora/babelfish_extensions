@@ -2608,6 +2608,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (islogin)
 					{
+						Oid save_userid;
+						int save_sec_context;
+
 						if (!has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)))
 							ereport(ERROR,
 									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -2618,10 +2621,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("The Server principal '%s' already exists", stmt->role)));
 
-						/* Set current user to session user for create permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to superuser for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						GetUserIdAndSecContext(&save_userid, &save_sec_context);
+						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 						PG_TRY();
 						{
@@ -2638,14 +2644,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
+							SetUserIdAndSecContext(save_userid, save_sec_context);
 						}
 						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
 
 						return;
 					}
@@ -2658,7 +2661,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						if (isrole || !from_windows)
 							validateUserAndRole(stmt->role);
 
-						/* Set current user to dbo user for create permissions */
+						/* Set current user to db owner for create permissions */
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 						bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
@@ -2684,14 +2687,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
 							
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
 							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
 						}
 						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
 
 						return;
 					}
@@ -2818,9 +2818,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (islogin)
 					{
 						Oid			datdba;
-						const char *prev_current_user;
 						bool		has_password = false;
 						char	   *temp_login_name = NULL;
+						Oid			save_userid;
+						int			save_sec_context;
 
 						datdba = get_role_oid("sysadmin", false);
 
@@ -2877,11 +2878,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
-
-						/* Set current user to session user for alter permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to superuser for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						GetUserIdAndSecContext(&save_userid, &save_sec_context);
+						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 						PG_TRY();
 						{
@@ -2898,14 +2901,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														login_options);
 							alter_bbf_authid_login_ext(stmt);
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
+							SetUserIdAndSecContext(save_userid, save_sec_context);
 						}
 						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
 
 						return;
 					}
@@ -3012,9 +3012,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					char	   *role_name = NULL;
 					bool		other = false;
 					ListCell   *item;
-					const char *db_owner_name;
 					char	   *db_name;
-					const char *prev_current_user = GetUserNameFromId(GetUserId(), false);
+					Oid save_userid;
+					int save_sec_context;
 
 					/* Check if roles are users that need role name mapping */
 					if (stmt->roles != NIL)
@@ -3171,8 +3171,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (drop_login)
 					{
 						int			role_oid = get_role_oid(role_name, true);
-
-						if (role_oid == InvalidOid)
+						
+						if (role_oid == InvalidOid || !is_member_of_role(GetSessionUserId(), get_sysadmin_oid()))
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3186,74 +3186,39 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									 errmsg("Could not drop login '%s' as the user is currently logged in.", role_name)));
 					}
 
-					if (all_logins || all_users || all_roles)
-					{
-						/*
-						 * Set current user as appropriate for drop
-						 * permissions
-						 */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
+					/*
+					 * Set current user as appropriate for drop
+					 * permissions
+					 */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
-						/*
-						 * Only use db_owner if dropping a user/role in a Babelfish
-						 * session.
-						 */
-						if (drop_user || drop_role)
-							bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
-						else
-							bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-													params, queryEnv, dest,
-													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-						}
-						PG_CATCH();
-						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-
-						return;
-					}
+					/*
+					 * Only use db_owner if dropping a user/role in a Babelfish
+					 * session. For logins, we need to use superuser.
+					 */
+					if (drop_user || drop_role)
+						SetUserIdAndSecContext(get_role_oid(get_db_owner_name(get_cur_db_name()), false), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					else
+						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+					PG_TRY();
 					{
-						db_name = get_cur_db_name();
-						db_owner_name = get_db_owner_name(db_name);
-
-						/* Set current user to db_owner for drop permissions */
-						bbf_set_current_user(db_owner_name);
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+						if (prev_ProcessUtility)
+							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+												params, queryEnv, dest,
+												qc);
+						else
+							standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 													params, queryEnv, dest,
 													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-						}
-						PG_CATCH();
-						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-						return;
 					}
+					PG_FINALLY();
+					{
+						SetUserIdAndSecContext(save_userid, save_sec_context);
+					}
+					PG_END_TRY();
+
+					return;
 				}
 				break;
 			}
@@ -3382,17 +3347,16 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
+				Oid save_userid;
+				int save_sec_context;
 
 				if (is_alter_server_stmt(grant_role))
 				{
-					const char *prev_current_user;
-					const char *session_user_name;
-
 					check_alter_server_stmt(grant_role);
-					prev_current_user = GetUserNameFromId(GetUserId(), false);
-					session_user_name = GetUserNameFromId(GetSessionUserId(), false);
-
-					bbf_set_current_user(session_user_name);
+					
+					/* Set to session user to grant the role */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 
@@ -3404,27 +3368,21 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 													queryEnv, dest, qc);
 
 					}
-					PG_CATCH();
+					PG_FINALLY();
 					{
 						/* Clean up. Restore previous state. */
-						bbf_set_current_user(prev_current_user);
-						PG_RE_THROW();
+						SetUserIdAndSecContext(save_userid, save_sec_context);
 					}
 					PG_END_TRY();
-					/* Clean up. Restore previous state. */
-					bbf_set_current_user(prev_current_user);
 					return;
 				}
 				else if (is_alter_role_stmt(grant_role))
 				{
-					const char *prev_current_user;
-					const char *session_user_name;
-
 					check_alter_role_stmt(grant_role);
-					prev_current_user = GetUserNameFromId(GetUserId(), false);
-					session_user_name = GetUserNameFromId(GetSessionUserId(), false);
-
-					bbf_set_current_user(session_user_name);
+					
+					/* Set to session user to grant the role */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 						if (prev_ProcessUtility)
@@ -3435,15 +3393,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 													queryEnv, dest, qc);
 
 					}
-					PG_CATCH();
+					PG_FINALLY();
 					{
 						/* Clean up. Restore previous state. */
-						bbf_set_current_user(prev_current_user);
-						PG_RE_THROW();
+						SetUserIdAndSecContext(save_userid, save_sec_context);
 					}
 					PG_END_TRY();
-					/* Clean up. Restore previous state. */
-					bbf_set_current_user(prev_current_user);
 					return;
 				}
 			}
