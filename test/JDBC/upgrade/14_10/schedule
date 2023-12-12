@@ -409,7 +409,7 @@ sys-sql_expression_dependencies
 smalldatetimefromparts-dep
 BABEL_4330
 #BABEL-4231 TODO: re-enable when test is fixed
-BABEL-4384
+#BABEL-4384 TODO: re-enable when test is fixed
 default_params
 BABEL-3326
 cast_eliminate
