@@ -3354,9 +3354,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				{
 					check_alter_server_stmt(grant_role);
 					
-					/* Set to session user to grant the role */
+					/*
+					 * Set to superuser to grant the role
+					 * We have already checked for permissions
+					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 
@@ -3380,9 +3383,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				{
 					check_alter_role_stmt(grant_role);
 					
-					/* Set to session user to grant the role */
+					/*
+					 * Set to superuser to grant the role
+					 * We have already checked for permissions
+					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 						if (prev_ProcessUtility)
