@@ -2329,7 +2329,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_CreateRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 				{
 					const char *prev_current_user;
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
@@ -3000,7 +3000,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_DropRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(DROP DATABASE )") != 0)
 				{
 					DropRoleStmt *stmt = (DropRoleStmt *) parsetree;
 					bool		drop_user = false;
@@ -3379,7 +3379,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 			}
 		case T_GrantRoleStmt:
-			if (sql_dialect == SQL_DIALECT_TSQL)
+			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
 
