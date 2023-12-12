@@ -730,6 +730,9 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 				GetUserIdAndSecContext(&save_userid, &save_sec_context);
 				SetUserIdAndSecContext(get_role_oid(dbo_role, true),
 							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+				if (stmt->type == T_DropOwnedStmt) // need superuser to perform DropOwnedObjects
+					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID,
+										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				is_set_userid = true;
 			}
 			/* need to make a wrapper PlannedStmt */
