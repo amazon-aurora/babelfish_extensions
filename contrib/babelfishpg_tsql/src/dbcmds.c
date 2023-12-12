@@ -422,7 +422,6 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 	const char *guest_scm;
 	NameData	default_collation;
 	const char *guest;
-	const char *prev_current_user;
 	int			stmt_number = 0;
 	int 			save_sec_context;
 	bool 			is_set_userid;
@@ -524,10 +523,12 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 
 	parsetree_list = gen_createdb_subcmds(dbo_scm, dbo_role, db_owner_role, guest, guest_scm);
 
-	/* Set current user to session user for create permissions */
-	prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-	bbf_set_current_user("sysadmin");
+	/*
+	 * Set current user to superuser for create permissions.
+	 * We have already checked for permissions.
+	 */
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();
@@ -545,7 +546,6 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 			if(stmt->type == T_CreateSchemaStmt || stmt->type == T_AlterTableStmt
 				|| stmt->type == T_ViewStmt)
 			{
-				GetUserIdAndSecContext(&save_userid, &save_sec_context);
 				SetUserIdAndSecContext(get_role_oid(dbo_role, true),
 							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				is_set_userid = true;
@@ -573,7 +573,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 						   NULL);
 
 			if(is_set_userid)
-				SetUserIdAndSecContext(save_userid, save_sec_context);
+				SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 			CommandCounterIncrement();
 		}
@@ -594,20 +594,13 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 				add_to_bbf_authid_user_ext(guest, "guest", dbname, "guest", NULL, false, false, false);
 		}
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
-		if(is_set_userid)
-			SetUserIdAndSecContext(save_userid, save_sec_context);
-
 		/* Clean up. Restore previous state. */
-		bbf_set_current_user(prev_current_user);
+		SetUserIdAndSecContext(save_userid, save_sec_context);
 		set_cur_db(old_dbid, old_dbname);
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	/* Set current user back to previous user */
-	bbf_set_current_user(prev_current_user);
 }
 
 void
