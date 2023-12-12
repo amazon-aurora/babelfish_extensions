@@ -6,23 +6,20 @@ SELECT set_config('search_path', 'sys, '||current_setting('search_path'), false)
 
 -- please add your SQL here
 
--- for 4.0.0 we need to give CREATEROLE privileges to db_owner
+-- for 4.0.0 we need to give CREATEROLE privileges to <db_name>_db_owner
 do
+language plpgsql
 $$
 DECLARE temprow RECORD;
+DECLARE query TEXT;
 BEGIN
     FOR temprow IN
         SELECT name FROM sys.databases
     LOOP
-        PERFORM format('ALTER ROLE %I_db_owner WITH CREATEROLE;', temprow.name);
-        raise warning 'GRANTING CREATEROLE to %_db_owner', temprow.name;
+        query := pg_catalog.format('ALTER ROLE %I_db_owner WITH CREATEROLE;', temprow.name);
+        EXECUTE query;
     END LOOP;
-    -- for singledb, also do 'db_owner'
-    ALTER ROLE db_owner WITH CREATEROLE;
-    raise warning 'GRANTING CREATEROLE to db_owner';
-    EXCEPTION WHEN OTHERS THEN
-        raise warning 'Error when trying to ALTER db_owner';
-END
+END;
 $$;
 
 -- Reset search_path to not affect any subsequent scripts
