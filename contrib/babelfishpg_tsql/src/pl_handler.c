@@ -2621,7 +2621,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						/* Set current user to session user for create permissions */
 						prev_current_user = GetUserNameFromId(GetUserId(), false);
 
-						bbf_set_current_user(GetUserNameFromId(GetSessionUserId(), false));
+						bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
 
 						PG_TRY();
 						{
