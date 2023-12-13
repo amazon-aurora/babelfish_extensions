@@ -2331,7 +2331,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			{
 				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 				{
-					const char *prev_current_user;
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
 					List	   *login_options = NIL;
 					List	   *user_options = NIL;
@@ -2340,6 +2339,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		isuser = false;
 					bool		isrole = false;
 					bool		from_windows = false;
+					Oid save_userid;
+					int save_sec_context;
 
 					/* Check if creating login or role. Expect islogin first */
 					if (stmt->options != NIL)
@@ -2608,9 +2609,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (islogin)
 					{
-						Oid save_userid;
-						int save_sec_context;
-
 						if (!has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)))
 							ereport(ERROR,
 									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
@@ -2620,81 +2618,58 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						if (get_role_oid(stmt->role, true) != InvalidOid)
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("The Server principal '%s' already exists", stmt->role)));
+					}
 
-						/* 
-						 * We have performed all permissions checks.
-						 * Set current user to superuser for create permissions.
-						 * Save the previous user to be restored after creating the login.
-						 */
-						GetUserIdAndSecContext(&save_userid, &save_sec_context);
-						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					/*
+					 * check whether sql user name and role name contains
+					 * '\' or not
+					 */
+					if (isrole || !from_windows)
+						validateUserAndRole(stmt->role);
 
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+					/* 
+					 * We have performed all permissions checks.
+					 * Set current user to superuser for create permissions.
+					 * Save the previous user to be restored after creating the login.
+					 */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+					PG_TRY();
+					{
+						if (prev_ProcessUtility)
+							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+												params, queryEnv, dest,
+												qc);
+						else
+							standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 													params, queryEnv, dest,
 													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
 
+						if (islogin)
+						{
 							stmt->options = list_concat(stmt->options,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
 						}
-						PG_FINALLY();
+						else
 						{
-							SetUserIdAndSecContext(save_userid, save_sec_context);
-						}
-						PG_END_TRY();
-
-						return;
-					}
-					else if (isuser || isrole)
-					{
-						/*
-						 * check whether sql user name and role name contains
-						 * '\' or not
-						 */
-						if (isrole || !from_windows)
-							validateUserAndRole(stmt->role);
-
-						/* Set current user to db owner for create permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						bbf_set_current_user(get_db_owner_name(get_cur_db_name()));
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-													params, queryEnv, dest,
-													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-
-							stmt->options = list_concat(stmt->options,
-														user_options);
-
 							/*
 							 * If the stmt is CREATE USER, it must have a
 							 * corresponding login and a schema name
 							 */
+							stmt->options = list_concat(stmt->options,
+														user_options);
 							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
-							
 						}
-						PG_FINALLY();
-						{
-							bbf_set_current_user(prev_current_user);
-						}
-						PG_END_TRY();
-
-						return;
 					}
+					PG_FINALLY();
+					{
+						SetUserIdAndSecContext(save_userid, save_sec_context);
+					}
+					PG_END_TRY();
+
+					return;
 				}
 				break;
 			}
@@ -2709,9 +2684,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		islogin = false;
 					bool		isuser = false;
 					bool		isrole = false;
-					Oid			prev_current_user;
-
-					prev_current_user = GetUserId();
 
 					/* Check if creating login or role. Expect islogin first */
 					if (stmt->options != NIL)
@@ -2911,16 +2883,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 					else if (isuser || isrole)
 					{
-						const char *dbo_name, *db_owner_name;
+						const char *dbo_name;
 						char	   *db_name;
 						char	   *user_name;
 						char	   *cur_user;
-						Oid			db_owner_id;
+						Oid			prev_current_user;
 
 						db_name = get_cur_db_name();
 						dbo_name = get_dbo_role_name(db_name);
-						db_owner_name = get_db_owner_name(db_name);
-						db_owner_id = get_role_oid(db_owner_name, false);
 						user_name = stmt->role->rolename;
 						cur_user = GetUserNameFromId(GetUserId(), false);
 
@@ -2963,8 +2933,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							}
 						}
 
-						/* Set current user to db_owner for alter permissions */
-						SetCurrentRoleId(db_owner_id, false);
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to superuser for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						prev_current_user = GetUserId();
+						SetCurrentRoleId(BOOTSTRAP_SUPERUSERID, true);
 
 						PG_TRY();
 						{
@@ -2981,14 +2956,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														user_options);
 							alter_bbf_authid_user_ext(stmt);
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
-							SetCurrentRoleId(prev_current_user, false);
-							PG_RE_THROW();
+							SetCurrentRoleId(prev_current_user, true);
 						}
 						PG_END_TRY();
 
-						SetCurrentRoleId(prev_current_user, false);
 						set_session_properties(db_name);
 						pfree(cur_user);
 						pfree(db_name);
