@@ -45,7 +45,6 @@
 Oid sys_babelfish_db_seq_oid = InvalidOid;
 
 static Oid get_sys_babelfish_db_seq_oid(void);
-static bool have_createdb_privilege(void);
 static List *gen_createdb_subcmds(const char *schema,
 								  const char *dbo,
 								  const char *db_owner,
@@ -72,26 +71,6 @@ get_sys_babelfish_db_seq_oid()
 		sys_babelfish_db_seq_oid = seqid;
 	}
 	return sys_babelfish_db_seq_oid;
-}
-
-static bool
-have_createdb_privilege(void)
-{
-	bool result = false;
-	HeapTuple	utup;
-
-	/* Superusers can always do everything */
-	if (superuser())
-		return true;
-
-	utup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(GetSessionUserId()));
-	if (HeapTupleIsValid(utup))
-	{
-		result = ((Form_pg_authid) GETSTRUCT(utup))->rolcreatedb;
-
-		ReleaseSysCache(utup);
-	}
-	return result;
 }
 
 /*
@@ -453,10 +432,21 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 							user_dbname)));
 	}
 
-	if (!have_createdb_privilege())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("permission denied to create database")));
+	/* temporarily change to session user while checking createdb privilege */
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	PG_TRY();
+	{
+		SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+		if (!have_createdb_privilege())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("permission denied to create database")));
+	}
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
 
 	/* dbowner is always sysadmin */
 	datdba = get_role_oid("sysadmin", false);
