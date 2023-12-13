@@ -3187,19 +3187,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/*
-					 * Set current user as appropriate for drop
+					 * Set current user to superuser for drop
 					 * permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-
-					/*
-					 * Only use db_owner if dropping a user/role in a Babelfish
-					 * session. For logins, we need to use superuser.
-					 */
-					if (drop_user || drop_role)
-						SetUserIdAndSecContext(get_role_oid(get_db_owner_name(get_cur_db_name()), false), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-					else
-						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 					PG_TRY();
 					{
