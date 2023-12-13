@@ -718,13 +718,14 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 			PlannedStmt *wrapper;
 			is_set_userid = false;
 
-			if(stmt->type != T_DropRoleStmt && stmt->type != T_GrantStmt)
+			if(stmt->type != T_GrantStmt)
 			{
 				GetUserIdAndSecContext(&save_userid, &save_sec_context);
-				SetUserIdAndSecContext(get_role_oid(dbo_role, true),
-							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-				if (stmt->type == T_DropOwnedStmt) // need superuser to perform DropOwnedObjects
+				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need superuser to perform DropOwnedObjects
 					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID,
+										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+				else
+					SetUserIdAndSecContext(get_role_oid(dbo_role, true),
 										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				is_set_userid = true;
 			}
