@@ -1462,7 +1462,7 @@ pltsql_post_transform_table_definition(ParseState *pstate, RangeVar *relation, c
 	 * add "ALTER TABLE SET (bbf_rel_create_date=<datetime>)" to alist so that
 	 * create_date will be stored in pg_class.reloptions
 	 */
-	curr_datetime = DatumGetCString(DirectFunctionCall1(timestamp_out, DirectFunctionCall1(sql_localtimestamp, Int32GetDatum(3))));
+	curr_datetime = DatumGetCString(DirectFunctionCall1(timestamp_out, TimestampGetDatum(GetSQLLocalTimestamp(3))));
 	cmd_crdate = makeNode(AlterTableCmd);
 	cmd_crdate->subtype = AT_SetRelOptions;
 	cmd_crdate->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_TABLE_CREATE_DATE), (Node *) makeString(pstrdup(curr_datetime)), -1));
@@ -2787,8 +2787,8 @@ pltsql_store_view_definition(const char *queryString, ObjectAddress address)
 		new_record_nulls[3] = true;
 	new_record[4] = UInt64GetDatum(flag_validity);
 	new_record[5] = UInt64GetDatum(flag_values);
-	new_record[6] = DirectFunctionCall1(sql_localtimestamp, Int32GetDatum(3));
-	new_record[7] = DirectFunctionCall1(sql_localtimestamp, Int32GetDatum(3));
+	new_record[6] = TimestampGetDatum(GetSQLLocalTimestamp(3));
+	new_record[7] = TimestampGetDatum(GetSQLLocalTimestamp(3));
 
 	tuple = heap_form_tuple(bbf_view_def_rel_dsc,
 							new_record, new_record_nulls);
@@ -3108,8 +3108,8 @@ pltsql_store_func_default_positions(ObjectAddress address, List *parameters, con
 		new_record_nulls[Anum_bbf_function_ext_default_positions - 1] = true;
 	new_record[Anum_bbf_function_ext_flag_validity - 1] = UInt64GetDatum(flag_validity);
 	new_record[Anum_bbf_function_ext_flag_values - 1] = UInt64GetDatum(flag_values);
-	new_record[Anum_bbf_function_ext_create_date - 1] = DirectFunctionCall1(sql_localtimestamp, Int32GetDatum(3));
-	new_record[Anum_bbf_function_ext_modify_date - 1] = DirectFunctionCall1(sql_localtimestamp, Int32GetDatum(3));
+	new_record[Anum_bbf_function_ext_create_date - 1] = TimestampGetDatum(GetSQLLocalTimestamp(3));
+	new_record[Anum_bbf_function_ext_modify_date - 1] = TimestampGetDatum(GetSQLLocalTimestamp(3));
 
 	/*
 	 * Save the original query in the catalog.

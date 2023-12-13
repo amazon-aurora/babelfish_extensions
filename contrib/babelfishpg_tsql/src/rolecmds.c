@@ -147,8 +147,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 	new_record_login_ext[LOGIN_EXT_CREDENTIAL_ID] = Int32GetDatum(-1);	/* placeholder */
 	new_record_login_ext[LOGIN_EXT_OWNING_PRINCIPAL_ID] = Int32GetDatum(-1);	/* placeholder */
 	new_record_login_ext[LOGIN_EXT_IS_FIXED_ROLE] = Int32GetDatum(0);
-	new_record_login_ext[LOGIN_EXT_CREATE_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
-	new_record_login_ext[LOGIN_EXT_MODIFY_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
+	new_record_login_ext[LOGIN_EXT_CREATE_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
+	new_record_login_ext[LOGIN_EXT_MODIFY_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
 	new_record_login_ext[LOGIN_EXT_DEFAULT_DATABASE_NAME] = CStringGetTextDatum(default_database);
 	new_record_login_ext[LOGIN_EXT_DEFAULT_LANGUAGE_NAME] = CStringGetTextDatum("English"); /* placeholder */
 	new_record_nulls_login_ext[LOGIN_EXT_PROPERTIES] = true;
@@ -248,7 +248,7 @@ alter_bbf_authid_login_ext(AlterRoleStmt *stmt)
 	new_record_repl_login_ext[LOGIN_EXT_IS_DISABLED] = true;
 
 	/* update modify_date */
-	new_record_login_ext[LOGIN_EXT_MODIFY_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
+	new_record_login_ext[LOGIN_EXT_MODIFY_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
 	new_record_repl_login_ext[LOGIN_EXT_MODIFY_DATE] = true;
 
 	/* update default_database */
@@ -1122,8 +1122,8 @@ add_to_bbf_authid_user_ext(const char *user_name,
 	new_record_user_ext[USER_EXT_AUTHENTICATION_TYPE] = Int32GetDatum(-1);	/* placeholder */
 	new_record_user_ext[USER_EXT_DEFAULT_LANGUAGE_LCID] = Int32GetDatum(-1);	/* placeholder */
 	new_record_user_ext[USER_EXT_ALLOW_ENCRYPTED_VALUE_MODIFICATIONS] = Int32GetDatum(-1);	/* placeholder */
-	new_record_user_ext[USER_EXT_CREATE_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
-	new_record_user_ext[USER_EXT_MODIFY_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
+	new_record_user_ext[USER_EXT_CREATE_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
+	new_record_user_ext[USER_EXT_MODIFY_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
 	new_record_user_ext[USER_EXT_ORIG_USERNAME] = CStringGetTextDatum(pstrdup(orig_user_name));
 	if (db_name)
 		new_record_user_ext[USER_EXT_DATABASE_NAME] = CStringGetTextDatum(pstrdup(db_name));
@@ -1436,7 +1436,7 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 	}
 
 	/* update modify_date */
-	new_record_user_ext[USER_EXT_MODIFY_DATE] = DirectFunctionCall1(current_timestamp, (Datum) 0);
+	new_record_user_ext[USER_EXT_MODIFY_DATE] = TimestampTzGetDatum(GetSQLCurrentTimestamp(-1));
 	new_record_repl_user_ext[USER_EXT_MODIFY_DATE] = true;
 
 	/* update default_schema */
