@@ -25,8 +25,7 @@ jobs:
             ENGINE_BRANCH=$GITHUB_HEAD_REF
           else
             ENGINE_BRANCH=$GITHUB_REF_NAME
-
-          echo "$ENGINE_BRANCH"
+          fi
 
           $GITHUB_WORKSPACE/.github/scripts/clone_engine_repo "$GITHUB_REPOSITORY_OWNER" "$ENGINE_BRANCH"
 
