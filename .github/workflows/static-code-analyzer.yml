@@ -35,4 +35,4 @@ jobs:
         run: |
           # ls
           # cd babelfish_extensions
-          cppcheck --error-exitcode=-1 -j 16 --enable=warning --template=gcc ./contrib
+          cppcheck --error-exitcode=-1 -j 16 -I ../postgresql_modified_for_babelfish --enable=warning --template=gcc ./contrib
