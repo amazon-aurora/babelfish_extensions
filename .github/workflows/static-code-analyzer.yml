@@ -31,7 +31,7 @@ jobs:
 
       - name: Run cppcheck on extensions
         id: run-cppcheck
-        if: always() && steps.clone-engine-repo == 'success'
+        if: always()
         run: |
           cd babelfish_extensions
           cppcheck --error-exitcode=-1 -j 16 --enable=warning --template=gcc ./contrib
