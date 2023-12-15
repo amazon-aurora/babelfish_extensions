@@ -13,26 +13,11 @@ jobs:
         if: always()
         run: |
           sudo apt-get update -y
-          # sudo apt-get install -y cppcheck-2.5
+          sudo apt-get install -y cppcheck_2.7
           # sudo apt-get update -y
-          sudo apt-get install cppcheck
+          # sudo apt-get install cppcheck
           # sudo apt update
           # sudo apt install cppcheck
-
-
-          # Build from code
-          wget https://github.com/danmar/cppcheck/archive/2.5.tar.gz
-          tar zxvf 2.5.tar.gz
-          cd cppcheck-2.5
-          mkdir build
-          cd build
-          cmake ..
-          make
-          sudo make install
-
-          # Check installation
-          # which cppcheck /usr/local/bin/cppcheck
-          cppcheck --version
 
       - name: Clone engine repository
         id: clone-engine-repo
