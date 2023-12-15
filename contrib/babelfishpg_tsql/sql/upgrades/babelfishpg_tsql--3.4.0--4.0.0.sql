@@ -40,12 +40,11 @@ DECLARE sa TEXT;
 DECLARE temprow RECORD;
 DECLARE query TEXT;
 BEGIN
-    sa := select rolname from pg_roles, pg_database where datdba = pg_roles.oid and datname = current_database();
+    sa := rolname from pg_roles, pg_database where datdba = pg_roles.oid and datname = current_database();
     FOR temprow IN
-        SELECT DISTINCT role_name FROM information_schema.applicable_roles;
+        SELECT DISTINCT role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')
     LOOP
         query := pg_catalog.format('GRANT %I to %I WITH ADMIN TRUE;', temprow.role_name, sa);
-        raise warning 'Query: %', query;
         EXECUTE query;
     END LOOP;
 END;
