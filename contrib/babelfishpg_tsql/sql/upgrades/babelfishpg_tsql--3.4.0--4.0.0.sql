@@ -22,16 +22,6 @@ BEGIN
 END;
 $$;
 
-do
-LANGUAGE plpgsql
-$$
-DECLARE db TEXT;
-BEGIN
-    db := current_database();
-    raise warning 'Current database: %', db;
-END;
-$$;
-
 -- Give the Babelfish SA admin privileges on every Babelfish role
 do
 LANGUAGE plpgsql
