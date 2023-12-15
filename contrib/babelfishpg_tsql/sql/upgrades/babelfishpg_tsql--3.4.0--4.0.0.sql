@@ -27,8 +27,8 @@ LANGUAGE plpgsql
 $$
 DECLARE db TEXT;
 BEGIN
-    db := select current_database();
-    raise warning 'Current database: %s', db;
+    db := current_database();
+    raise warning 'Current database: %', db;
 END;
 $$;
 
@@ -45,7 +45,7 @@ BEGIN
         SELECT DISTINCT role_name FROM information_schema.applicable_roles;
     LOOP
         query := pg_catalog.format('GRANT %I to %I WITH ADMIN TRUE;', temprow.role_name, sa);
-        raise warning 'Query: %s', query;
+        raise warning 'Query: %', query;
         EXECUTE query;
     END LOOP;
 END;
