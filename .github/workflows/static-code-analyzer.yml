@@ -22,8 +22,8 @@ jobs:
 
           # Build from code
           wget https://github.com/danmar/cppcheck/archive/2.5.tar.gz
-          tar zxvf 2.1.tar.gz
-          cd cppcheck-2.1
+          tar zxvf 2.5.tar.gz
+          cd cppcheck-2.5
           mkdir build
           cd build
           cmake ..
