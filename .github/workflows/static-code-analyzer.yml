@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-cache policy cppcheck
-          sudo apt-get install -y cppcheck=2.5\*
+          sudo apt-get install -y cppcheck=2.5-1
           # sudo apt-get update -y
           # sudo apt-get install cppcheck
           # sudo apt update
