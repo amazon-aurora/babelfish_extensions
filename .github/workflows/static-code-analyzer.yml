@@ -14,6 +14,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y cppcheck
+          sudo apt-get update -y
           # sudo apt-get install cppcheck
 
       - name: Clone engine repository
