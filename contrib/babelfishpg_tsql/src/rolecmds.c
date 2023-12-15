@@ -2368,8 +2368,8 @@ revoke_role_from_user(const char *role, const char *user, bool cascade)
 	{
 		sql_dialect = SQL_DIALECT_PG;
 
-		/* Need to set the current user to BOOTSTRAP_SUPERUSER, or else we can't actually revoke the grant. */
-		bbf_set_current_user(GetUserNameFromId(BOOTSTRAP_SUPERUSERID, false));
+		/* Need to set the current user to sa, or else we can't actually revoke the grant. */
+		bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
 
 		initStringInfo(&query);
 		appendStringInfo(&query, "REVOKE dummy FROM dummy");
@@ -2455,8 +2455,8 @@ add_user_to_role(const char *role, const char *user)
 	{
 		sql_dialect = SQL_DIALECT_PG;
 
-		/* Need to set the current user to BOOTSTRAP_SUPERUSER, or else we can't actually add the grant. */
-		bbf_set_current_user(GetUserNameFromId(BOOTSTRAP_SUPERUSERID, false));
+		/* Need to set the current user to SA, or else we can't actually add the grant. */
+		bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
 
 		initStringInfo(&query);
 		appendStringInfo(&query, "GRANT dummy TO dummy");

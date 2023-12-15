@@ -2629,11 +2629,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					/* 
 					 * We have performed all permissions checks.
-					 * Set current user to superuser for create permissions.
+					 * Set current user to SA for create permissions.
 					 * Save the previous user to be restored after creating the login.
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 					PG_TRY();
 					{
@@ -2852,11 +2852,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						/* 
 						 * We have performed all permissions checks.
-						 * Set current user to superuser for create permissions.
+						 * Set current user to sa for create permissions.
 						 * Save the previous user to be restored after creating the login.
 						 */
 						GetUserIdAndSecContext(&save_userid, &save_sec_context);
-						SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+						SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 						PG_TRY();
 						{
@@ -2935,11 +2935,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						/* 
 						 * We have performed all permissions checks.
-						 * Set current user to superuser for create permissions.
+						 * Set current user to sa for create permissions.
 						 * Save the previous user to be restored after creating the login.
 						 */
 						prev_current_user = GetUserId();
-						SetCurrentRoleId(BOOTSTRAP_SUPERUSERID, true);
+						SetCurrentRoleId(get_sa_role_oid(), true);
 
 						PG_TRY();
 						{
@@ -3160,11 +3160,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/*
-					 * Set current user to superuser for drop
+					 * Set current user to sa for drop
 					 * permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 					PG_TRY();
 					{
@@ -3320,11 +3320,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					check_alter_server_stmt(grant_role);
 					
 					/*
-					 * Set to superuser to grant the role
+					 * Set to sa to grant the role
 					 * We have already checked for permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 
@@ -3349,11 +3349,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					check_alter_role_stmt(grant_role);
 					
 					/*
-					 * Set to superuser to grant the role
+					 * Set to sa to grant the role
 					 * We have already checked for permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 						if (prev_ProcessUtility)

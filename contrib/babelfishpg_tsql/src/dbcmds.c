@@ -514,11 +514,11 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 	parsetree_list = gen_createdb_subcmds(dbo_scm, dbo_role, db_owner_role, guest, guest_scm);
 
 	/*
-	 * Set current user to superuser for create permissions.
+	 * Set current user to sa for create permissions.
 	 * We have already checked for permissions.
 	 */
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();
@@ -563,7 +563,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 						   NULL);
 
 			if(is_set_userid)
-				SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+				SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 			CommandCounterIncrement();
 		}
@@ -711,8 +711,8 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 			if(stmt->type != T_GrantStmt)
 			{
 				GetUserIdAndSecContext(&save_userid, &save_sec_context);
-				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need superuser to perform DropOwnedObjects
-					SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID,
+				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need sa to perform DropOwnedObjects
+					SetUserIdAndSecContext(get_sa_role_oid(),
 										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				else
 					SetUserIdAndSecContext(get_role_oid(dbo_role, true),
