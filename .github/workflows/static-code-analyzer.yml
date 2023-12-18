@@ -38,7 +38,7 @@ jobs:
         run: |
           cppcheck --error-exitcode=-1 -j 16 --template=gcc \
           --enable=warning --inline-suppr \
-          ./contrib -I ../postgresql_modified_for_babelfish \
+          ./contrib --include=../postgresql_modified_for_babelfish \
           --suppress=nullPointerRedundantCheck \
           --output-file=cppcheck-failures.txt
       
