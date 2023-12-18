@@ -1744,7 +1744,7 @@ is_empty_role(Oid roleid)
         HeapTuple   tup = &memlist->members[i]->tuple;
         Oid         member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
 
-        if (member != db_owner_oid && member != dbo_oid && member != get_sa_role_oid())
+        if (member != db_owner_oid && member != dbo_oid && member != get_bbf_role_admin_oid())
         {
             ReleaseSysCacheList(memlist);
             return false;
