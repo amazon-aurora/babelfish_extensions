@@ -270,6 +270,8 @@ BEGIN
 		RAISE E'Could not initialize babelfish with given role name: % is not the DB owner of current database.', sa_name;
 	END IF;
 
+  DROP ROLE IF EXISTS bbf_role_admin;
+	CREATE ROLE bbf_role_admin WITH CREATEROLE;
 	EXECUTE format('CREATE ROLE sysadmin CREATEDB CREATEROLE INHERIT ROLE %I', sa_name);
 	EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sys.babelfish_db_seq TO sysadmin WITH GRANT OPTION');
 	EXECUTE format('GRANT CREATE, CONNECT, TEMPORARY ON DATABASE %s TO sysadmin WITH GRANT OPTION', CURRENT_DATABASE());

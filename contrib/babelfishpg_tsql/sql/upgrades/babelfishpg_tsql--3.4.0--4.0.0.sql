@@ -22,19 +22,26 @@ BEGIN
 END;
 $$;
 
--- Give the Babelfish SA admin privileges on every Babelfish role
+-- Give bbf_role_admin privileges on every Babelfish role
+-- Need to create the role if it doesn't exist (e.g. from upgrade)
 do
 LANGUAGE plpgsql
 $$
-DECLARE sa TEXT;
 DECLARE temprow RECORD;
 DECLARE query TEXT;
 BEGIN
-    sa := rolname from pg_roles, pg_database where datdba = pg_roles.oid and datname = current_database();
+    IF EXISTS (
+               SELECT FROM pg_catalog.pg_roles
+               WHERE  rolname = 'bbf_role_admin') 
+        THEN
+            RAISE NOTICE 'Role "bbf_role_admin" already exists. Skipping.';
+    ELSE
+        CREATE ROLE bbf_role_admin WITH CREATEROLE;
+    END IF;
     FOR temprow IN
         SELECT DISTINCT role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')
     LOOP
-        query := pg_catalog.format('GRANT %I to %I WITH ADMIN TRUE;', temprow.role_name, sa);
+        query := pg_catalog.format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', temprow.role_name);
         EXECUTE query;
     END LOOP;
 END;

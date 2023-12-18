@@ -2633,7 +2633,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					 * Save the previous user to be restored after creating the login.
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 					PG_TRY();
 					{
@@ -2856,7 +2856,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						 * Save the previous user to be restored after creating the login.
 						 */
 						GetUserIdAndSecContext(&save_userid, &save_sec_context);
-						SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+						SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 						PG_TRY();
 						{
@@ -2939,7 +2939,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						 * Save the previous user to be restored after creating the login.
 						 */
 						prev_current_user = GetUserId();
-						SetCurrentRoleId(get_sa_role_oid(), true);
+						SetCurrentRoleId(get_bbf_role_admin_oid(), true);
 
 						PG_TRY();
 						{
@@ -3164,7 +3164,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					 * permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 					PG_TRY();
 					{
@@ -3324,7 +3324,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					 * We have already checked for permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 
@@ -3353,7 +3353,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					 * We have already checked for permissions
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 						if (prev_ProcessUtility)

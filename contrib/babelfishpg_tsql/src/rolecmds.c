@@ -602,6 +602,12 @@ gen_droplogin_subcmds(const char *login)
 	return res;
 }
 
+Oid
+get_bbf_role_admin_oid(void)
+{
+	return get_role_oid("bbf_role_admin", false);
+}
+
 /*
  * Returns OID of SA of the current database.
  * We assume that SA is the DBA of the babelfish DB.
@@ -2369,7 +2375,7 @@ revoke_role_from_user(const char *role, const char *user, bool cascade)
 		sql_dialect = SQL_DIALECT_PG;
 
 		/* Need to set the current user to sa, or else we can't actually revoke the grant. */
-		bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
+		bbf_set_current_user(GetUserNameFromId(get_bbf_role_admin_oid(), false));
 
 		initStringInfo(&query);
 		appendStringInfo(&query, "REVOKE dummy FROM dummy");
@@ -2456,7 +2462,7 @@ add_user_to_role(const char *role, const char *user)
 		sql_dialect = SQL_DIALECT_PG;
 
 		/* Need to set the current user to SA, or else we can't actually add the grant. */
-		bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
+		bbf_set_current_user(GetUserNameFromId(get_bbf_role_admin_oid(), false));
 
 		initStringInfo(&query);
 		appendStringInfo(&query, "GRANT dummy TO dummy");

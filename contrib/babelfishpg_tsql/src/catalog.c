@@ -2496,11 +2496,11 @@ create_guest_role_for_db(const char *dbname)
 	}
 
 	/* 
-	 * Set current user to sa for create permissions.
+	 * Set current user to bbf_role_admin for create permissions.
 	 * We assume that all permissions have been validated already
 	 */
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();

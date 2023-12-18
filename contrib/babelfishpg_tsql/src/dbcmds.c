@@ -563,7 +563,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 						   NULL);
 
 			if(is_set_userid)
-				SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+				SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 			CommandCounterIncrement();
 		}
@@ -658,7 +658,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 	/* Set current user to session user for dropping permissions */
 	prev_current_user = GetUserNameFromId(GetUserId(), false);
 
-	bbf_set_current_user("sysadmin");
+	bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
 
 	PG_TRY();
 	{
@@ -712,7 +712,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 			{
 				GetUserIdAndSecContext(&save_userid, &save_sec_context);
 				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need sa to perform DropOwnedObjects
-					SetUserIdAndSecContext(get_sa_role_oid(),
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(),
 										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				else
 					SetUserIdAndSecContext(get_role_oid(dbo_role, true),
