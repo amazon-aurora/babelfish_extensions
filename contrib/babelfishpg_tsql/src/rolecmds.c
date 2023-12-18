@@ -1634,12 +1634,12 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 	memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
 								  ObjectIdGetDatum(sysadmin));
 
-	if (memlist->n_members == 1)
+	if (memlist->n_members <= 2)
 	{
 		HeapTuple	tup = &memlist->members[0]->tuple;
 		Oid			member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
 
-		if (member == grantee)
+		if (member ==  grantee || member == get_bbf_role_admin_oid())
 		{
 			ReleaseSysCacheList(memlist);
 			ereport(ERROR,
