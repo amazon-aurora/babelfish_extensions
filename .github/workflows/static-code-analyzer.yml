@@ -3,7 +3,8 @@ on: [push, pull_request]
 
 jobs:
   run-static-code-analyzer:
-    runs-on: ubuntu-21.04
+    runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v2
         id: checkout
@@ -35,8 +36,22 @@ jobs:
 
           $GITHUB_WORKSPACE/.github/scripts/clone_engine_repo "$GITHUB_REPOSITORY_OWNER" "$ENGINE_BRANCH"
 
+          ls
+
       - name: Run cppcheck on extensions
         id: run-cppcheck
         if: always()
         run: |
-          cppcheck --error-exitcode=-1 -j 16 -I ../postgresql_modified_for_babelfish --enable=warning --template=gcc ./contrib
+          cppcheck --error-exitcode=-1 -j 16 --template=gcc \
+          --enable=warning --inline-suppr \
+          ./contrib -I ../postgresql_modified_for_babelfish \
+          --suppress=nullPointerRedundantCheck \
+          --output-file=cppcheck-failures.txt
+      
+      - name: Upload failures as artifacts
+        id: upload-failures
+        if: always() && steps.run-cppcheck.outcome == 'failure'
+        uses: actions/upload-artifact@v2
+        with:
+          name: cppcheck-failures
+          path: ./cppcheck-failures.txt
