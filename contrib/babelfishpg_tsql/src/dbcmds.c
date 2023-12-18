@@ -515,7 +515,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 	parsetree_list = gen_createdb_subcmds(dbo_scm, dbo_role, db_owner_role, guest, guest_scm);
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	old_createrole_self_grant = GetConfigOption("createrole_self_grant", false, true);
+	old_createrole_self_grant = pstrdup(GetConfigOption("createrole_self_grant", false, true));
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();

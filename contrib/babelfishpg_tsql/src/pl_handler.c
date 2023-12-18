@@ -2629,7 +2629,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						validateUserAndRole(stmt->role);
 
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
-					old_createrole_self_grant = GetConfigOption("createrole_self_grant", false, true);
+					old_createrole_self_grant = pstrdup(GetConfigOption("createrole_self_grant", false, true));
 
 					PG_TRY();
 					{

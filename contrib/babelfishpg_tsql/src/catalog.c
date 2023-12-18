@@ -2497,7 +2497,7 @@ create_guest_role_for_db(const char *dbname)
 	}
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	old_createrole_self_grant = GetConfigOption("createrole_self_grant", false, true);
+	old_createrole_self_grant = pstrdup(GetConfigOption("createrole_self_grant", false, true));
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();
