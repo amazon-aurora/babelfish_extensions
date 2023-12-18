@@ -402,6 +402,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 	NameData	default_collation;
 	const char *guest;
 	int			stmt_number = 0;
+	const char *old_createrole_self_grant;
 	int 			save_sec_context;
 	bool 			is_set_userid;
 	Oid 			save_userid;
@@ -513,12 +514,8 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 
 	parsetree_list = gen_createdb_subcmds(dbo_scm, dbo_role, db_owner_role, guest, guest_scm);
 
-	/*
-	 * Set current user to sa for create permissions.
-	 * We have already checked for permissions.
-	 */
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	old_createrole_self_grant = GetConfigOption("createrole_self_grant", false, true);
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();
@@ -526,6 +523,12 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 
 	PG_TRY();
 	{
+		/*
+		 * Set current user to bbf_role_admin for create permissions.
+		 * We have already checked for permissions.
+		 */
+		SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+		SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
 		/* Run all subcommands */
 		foreach(parsetree_item, parsetree_list)
 		{
@@ -587,6 +590,7 @@ create_bbf_db_internal(const char *dbname, List *options, const char *owner, int
 	PG_FINALLY();
 	{
 		/* Clean up. Restore previous state. */
+		SetConfigOption("createrole_self_grant", old_createrole_self_grant, PGC_USERSET, PGC_S_OVERRIDE);
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 		set_cur_db(old_dbid, old_dbname);
 	}
@@ -658,7 +662,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 	/* Set current user to session user for dropping permissions */
 	prev_current_user = GetUserNameFromId(GetUserId(), false);
 
-	bbf_set_current_user(GetUserNameFromId(get_sa_role_oid(), false));
+	bbf_set_current_user("sysadmin");
 
 	PG_TRY();
 	{
@@ -711,7 +715,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 			if(stmt->type != T_GrantStmt)
 			{
 				GetUserIdAndSecContext(&save_userid, &save_sec_context);
-				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need sa to perform DropOwnedObjects
+				if (stmt->type == T_DropOwnedStmt || stmt->type == T_DropRoleStmt) // need bbf_role_admin to perform DropOwnedObjects
 					SetUserIdAndSecContext(get_bbf_role_admin_oid(),
 										   save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				else

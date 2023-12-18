@@ -27,6 +27,7 @@ $$;
 do
 LANGUAGE plpgsql
 $$
+DECLARE bbf_role_admin TEXT;
 DECLARE temprow RECORD;
 DECLARE query TEXT;
 BEGIN
@@ -36,7 +37,8 @@ BEGIN
         THEN
             RAISE NOTICE 'Role "bbf_role_admin" already exists. Skipping.';
     ELSE
-        CREATE ROLE bbf_role_admin WITH CREATEROLE;
+        EXECUTE format('CREATE ROLE bbf_role_admin WITH CREATEDB CREATEROLE INHERIT PASSWORD NULL');
+        EXECUTE format('GRANT CREATE ON DATABASE %s TO bbf_role_admin WITH GRANT OPTION', CURRENT_DATABASE());
     END IF;
     FOR temprow IN
         SELECT DISTINCT role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')

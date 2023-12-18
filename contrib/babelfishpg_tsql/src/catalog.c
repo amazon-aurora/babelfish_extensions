@@ -2471,6 +2471,7 @@ create_guest_role_for_db(const char *dbname)
 	int16		old_dbid;
 	char	   *old_dbname;
 	int16		dbid = get_db_id(dbname);
+	const char	*old_createrole_self_grant;
 	Oid save_userid;
 	int save_sec_context;
 
@@ -2495,12 +2496,8 @@ create_guest_role_for_db(const char *dbname)
 		update_GrantRoleStmt(stmt, list_make1(tmp), logins);
 	}
 
-	/* 
-	 * Set current user to bbf_role_admin for create permissions.
-	 * We assume that all permissions have been validated already
-	 */
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
-	SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	old_createrole_self_grant = GetConfigOption("createrole_self_grant", false, true);
 
 	old_dbid = get_cur_db_id();
 	old_dbname = get_cur_db_name();
@@ -2508,6 +2505,12 @@ create_guest_role_for_db(const char *dbname)
 
 	PG_TRY();
 	{
+		/* 
+		 * Set current user to bbf_role_admin for create permissions.
+		 * We assume that all permissions have been validated already
+		 */
+		SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+		SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
 		/* Run all subcommands */
 		foreach(res_item, res)
 		{
@@ -2541,6 +2544,7 @@ create_guest_role_for_db(const char *dbname)
 	PG_FINALLY();
 	{
 		/* Clean up. Restore previous state. */
+		SetConfigOption("createrole_self_grant", old_createrole_self_grant, PGC_USERSET, PGC_S_OVERRIDE);
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 		set_cur_db(old_dbid, old_dbname);
 	}
