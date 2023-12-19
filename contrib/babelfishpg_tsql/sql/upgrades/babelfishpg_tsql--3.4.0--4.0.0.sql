@@ -43,7 +43,7 @@ BEGIN
         CALL sys.babel_initialize_logins('bbf_role_admin');
     END IF;
     FOR temprow IN
-        SELECT DISTINCT on (grantee, role_name) grantee, role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name = 'bbf_role_admin' OR role_name LIKE 'pg_%')
+        SELECT DISTINCT on (grantee, role_name) grantee, role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name = 'bbf_role_admin' OR grantee = 'bbf_role_admin' OR role_name LIKE 'pg_%')
     LOOP
         query := pg_catalog.format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', temprow.grantee);
         EXECUTE query;
