@@ -129,7 +129,7 @@ BEGIN
 					AND database_name = DB_NAME()
 					AND type != 'R')
 	BEGIN
-		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
+		SELECT DISTINCT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
 			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN 'db_owner' 
 					WHEN Ext2.orig_username IS NULL THEN 'public' 
 					ELSE Ext2.orig_username END 
