@@ -42,10 +42,10 @@ BEGIN
 	    EXECUTE format('GRANT sysadmin TO bbf_role_admin WITH ADMIN TRUE');
     END IF;
     FOR temprow IN
-        SELECT DISTINCT role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')
+        SELECT DISTINCT on (grantee, role_name) grantee, role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')
     LOOP
+        query := pg_catalog.format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', temprow.grantee);
         query := pg_catalog.format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', temprow.role_name);
-        RAISE WARNING 'Executing %', query;
         EXECUTE query;
     END LOOP;
 END;
