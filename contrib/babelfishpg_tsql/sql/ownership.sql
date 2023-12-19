@@ -280,6 +280,7 @@ BEGIN
 	EXECUTE 'SET babelfishpg_tsql.enable_ownership_structure = true';
 	CALL sys.babel_initialize_logins(sa_name);
 	CALL sys.babel_initialize_logins('sysadmin');
+	CALL sys.babel_initialize_logins('bbf_role_admin');
 	CALL sys.babel_create_builtin_dbs(sa_name);
 	CALL sys.initialize_babel_extras();
 	-- run analyze for all babelfish catalog

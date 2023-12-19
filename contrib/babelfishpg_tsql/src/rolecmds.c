@@ -139,6 +139,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 
 	if (strcmp(stmt->role, "sysadmin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
+	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("A");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
 	else

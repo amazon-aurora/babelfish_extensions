@@ -40,6 +40,7 @@ BEGIN
         EXECUTE format('CREATE ROLE bbf_role_admin WITH CREATEDB CREATEROLE INHERIT PASSWORD NULL');
         EXECUTE format('GRANT CREATE ON DATABASE %s TO bbf_role_admin WITH GRANT OPTION', CURRENT_DATABASE());
 	    EXECUTE format('GRANT sysadmin TO bbf_role_admin WITH ADMIN TRUE');
+        CALL sys.babel_initialize_logins('bbf_role_admin');
     END IF;
     FOR temprow IN
         SELECT DISTINCT on (grantee, role_name) grantee, role_name FROM information_schema.applicable_roles WHERE NOT (role_name = 'sysadmin' OR role_name LIKE 'pg_%')
