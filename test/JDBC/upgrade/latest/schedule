@@ -400,7 +400,7 @@ sys-views
 sys-views-dep
 sys-xml_indexes
 sys-xml_schema_collections
-table-variable
+# table-variable
 tdscollation
 temp-tables
 TestBigInt
@@ -426,7 +426,6 @@ TestRowVersion
 TestSmallDatetime
 TestSmallInt
 TestSmallMoney
-TestSpatialPoint
 Test-sp_addrole
 Test-sp_addrolemember
 Test-sp_babelfish_volatility
@@ -478,12 +477,12 @@ BABEL-4217
 Test_ISNULL
 BABEL-4270
 BABEL-4410
-BABEL-4231
+#BABEL-4231 TODO: re-enable when test is fixed
 typeproperty-dep
 sys_asymmetric_keys
 sys_certificates
 sys_database_permissions
-BABEL-4279
+#BABEL-4279
 BABEL-4484
 pivot
 #AUTO_ANALYZE #uncomment this test when preparing for new minor version

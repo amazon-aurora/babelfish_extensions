@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
@@ -22,7 +23,6 @@
 #include "access/table.h"
 #include "access/genam.h"
 #include "catalog.h"
-#include "parser/gramparse.h"
 #include "hooks.h"
 #include "tcop/utility.h"
 
@@ -1381,7 +1381,7 @@ tsql_get_proc_oid(char *proname, Oid pronamespace, Oid user_id)
 		procform = (Form_pg_proc) GETSTRUCT(tuple);
 		/* then consider only procs in specified namespace */
 		if (procform->pronamespace == pronamespace &&
-			pg_proc_aclcheck(procform->oid, user_id, ACL_EXECUTE) == ACLCHECK_OK)
+			object_aclcheck(ProcedureRelationId, procform->oid, user_id, ACL_EXECUTE) == ACLCHECK_OK)
 		{
 			result = procform->oid;
 
@@ -1528,7 +1528,7 @@ tsql_get_proc_nsp_oid(Oid object_id)
 	bool		isnull;
 
 	/* retrieve pronamespace in pg_proc by oid */
-	tuple = SearchSysCache1(PROCOID, CStringGetDatum(object_id));
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_id));
 
 	if (HeapTupleIsValid(tuple))
 	{
@@ -1560,7 +1560,7 @@ tsql_get_constraint_nsp_oid(Oid object_id, Oid user_id)
 	bool		isnull;
 
 	/* retrieve connamespace in pg_constraint by oid */
-	tuple = SearchSysCache1(CONSTROID, CStringGetDatum(object_id));
+	tuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(object_id));
 
 	if (HeapTupleIsValid(tuple))
 	{

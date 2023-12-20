@@ -418,17 +418,11 @@ UninstallExtendedHooks(void)
 	object_access_hook = prev_object_access_hook;
 
 	core_yylex_hook = prev_core_yylex_hook;
-	set_target_table_alternative_hook = NULL;
-	get_output_clause_status_hook = NULL;
-	post_transform_delete_hook = NULL;
-	pre_output_clause_transformation_hook = NULL;
 	pre_transform_returning_hook = prev_pre_transform_returning_hook;
 	pre_transform_insert_hook = prev_pre_transform_insert_hook;
 	post_transform_insert_row_hook = prev_post_transform_insert_row_hook;
 	pre_transform_setop_tree_hook = prev_pre_transform_setop_tree_hook;
 	pre_transform_setop_sort_clause_hook = prev_pre_transform_setop_sort_clause_hook;
-	post_transform_column_definition_hook = NULL;
-	post_transform_table_definition_hook = NULL;
 	pre_transform_target_entry_hook = prev_pre_transform_target_entry_hook;
 	tle_name_comparison_hook = prev_tle_name_comparison_hook;
 	get_trigger_object_address_hook = prev_get_trigger_object_address_hook;
@@ -2128,7 +2122,7 @@ get_trigger_object_address(List *object, Relation *relp, bool missing_ok, bool o
 	Oid			trigger_rel_oid = InvalidOid;
 
 
-	address.classId = InvalidOid;
+	address.classId = TriggerRelationId;
 	address.objectId = InvalidOid;
 	address.objectSubId = InvalidAttrNumber;
 
@@ -2147,7 +2141,6 @@ get_trigger_object_address(List *object, Relation *relp, bool missing_ok, bool o
 	if (!OidIsValid(trigger_rel_oid))
 		return address;
 
-	address.classId = TriggerRelationId;
 	address.objectId = get_trigger_oid(trigger_rel_oid, depname, missing_ok);
 	address.objectSubId = 0;
 
@@ -4415,7 +4408,7 @@ transform_pivot_clause(ParseState *pstate, SelectStmt *stmt)
 	for(int i = 0; i < stmt->value_col_strlist->length; i++)
 	{
 		ColumnDef	*tempColDef;
-		tempColDef = makeColumnDef((char *) list_nth(stmt->value_col_strlist, i),
+		tempColDef = makeColumnDef(((String *) list_nth(stmt->value_col_strlist, i))->sval,
 									((Aggref *)aggfunc_te->expr)->aggtype, 
 									-1,
 									((Aggref *)aggfunc_te->expr)->aggcollid
@@ -4485,21 +4478,21 @@ static Node* optimize_explicit_cast(ParseState *pstate, Node *node)
 		OpExpr *opExpr = (OpExpr*) node;
 		Form_pg_operator form;
 		HeapTuple	tuple;
-		Node* node = optimize_explicit_cast(pstate, linitial(opExpr->args));
+		Node* node1 = optimize_explicit_cast(pstate, linitial(opExpr->args));
 		Node* result = NULL;
-		if (node != linitial(opExpr->args))
+		if (node1 != linitial(opExpr->args))
 		{
 			char	   *opname;
 
 			tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(opExpr->opno));
 			if (!HeapTupleIsValid(tuple))
-				return node; // no need to error out in here, stop transform and quite, keep the original node
+				return node1; // no need to error out in here, stop transform and quite, keep the original node
 			form = (Form_pg_operator) GETSTRUCT(tuple);
 
 			opname = NameStr(form->oprname);
 			if (strcmp(opname, "=") == 0)
 			{
-				result =(Node*)make_op(pstate, list_make1(makeString(opname)), node, lsecond(opExpr->args), pstate->p_last_srf, -1);
+				result =(Node*)make_op(pstate, list_make1(makeString(opname)), node1, lsecond(opExpr->args), pstate->p_last_srf, -1);
 			}
 			ReleaseSysCache(tuple);
 			if (result)

@@ -139,6 +139,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 
 	if (strcmp(stmt->role, "sysadmin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
+	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("A");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
 	else
@@ -602,6 +604,12 @@ gen_droplogin_subcmds(const char *login)
 	return res;
 }
 
+Oid
+get_bbf_role_admin_oid(void)
+{
+	return get_role_oid("bbf_role_admin", false);
+}
+
 /*
  * Returns OID of SA of the current database.
  * We assume that SA is the DBA of the babelfish DB.
@@ -725,7 +733,7 @@ user_name(PG_FUNCTION_ARGS)
 	systable_endscan(scan);
 	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
 
-	PG_RETURN_TEXT_P(CStringGetTextDatum(user));
+	PG_RETURN_TEXT_P(cstring_to_text(user));
 }
 
 PG_FUNCTION_INFO_V1(user_id);
@@ -868,7 +876,7 @@ suser_name(PG_FUNCTION_ARGS)
 	if (!orig_loginname)
 		PG_RETURN_NULL();
 
-	PG_RETURN_TEXT_P(CStringGetTextDatum(orig_loginname));
+	PG_RETURN_TEXT_P(cstring_to_text(orig_loginname));
 }
 
 PG_FUNCTION_INFO_V1(suser_id);
@@ -970,7 +978,7 @@ drop_all_logins(PG_FUNCTION_ARGS)
 
 	while (rolname_list != NIL)
 	{
-		char	   *rolname = linitial(rolname_list);
+		char	   *rolname1 = linitial(rolname_list);
 
 		rolname_list = list_delete_first(rolname_list);
 
@@ -979,7 +987,7 @@ drop_all_logins(PG_FUNCTION_ARGS)
 			/* Advance cmd counter to make the delete visible */
 			CommandCounterIncrement();
 
-			parsetree_list = gen_droplogin_subcmds(rolname);
+			parsetree_list = gen_droplogin_subcmds(rolname1);
 
 			/* Run all subcommands */
 			foreach(parsetree_item, parsetree_list)
@@ -1628,12 +1636,12 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 	memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
 								  ObjectIdGetDatum(sysadmin));
 
-	if (memlist->n_members == 1)
+	if (memlist->n_members <= 2)
 	{
 		HeapTuple	tup = &memlist->members[0]->tuple;
 		Oid			member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
 
-		if (member == grantee)
+		if (member ==  grantee || member == get_bbf_role_admin_oid())
 		{
 			ReleaseSysCacheList(memlist);
 			ereport(ERROR,
@@ -1713,33 +1721,41 @@ check_alter_role_stmt(GrantRoleStmt *stmt)
 bool
 is_empty_role(Oid roleid)
 {
-	CatCList   *memlist;
+    CatCList   *memlist;
+    char       *db_name = get_cur_db_name();
+    Oid         db_owner_oid, dbo_oid;
+    int         i;
 
-	if (roleid == InvalidOid)
-		return true;
+    if (roleid == InvalidOid || db_name == NULL || strcmp(db_name, "") == 0)
+        return true;
 
-	memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
-								  ObjectIdGetDatum(roleid));
+    memlist = SearchSysCacheList1(AUTHMEMROLEMEM,
+                                  ObjectIdGetDatum(roleid));
 
-	if (memlist->n_members == 1)
-	{
-		HeapTuple	tup = &memlist->members[0]->tuple;
-		Oid			member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
-		char	   *db_name = get_cur_db_name();
+    if (memlist->n_members == 0)
+    {
+        ReleaseSysCacheList(memlist);
+        return true;
+    }
 
-		if (db_name == NULL || strcmp(db_name, "") == 0)
-			return true;
+    db_owner_oid = get_role_oid(get_db_owner_name(db_name), true);
+    dbo_oid = get_role_oid(get_dbo_role_name(db_name), true);
 
-		if (member == get_role_oid(get_db_owner_name(db_name), true))
-		{
-			ReleaseSysCacheList(memlist);
-			return true;
-		}
-	}
+    for (i = 0; i < memlist->n_members; i++)
+    {
+        HeapTuple   tup = &memlist->members[i]->tuple;
+        Oid         member = ((Form_pg_auth_members) GETSTRUCT(tup))->member;
 
-	ReleaseSysCacheList(memlist);
+        if (member != db_owner_oid && member != dbo_oid && member != get_bbf_role_admin_oid())
+        {
+            ReleaseSysCacheList(memlist);
+            return false;
+        }
+    }
 
-	return false;
+    ReleaseSysCacheList(memlist);
+
+    return true;
 }
 
 PG_FUNCTION_INFO_V1(role_id);
@@ -1838,7 +1854,7 @@ is_rolemember(PG_FUNCTION_ARGS)
 	 * have permissions.
 	 */
 	if (!is_role(role_oid) ||
-		(principal_oid != cur_user_oid &&
+		((principal_oid != cur_user_oid) &&
 		 (!has_privs_of_role(cur_user_oid, role_oid) ||
 		  !has_privs_of_role(cur_user_oid, principal_oid))))
 		PG_RETURN_NULL();
@@ -2341,4 +2357,176 @@ check_windows_logon_length(char *input)
 		return true;
 	else
 		return false;
+}
+
+/*
+ * Revoke a given role from given user.
+ */
+void
+revoke_role_from_user(const char *role, const char *user, bool cascade)
+{
+	StringInfoData	query;
+	List			*res;
+	GrantRoleStmt	*stmt;
+	PlannedStmt		*wrapper;
+	int				old_sql_dialect = sql_dialect;
+	char			*old_user_name = GetUserNameFromId(GetUserId(), false);
+
+	PG_TRY();
+	{
+		sql_dialect = SQL_DIALECT_PG;
+
+		/* Need to set the current user to sa, or else we can't actually revoke the grant. */
+		bbf_set_current_user(GetUserNameFromId(get_bbf_role_admin_oid(), false));
+
+		initStringInfo(&query);
+		appendStringInfo(&query, "REVOKE dummy FROM dummy");
+		if (cascade)
+			appendStringInfo(&query, " CASCADE");
+		res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+		if (list_length(res) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("Expected 1 statement but get %d statements after parsing",
+							list_length(res))));
+
+		stmt = (GrantRoleStmt *) parsetree_nth_stmt(res, 0);
+		if (!IsA(stmt, GrantRoleStmt))
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a GrantRoleStmt")));
+		
+		if (role && stmt->granted_roles && stmt->grantee_roles)
+		{
+			/*
+			* Delete the first element if it's is_role flag, in this way we won't
+			* need to rewrite the role names during internal call.
+			*/
+			AccessPriv	*ap = (AccessPriv *) linitial(stmt->granted_roles);
+			RoleSpec	*rs = (RoleSpec *) linitial(stmt->grantee_roles);
+
+			if (strcmp(ap->priv_name, "is_role") == 0)
+				stmt->granted_roles = list_delete_cell(stmt->granted_roles, list_head(stmt->granted_roles));
+
+			if (!stmt->granted_roles)
+				return;
+
+			/* Update the statement with given role and user name */
+			ap = (AccessPriv *) llast(stmt->granted_roles);
+			ap->priv_name = pstrdup(role);
+
+			rs->rolename = pstrdup(user);
+		}
+
+		/* need to make a wrapper PlannedStmt */
+		wrapper = makeNode(PlannedStmt);
+		wrapper->commandType = CMD_UTILITY;
+		wrapper->canSetTag = false;
+		wrapper->utilityStmt = (Node *) stmt;
+		wrapper->stmt_location = 0;
+		wrapper->stmt_len = 0;
+
+		/* do this step */
+		standard_ProcessUtility(wrapper,
+						"(REVOKE )",
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
+
+		/* make sure later steps can see the object created here */
+		CommandCounterIncrement();
+	}
+	PG_FINALLY();
+	{
+		bbf_set_current_user(old_user_name);
+		sql_dialect = old_sql_dialect;
+	}
+	PG_END_TRY();
+}
+
+/*
+ * Add a user to a given role.
+ */
+void
+add_user_to_role(const char *role, const char *user)
+{
+	StringInfoData	query;
+	List			*res;
+	GrantRoleStmt	*stmt;
+	PlannedStmt		*wrapper;
+	int				old_sql_dialect = sql_dialect;
+	char			*old_user_name = GetUserNameFromId(GetUserId(), false);
+
+	PG_TRY();
+	{
+		sql_dialect = SQL_DIALECT_PG;
+
+		/* Need to set the current user to SA, or else we can't actually add the grant. */
+		bbf_set_current_user(GetUserNameFromId(get_bbf_role_admin_oid(), false));
+
+		initStringInfo(&query);
+		appendStringInfo(&query, "GRANT dummy TO dummy");
+		res = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+		if (list_length(res) != 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					errmsg("Expected 1 statement but get %d statements after parsing",
+							list_length(res))));
+
+		stmt = (GrantRoleStmt *) parsetree_nth_stmt(res, 0);
+		if (!IsA(stmt, GrantRoleStmt))
+			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a GrantRoleStmt")));
+		
+		if (role && stmt->granted_roles && stmt->grantee_roles)
+		{
+			/*
+			* Delete the first element if it's is_role flag, in this way we won't
+			* need to rewrite the role names during internal call.
+			*/
+			AccessPriv	*ap = (AccessPriv *) linitial(stmt->granted_roles);
+			RoleSpec	*rs = (RoleSpec *) linitial(stmt->grantee_roles);
+
+			if (strcmp(ap->priv_name, "is_role") == 0)
+				stmt->granted_roles = list_delete_cell(stmt->granted_roles, list_head(stmt->granted_roles));
+
+			if (!stmt->granted_roles)
+				return;
+
+			/* Update the statement with given role and user name */
+			ap = (AccessPriv *) llast(stmt->granted_roles);
+			ap->priv_name = pstrdup(role);
+
+			rs->rolename = pstrdup(user);
+		}
+
+		/* need to make a wrapper PlannedStmt */
+		wrapper = makeNode(PlannedStmt);
+		wrapper->commandType = CMD_UTILITY;
+		wrapper->canSetTag = false;
+		wrapper->utilityStmt = (Node *) stmt;
+		wrapper->stmt_location = 0;
+		wrapper->stmt_len = 0;
+
+		/* do this step */
+		standard_ProcessUtility(wrapper,
+						"(GRANT )",
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
+
+		/* make sure later steps can see the object created here */
+		CommandCounterIncrement();
+	}
+	PG_FINALLY();
+	{
+		bbf_set_current_user(old_user_name);
+		sql_dialect = old_sql_dialect;
+	}
+	PG_END_TRY();
 }

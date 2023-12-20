@@ -376,7 +376,7 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 			recheckIndexes =
 				ExecInsertIndexTuples(resultRelInfo,
 									  buffer->slots[i], estate, false, false,
-									  NULL, NIL);
+									  NULL, NIL, false);
 			list_free(recheckIndexes);
 		}
 
@@ -786,27 +786,27 @@ BeginBulkCopy(Relation rel,
 	ExprState **defexprs;
 	MemoryContext oldcontext;
 	ParseNamespaceItem *nsitem;
-	RangeTblEntry *rte;
+	RTEPermissionInfo *perminfo;
 	ParseState *pstate = make_parsestate(NULL);
 	ListCell   *cur;
 
 	nsitem = addRangeTableEntryForRelation(pstate, rel, RowExclusiveLock,
 										   NULL, false, false);
-	rte = nsitem->p_rte;
-	rte->requiredPerms = ACL_INSERT;
+	perminfo = nsitem->p_perminfo;
+	perminfo->requiredPerms = ACL_INSERT;
 
 	foreach(cur, attnums)
 	{
 		int			attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
 
-		rte->insertedCols = bms_add_member(rte->insertedCols, attno);
+		perminfo->insertedCols = bms_add_member(perminfo->insertedCols, attno);
 	}
 
 	/* Check access permissions. */
-	ExecCheckRTPerms(pstate->p_rtable, true);
+	ExecCheckPermissions(pstate->p_rtable, pstate->p_rteperminfos, true);
 
 	/* Permission check for row security policies. */
-	if (check_enable_rls(rte->relid, InvalidOid, false) == RLS_ENABLED)
+	if (check_enable_rls(perminfo->relid, InvalidOid, false) == RLS_ENABLED)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("Bulk Copy not supported with row-level security"),
@@ -916,7 +916,7 @@ BeginBulkCopy(Relation rel,
 	 */
 	if (RELKIND_HAS_STORAGE(cstate->rel->rd_rel->relkind) &&
 		(cstate->rel->rd_createSubid != InvalidSubTransactionId ||
-		 cstate->rel->rd_firstRelfilenodeSubid != InvalidSubTransactionId))
+		 cstate->rel->rd_firstRelfilelocatorSubid != InvalidSubTransactionId))
 		ti_options |= TABLE_INSERT_SKIP_FSM;
 
 	/*
@@ -924,7 +924,7 @@ BeginBulkCopy(Relation rel,
 	 * index-entry-making machinery.  (There used to be a huge amount of code
 	 * here that basically duplicated execUtils.c ...).
 	 */
-	ExecInitRangeTable(cstate->estate, cstate->range_table);
+	ExecInitRangeTable(cstate->estate, cstate->range_table, cstate->estate->es_rteperminfos);
 	cstate->resultRelInfo = cstate->target_resultRelInfo = makeNode(ResultRelInfo);
 	ExecInitResultRelation(cstate->estate, cstate->resultRelInfo, 1);
 

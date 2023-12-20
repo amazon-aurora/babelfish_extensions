@@ -8,6 +8,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_language.h"
+#include "catalog/pg_namespace.h"
 #include "commands/proclang.h"
 #include "executor/tstoreReceiver.h"
 #include "nodes/parsenodes.h"
@@ -2121,39 +2122,39 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
+				bool		isnull1;
+				Oid			restype1;
+				int32		restypmod1;
 				int			save_nestlevel;
 				int			scope_level;
 				InlineCodeBlockArgs *args = NULL;
 
-				batch = exec_eval_expr(estate, stmt->query, &isnull, &restype, &restypmod);
-				if (isnull)
+				batch = exec_eval_expr(estate, stmt->query, &isnull1, &restype1, &restypmod1);
+				if (isnull1)
 					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 									errmsg("batch string argument of sp_executesql is null")));
 
-				batchstr = convert_value_to_string(estate, batch, restype);
+				batchstr = convert_value_to_string(estate, batch, restype1);
 
 				args = create_args(0);
 				if (stmt->param_def)
 				{
 					Datum		paramdef;
-					Oid			restype;
-					int32		restypmod;
+					Oid			restype2;
+					int32		restypmod2;
 					char	   *paramdefstr;
-					bool		isnull;
+					bool		isnull2;
 
 					/*
 					 * Evaluate the parameter definition
 					 */
-					paramdef = exec_eval_expr(estate, stmt->param_def, &isnull, &restype, &restypmod);
+					paramdef = exec_eval_expr(estate, stmt->param_def, &isnull2, &restype2, &restypmod2);
 
-					if (isnull)
+					if (isnull2)
 						ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 										errmsg("NULL param definition")));
 
-					paramdefstr = convert_value_to_string(estate, paramdef, restype);
+					paramdefstr = convert_value_to_string(estate, paramdef, restype2);
 
 					if (strcmp(paramdefstr, "") != 0)	/* check edge cases for
 														 * sp_executesql */
@@ -2218,30 +2219,30 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
+				bool		isnull3;
+				Oid			restype3;
+				int32		restypmod3;
 				InlineCodeBlockArgs *args = NULL;
 				Datum		paramdef;
 				char	   *paramdefstr;
 
-				batch = exec_eval_expr(estate, stmt->query, &isnull, &restype, &restypmod);
-				if (isnull)
+				batch = exec_eval_expr(estate, stmt->query, &isnull3, &restype3, &restypmod3);
+				if (isnull3)
 					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 									errmsg("batch string argument of sp_prepexec is null")));
 
-				batchstr = convert_value_to_string(estate, batch, restype);
+				batchstr = convert_value_to_string(estate, batch, restype3);
 
 				args = create_args(0);
 
 				/*
 				 * Evaluate the parameter definition
 				 */
-				paramdef = exec_eval_expr(estate, stmt->param_def, &isnull, &restype, &restypmod);
+				paramdef = exec_eval_expr(estate, stmt->param_def, &isnull3, &restype3, &restypmod3);
 
-				if (!isnull)
+				if (!isnull3)
 				{
-					paramdefstr = convert_value_to_string(estate, paramdef, restype);
+					paramdefstr = convert_value_to_string(estate, paramdef, restype3);
 
 					read_param_def(args, paramdefstr);
 
@@ -3288,7 +3289,7 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 	}
 
 	/* Permission check */
-	if (!(pg_namespace_ownercheck(nsp_oid, GetUserId()) ||
+	if (!(object_ownercheck(NamespaceRelationId, nsp_oid, GetUserId()) ||
 			has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)) ||
 				login_is_db_owner))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA, nsp_name);
@@ -3778,7 +3779,7 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 					stmt->schema_name)));
 
 	// Check if the user has necessary permissions for CREATE/DROP FULLTEXT INDEX
-	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner && !pg_namespace_ownercheck(schemaOid, GetUserId()))
+	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner && !object_ownercheck(NamespaceRelationId, schemaOid, GetUserId()))
 	{
 		const char *error_msg = is_create ? "A default full-text catalog does not exist in the database or user does not have permission to perform this action" : "Cannot drop the full-text index, because it does not exist or you do not have permission";
     	ereport(ERROR, 

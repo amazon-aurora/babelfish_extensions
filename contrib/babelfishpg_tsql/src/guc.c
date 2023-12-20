@@ -60,7 +60,7 @@ bool		pltsql_showplan_all = false;
 bool		pltsql_showplan_text = false;
 bool		pltsql_showplan_xml = false;
 bool		pltsql_fmtonly = false;
-bool		pltsql_enable_tsql_information_schema = true;
+bool		pltsql_enable_tsql_information_schema = false;
 bool		pltsql_no_browsetable = false;
 
 char	   *pltsql_host_destribution = NULL;
@@ -476,7 +476,7 @@ assign_ansi_defaults(bool newval, void *extra)
 		pltsql_ansi_warnings = true;
 		pltsql_ansi_null_dflt_on = true;
 		pltsql_ansi_padding = true;
-		pltsql_implicit_transactions = true;
+		SetConfigOption("babelfishpg_tsql.implicit_transactions", "ON", PGC_USERSET, PGC_S_CLIENT);
 		pltsql_quoted_identifier = true;
 
 		if (pltsql_protocol_plugin_ptr && *pltsql_protocol_plugin_ptr && (*pltsql_protocol_plugin_ptr)->set_guc_stat_var)
@@ -499,7 +499,7 @@ assign_ansi_defaults(bool newval, void *extra)
 		/* Call the assign hook function for ANSI_NULLS as well */
 		assign_transform_null_equals(false, NULL);
 
-		pltsql_implicit_transactions = false;
+		SetConfigOption("babelfishpg_tsql.implicit_transactions", "OFF", PGC_USERSET, PGC_S_CLIENT);
 		pltsql_quoted_identifier = false;
 
 		if (pltsql_protocol_plugin_ptr && *pltsql_protocol_plugin_ptr && (*pltsql_protocol_plugin_ptr)->set_guc_stat_var)
@@ -665,7 +665,7 @@ define_custom_variables(void)
 							 &pltsql_allow_antlr_to_unsupported_grammar_for_testing,
 							 false,
 							 PGC_SUSET, /* only superuser can set */
-							 GUC_NO_SHOW_ALL,
+							 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 							 NULL, NULL, NULL);
 
 	/* temporary GUC for enable or disable windows login */
@@ -687,17 +687,6 @@ define_custom_variables(void)
 							 PGC_SUSET,
 							 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_SUPERUSER_ONLY,
 							 NULL, NULL, NULL);
-
-	/* ISO standard settings */
-	DefineCustomBoolVariable("babelfishpg_tsql.ansi_defaults",
-							 gettext_noop("Controls a group of settings that collectively specify some "
-										  "ISO standard behavior. "),
-							 NULL,
-							 &pltsql_ansi_defaults,
-							 true,
-							 PGC_USERSET,
-							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
-							 NULL, assign_ansi_defaults, NULL);
 
 	DefineCustomBoolVariable("babelfishpg_tsql.quoted_identifier",
 							 gettext_noop("Interpret double-quoted strings as quoted identifiers"),
@@ -888,6 +877,17 @@ define_custom_variables(void)
 							 PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 							 NULL, NULL, NULL);
+
+	/* ISO standard settings */
+	DefineCustomBoolVariable("babelfishpg_tsql.ansi_defaults",
+							 gettext_noop("Controls a group of settings that collectively specify some "
+										  "ISO standard behavior. "),
+							 NULL,
+							 &pltsql_ansi_defaults,
+							 true,
+							 PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+							 NULL, assign_ansi_defaults, NULL);
 
 	DefineCustomBoolVariable("babelfishpg_tsql.cursor_close_on_commit",
 							 gettext_noop("Controls the behavior of the cursor during COMMIT TRANSACTION "

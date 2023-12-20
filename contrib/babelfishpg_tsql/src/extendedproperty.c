@@ -276,24 +276,24 @@ sp_execextended_property(PG_FUNCTION_ARGS, ExtendedPropertyProc proc)
 
 	if (proc == SP_ADDEXTENDEDPROPERTY || proc == SP_UPDATEEXTENDEDPROPERTY)
 	{
-		orig_name = TextDatumGetCString(PG_GETARG_TEXT_PP(0));
+		orig_name = text_to_cstring(PG_GETARG_TEXT_PP(0));
 		value = PG_ARGISNULL(1) ? NULL : PG_GETARG_BYTEA_PP(1);
-		level0type = PG_ARGISNULL(2) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(2));
-		level0name = PG_ARGISNULL(3) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(3));
-		level1type = PG_ARGISNULL(4) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(4));
-		level1name = PG_ARGISNULL(5) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(5));
-		level2type = PG_ARGISNULL(6) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(6));
-		level2name = PG_ARGISNULL(7) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(7));
+		level0type = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
+		level0name = PG_ARGISNULL(3) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(3));
+		level1type = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(4));
+		level1name = PG_ARGISNULL(5) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(5));
+		level2type = PG_ARGISNULL(6) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(6));
+		level2name = PG_ARGISNULL(7) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(7));
 	}
 	else if (proc == SP_DROPEXTENDEDPROPERTY)
 	{
-		orig_name = TextDatumGetCString(PG_GETARG_TEXT_PP(0));
-		level0type = PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
-		level0name = PG_ARGISNULL(2) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(2));
-		level1type = PG_ARGISNULL(3) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(3));
-		level1name = PG_ARGISNULL(4) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(4));
-		level2type = PG_ARGISNULL(5) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(5));
-		level2name = PG_ARGISNULL(6) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(6));
+		orig_name = text_to_cstring(PG_GETARG_TEXT_PP(0));
+		level0type = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(1));
+		level0name = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
+		level1type = PG_ARGISNULL(3) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(3));
+		level1name = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(4));
+		level2type = PG_ARGISNULL(5) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(5));
+		level2name = PG_ARGISNULL(6) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(6));
 	}
 
 	db_owner = get_role_oid(get_db_owner_name(db_name), false);
@@ -656,7 +656,7 @@ sp_execextended_property(PG_FUNCTION_ARGS, ExtendedPropertyProc proc)
 		values[5] = CStringGetTextDatum(name);
 		values[6] = CStringGetTextDatum(orig_name);
 		if (value)
-			values[7] = CStringGetDatum(value);
+			values[7] = (Datum) value;
 		else
 			nulls[7] = true;
 
@@ -676,7 +676,7 @@ sp_execextended_property(PG_FUNCTION_ARGS, ExtendedPropertyProc proc)
 		MemSet(replaces, false, sizeof(replaces));
 
 		if (value)
-			values[Anum_bbf_extended_properties_value - 1] = CStringGetDatum(value);
+			values[Anum_bbf_extended_properties_value - 1] = (Datum) value;
 		else
 			nulls[Anum_bbf_extended_properties_value - 1] = true;
 		replaces[Anum_bbf_extended_properties_value - 1] = true;
@@ -720,13 +720,13 @@ fn_listextendedproperty(PG_FUNCTION_ARGS)
 	uint8			param_valid = 0;
 	Oid				nspoid, sysname_oid, sql_variant_oid, colloid;
 
-	name = PG_ARGISNULL(0) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(0));
-	level0type = PG_ARGISNULL(1) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(1));
-	level0name = PG_ARGISNULL(2) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(2));
-	level1type = PG_ARGISNULL(3) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(3));
-	level1name = PG_ARGISNULL(4) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(4));
-	level2type = PG_ARGISNULL(5) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(5));
-	level2name = PG_ARGISNULL(6) ? NULL : TextDatumGetCString(PG_GETARG_TEXT_PP(6));
+	name = PG_ARGISNULL(0) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
+	level0type = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(1));
+	level0name = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(2));
+	level1type = PG_ARGISNULL(3) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(3));
+	level1name = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(4));
+	level2type = PG_ARGISNULL(5) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(5));
+	level2name = PG_ARGISNULL(6) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(6));
 
 	db_id = get_cur_db_id();
 	type = NULL;
@@ -1001,7 +1001,7 @@ get_extended_property_from_tuple(Relation relation, HeapTuple tuple,
 		ReleaseSysCache(heaptuple);
 
 		if (strcmp(type, ExtendedPropertyTypeNames[EXTENDED_PROPERTY_SCHEMA]) == 0 &&
-			pg_namespace_aclcheck(schema_id, cur_user_id, ACL_USAGE | ACL_CREATE) != ACLCHECK_OK)
+			object_aclcheck(NamespaceRelationId, schema_id, cur_user_id, ACL_USAGE | ACL_CREATE) != ACLCHECK_OK)
 			return false;
 
 		major_name = NameStr(bep->major_name);
@@ -1070,7 +1070,7 @@ get_extended_property_from_tuple(Relation relation, HeapTuple tuple,
 					strcmp(type, ExtendedPropertyTypeNames[EXTENDED_PROPERTY_FUNCTION]) == 0)
 				{
 					if (!find ||
-						pg_proc_aclcheck(procoid, cur_user_id, ACL_EXECUTE) != ACLCHECK_OK)
+						object_aclcheck(ProcedureRelationId, procoid, cur_user_id, ACL_EXECUTE) != ACLCHECK_OK)
 						return false;
 				}
 			}
@@ -1090,7 +1090,7 @@ get_extended_property_from_tuple(Relation relation, HeapTuple tuple,
 
 				if (strcmp(type, ExtendedPropertyTypeNames[EXTENDED_PROPERTY_TYPE]) == 0)
 				{
-					if (pg_type_aclcheck(typeoid, cur_user_id, ACL_USAGE) != ACLCHECK_OK)
+					if (object_aclcheck(TypeRelationId, typeoid, cur_user_id, ACL_USAGE) != ACLCHECK_OK)
 						return false;
 				}
 			}
