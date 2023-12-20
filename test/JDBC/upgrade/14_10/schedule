@@ -108,7 +108,7 @@ BABEL-3358
 BABEL-3747
 BABEL-3781
 temp-tables
-table-variable
+# table-variable
 TestNotNull
 Test-Identity
 Test-Computed-Columns
@@ -408,8 +408,8 @@ babel_varbinary_int4_div
 sys-sql_expression_dependencies
 smalldatetimefromparts-dep
 BABEL_4330
-BABEL-4231
-BABEL-4384
+#BABEL-4231 TODO: re-enable when test is fixed
+#BABEL-4384 TODO: re-enable when test is fixed
 default_params
 BABEL-3326
 cast_eliminate

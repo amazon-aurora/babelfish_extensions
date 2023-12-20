@@ -52,8 +52,7 @@ include $(PGXS)
 
 MODULEPATH = $$libdir/$(EXTENSION)-$(BBFPGCMN_MAJOR_VERSION)
 
-UPGRADES = $(patsubst sql/upgrades/babelfishpg_common--%.sql,sql/babelfishpg_common--%.sql,$(wildcard sql/upgrades/babelfishpg_common--*.sql))
-GENERATED_UPGRADES = sql/$(EXTENSION)--3.2.0--3.3.0.sql
+UPGRADES = $(patsubst sql/upgrades/%.sql,sql/%.sql,$(wildcard sql/upgrades/*.sql))
 
 ifdef PREV_EXTVERSION
 DATA = sql/$(EXTENSION)--$(PREV_EXTVERSION).sql
@@ -61,8 +60,7 @@ endif
 
 DATA_built = \
     $(EXTENSION).control \
-    sql/$(EXTENSION)--$(EXTVERSION).sql $(UPGRADES) \
-    $(GENERATED_UPGRADES)
+    sql/$(EXTENSION)--$(EXTVERSION).sql $(UPGRADES)
 
 #include ../Makefile.common
 
@@ -80,7 +78,6 @@ include $(PGXS)
 
 ifeq ($(GE91),yes)
 all: sql/$(EXTENSION)--$(EXTVERSION).sql $(UPGRADES)
-all: $(GENERATED_UPGRADES)
 endif
 
 $(EXTENSION).control: $(EXTENSION).control.in
@@ -90,26 +87,10 @@ $(EXTENSION).control: $(EXTENSION).control.in
 		| sed -e 's|@MODULEPATH@|$(MODULEPATH)|g' \
 		> $@
 
-FLAG_TO_CHECK := -DENABLE_SPATIAL_TYPES
+sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
+	cpp $< | sed 's/^# /-- /g' > $@
 
-# Check if the flag is present in PG_CPPFLAGS
-ifeq (,$(filter $(FLAG_TO_CHECK),$(PG_CPPFLAGS)))
-# The flag is not present then build the .in file not including the spatial type files
-    sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
-		cpp $< | sed 's/^# /-- /g' > $@
-
-    sql/$(EXTENSION)--3.2.0--3.3.0.sql: sql/upgrades/babelfishpg_upgrades.in
-		cpp -D PREV_VERSION=3.2.0 -D CUR_VERSION=3.3.0 $< | sed 's/^# /-- /g' > $@
-else
-# The flag is present build the .in file including the spatial type files
-    sql/$(EXTENSION)--$(EXTVERSION).sql: sql/$(EXTENSION).in
-		cpp -D ENABLE_SPATIAL_TYPES=1 $< | sed 's/^# /-- /g' > $@
-
-    sql/$(EXTENSION)--3.2.0--3.3.0.sql: sql/upgrades/babelfishpg_upgrades.in
-		cpp -D ENABLE_SPATIAL_TYPES=1 -D PREV_VERSION=3.2.0 -D CUR_VERSION=3.3.0 $< | sed 's/^# /-- /g' > $@
-endif
-
-sql/babelfishpg_common--%.sql: sql/upgrades/babelfishpg_common--%.sql
+sql/%.sql: sql/upgrades/%.sql
 	cp $< $@
 
 

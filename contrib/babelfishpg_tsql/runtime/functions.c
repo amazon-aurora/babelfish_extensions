@@ -2,6 +2,7 @@
 #include "port.h"
 #include "funcapi.h"
 #include "pgstat.h"
+#include "varatt.h"
 
 #include "access/detoast.h"
 #include "access/htup_details.h"
@@ -175,7 +176,6 @@ extern bool canCommitTransaction(void);
 extern bool is_ms_shipped(char *object_name, int type, Oid schema_id);
 
 extern int	pltsql_datefirst;
-extern bool pltsql_implicit_transactions;
 extern bool pltsql_cursor_close_on_commit;
 extern bool pltsql_ansi_warnings;
 extern bool pltsql_ansi_padding;
@@ -378,22 +378,22 @@ version(PG_FUNCTION_ARGS)
 
 Datum sysutcdatetime(PG_FUNCTION_ARGS)
 {
-    PG_RETURN_TIMESTAMP(DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
-                                                            PointerGetDatum(GetCurrentStatementStartTimestamp())));
+    return DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
+                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp()));
     
 }
 
 Datum getutcdate(PG_FUNCTION_ARGS)
 {
-    PG_RETURN_TIMESTAMP(DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
-                                                            PointerGetDatum(GetCurrentStatementStartTimestamp()))));
+    return DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),DirectFunctionCall2(timestamptz_zone,CStringGetTextDatum("UTC"),
+                                                            TimestampTzGetDatum(GetCurrentStatementStartTimestamp())));
     
 }
 
 Datum getdate_internal(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_TIMESTAMP(DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),
-						PointerGetDatum(GetCurrentStatementStartTimestamp())));
+	return DirectFunctionCall2(timestamp_trunc,CStringGetTextDatum("millisecond"),
+						TimestampTzGetDatum(GetCurrentStatementStartTimestamp()));
 	
 }
 
@@ -406,8 +406,8 @@ Datum sysdatetimeoffset(PG_FUNCTION_ARGS)
 {
 	
 
-	PG_RETURN_POINTER((DirectFunctionCall1(common_utility_plugin_ptr->timestamp_datetimeoffset,
-							PointerGetDatum(GetCurrentStatementStartTimestamp()))));
+	return (DirectFunctionCall1(common_utility_plugin_ptr->timestamp_datetimeoffset,
+							TimestampTzGetDatum(GetCurrentStatementStartTimestamp())));
 }
 
 void *
@@ -1440,8 +1440,8 @@ object_id(PG_FUNCTION_ARGS)
 		db_name = downcase_identifier(db_name, strlen(db_name), false, false);
 		schema_name = downcase_identifier(schema_name, strlen(schema_name), false, false);
 		object_name = downcase_identifier(object_name, strlen(object_name), false, false);
-		for (int i = 0; i < 4; i++)
-			pfree(splited_object_name[i]);
+		for (int j = 0; j < 4; j++)
+			pfree(splited_object_name[j]);
 	}
 	else
 		pfree(splited_object_name[0]);
@@ -1519,7 +1519,7 @@ object_id(PG_FUNCTION_ARGS)
 	pfree(schema_name);
 	pfree(physical_schema_name);
 
-	if (!OidIsValid(schema_oid) || pg_namespace_aclcheck(schema_oid, user_id, ACL_USAGE) != ACLCHECK_OK)
+	if (!OidIsValid(schema_oid) || object_aclcheck(NamespaceRelationId, schema_oid, user_id, ACL_USAGE) != ACLCHECK_OK)
 	{
 		pfree(object_name);
 		if (object_type)
@@ -1731,7 +1731,7 @@ object_name(PG_FUNCTION_ARGS)
 		if (HeapTupleIsValid(tuple))
 		{
 			/* check if user have right permission on object */
-			if (pg_proc_aclcheck(object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
+			if (object_aclcheck(ProcedureRelationId, object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
 			{
 				Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(tuple);
 				result_text = cstring_to_text(NameStr(procform->proname));
@@ -1749,7 +1749,7 @@ object_name(PG_FUNCTION_ARGS)
 		if (HeapTupleIsValid(tuple))
 		{
 			/* check if user have right permission on object */
-			if (pg_type_aclcheck(object_id, user_id, ACL_USAGE) == ACLCHECK_OK)
+			if (object_aclcheck(TypeRelationId, object_id, user_id, ACL_USAGE) == ACLCHECK_OK)
 			{
 				Form_pg_type pg_type = (Form_pg_type) GETSTRUCT(tuple);
 				result_text = cstring_to_text(NameStr(pg_type->typname));
@@ -1875,8 +1875,8 @@ type_id(PG_FUNCTION_ARGS)
     if(pg_mbstrlen(splitted_object_name[1]) != 0)
     {
         pfree(input);
-        for (int i = 0; i < 4; i++)
-            pfree(splitted_object_name[i]);
+        for (int j = 0; j < 4; j++)
+            pfree(splitted_object_name[j]);
         pfree(splitted_object_name);
         PG_RETURN_NULL();
     }
@@ -1890,8 +1890,8 @@ type_id(PG_FUNCTION_ARGS)
         db_name = downcase_identifier(db_name, strlen(db_name), false, false);
         schema_name = downcase_identifier(schema_name, strlen(schema_name), false, false);
         object_name = downcase_identifier(object_name, strlen(object_name), false, false);
-        for (int i = 0; i < 4; i++)
-            pfree(splitted_object_name[i]);
+        for (int k = 0; k < 4; k++)
+            pfree(splitted_object_name[k]);
     }
     else
         pfree(splitted_object_name[0]);
@@ -1971,11 +1971,11 @@ type_id(PG_FUNCTION_ARGS)
     pfree(physical_schema_name);
 
     // Check if user has permission to access schema
-    if (OidIsValid(schema_oid) && pg_namespace_aclcheck(schema_oid, user_id, ACL_USAGE) == ACLCHECK_OK)
+    if (OidIsValid(schema_oid) && object_aclcheck(NamespaceRelationId, schema_oid, user_id, ACL_USAGE) == ACLCHECK_OK)
     {
     	// Search in pg_type.
 	result = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum(object_name), ObjectIdGetDatum(schema_oid));
-	if (OidIsValid(result) && pg_type_aclcheck(result, user_id, ACL_USAGE) == ACLCHECK_OK)
+	if (OidIsValid(result) && object_aclcheck(TypeRelationId, result, user_id, ACL_USAGE) == ACLCHECK_OK)
 	{
 		pfree(object_name);
 		PG_RETURN_INT32(result);
@@ -2013,7 +2013,7 @@ type_name(PG_FUNCTION_ARGS)
     tsql_typename = (*common_utility_plugin_ptr->translate_pg_type_to_tsql) (fcinfo1);
     if (tsql_typename)
     {
-        PG_RETURN_TEXT_P(tsql_typename);
+        return tsql_typename;
     }
     else
     {   
@@ -2021,7 +2021,7 @@ type_name(PG_FUNCTION_ARGS)
         tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type_id));
         if (HeapTupleIsValid(tuple))
         {
-            if (pg_type_aclcheck(type_id, user_id, ACL_USAGE) == ACLCHECK_OK)
+            if (object_aclcheck(TypeRelationId, type_id, user_id, ACL_USAGE) == ACLCHECK_OK)
             {
                 Form_pg_type pg_type = (Form_pg_type) GETSTRUCT(tuple);
                 result = NameStr(pg_type->typname);
@@ -2823,7 +2823,7 @@ object_schema_name(PG_FUNCTION_ARGS)
 		temp_nspid = tsql_get_proc_nsp_oid(object_id);
 		if (OidIsValid(temp_nspid))
 		{
-			if (pg_proc_aclcheck(object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
+			if (object_aclcheck(ProcedureRelationId, object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
 				namespace_oid = temp_nspid;
 			else
 				PG_RETURN_NULL();
@@ -2856,7 +2856,7 @@ object_schema_name(PG_FUNCTION_ARGS)
 	if (OidIsValid(namespace_oid))
 	{
 		namespace_name = get_namespace_name(namespace_oid);
-		if (pg_namespace_aclcheck(namespace_oid, user_id, ACL_USAGE) != ACLCHECK_OK ||
+		if (object_aclcheck(NamespaceRelationId, namespace_oid, user_id, ACL_USAGE) != ACLCHECK_OK ||
 		/* database_id should be same as that of db_id of physical schema name */
 			database_id != get_dbid_from_physical_schema_name(namespace_name, true))
 			PG_RETURN_NULL();
@@ -3240,7 +3240,7 @@ objectproperty_internal(PG_FUNCTION_ARGS)
 		tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_id));
 		if (HeapTupleIsValid(tuple))
 		{
-			if (pg_proc_aclcheck(object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
+			if (object_aclcheck(ProcedureRelationId, object_id, user_id, ACL_EXECUTE) == ACLCHECK_OK)
 			{
 				Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(tuple);
 
@@ -3322,10 +3322,10 @@ objectproperty_internal(PG_FUNCTION_ARGS)
 			SysScanDesc scan;
 			HeapTuple	tup;
 
-			if (pg_attribute_aclmask(atdform->adrelid, atdform->adnum, user_id, ACL_SELECT, ACLMASK_ANY) == ACLCHECK_OK &&
-				pg_attribute_aclmask(atdform->adrelid, atdform->adnum, user_id, ACL_INSERT, ACLMASK_ANY) == ACLCHECK_OK &&
-				pg_attribute_aclmask(atdform->adrelid, atdform->adnum, user_id, ACL_UPDATE, ACLMASK_ANY) == ACLCHECK_OK &&
-				pg_attribute_aclmask(atdform->adrelid, atdform->adnum, user_id, ACL_REFERENCES, ACLMASK_ANY) == ACLCHECK_OK)
+			if (pg_attribute_aclcheck(atdform->adrelid, atdform->adnum, user_id, ACL_SELECT) &&
+				pg_attribute_aclcheck(atdform->adrelid, atdform->adnum, user_id, ACL_INSERT) &&
+				pg_attribute_aclcheck(atdform->adrelid, atdform->adnum, user_id, ACL_UPDATE) &&
+				pg_attribute_aclcheck(atdform->adrelid, atdform->adnum, user_id, ACL_REFERENCES))
 			{
 				attrRel = table_open(AttributeRelationId, RowExclusiveLock);
 
@@ -3397,7 +3397,7 @@ objectproperty_internal(PG_FUNCTION_ARGS)
 	 * If the object_id is not found or user does not have enough privileges on the object and schema,
 	 * Return NULL.
 	 */
-	if (!schema_id || pg_namespace_aclcheck(schema_id, user_id, ACL_USAGE) != ACLCHECK_OK)
+	if (!schema_id || object_aclcheck(NamespaceRelationId, schema_id, user_id, ACL_USAGE) != ACLCHECK_OK)
 	{
 		pfree(property);
 		PG_RETURN_NULL();
@@ -3839,6 +3839,12 @@ bbf_pivot(PG_FUNCTION_ARGS)
 	oldcontext = MemoryContextSwitchTo(tsql_outmost_context);
 	PG_TRY();
 	{
+		if (!tsql_outmost_estat->pivot_parsetree_list)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_ASSERT_FAILURE),
+					errmsg("Unexpected error while trying to evaluate PIVOT clause")));
+		}
 		per_pivot_list = list_nth_node(List, tsql_outmost_estat->pivot_parsetree_list, tsql_outmost_estat->pivot_number - 1);
 		Assert(list_length(per_pivot_list) >= 2);
 		bbf_pivot_src_sql = list_nth_node(RawStmt, per_pivot_list, 0);

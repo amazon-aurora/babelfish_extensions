@@ -352,7 +352,7 @@ AlterRoleStmt:
 					n->is_grant = true;
 					n->granted_roles = list_make1(ap);
 					n->grantee_roles = list_make1($6);
-					n->admin_opt = false;
+					n->opt = NIL;
 					n->grantor = NULL;
 					$$ = (Node *) n;
 				}
@@ -365,7 +365,7 @@ AlterRoleStmt:
 					n->is_grant = false;
 					n->granted_roles = list_make1(ap);
 					n->grantee_roles = list_make1($6);
-					n->admin_opt = false;
+					n->opt = NIL;
 					n->grantor = NULL;
 					$$ = (Node *) n;
 				}
@@ -1635,11 +1635,11 @@ tsql_pivot_expr: TSQL_PIVOT '(' func_application FOR ColId IN_P in_expr ')'
 							List 		*l = list_make1(copyObject(n));
 							if (value_col_strlist == NULL || subsel_valuelists == NULL)
 							{
-								value_col_strlist = list_make1(s->sval);
+								value_col_strlist = list_make1(s);
 								subsel_valuelists = list_make1(l);
 							}else
 							{
-								value_col_strlist = lappend(value_col_strlist, s->sval);
+								value_col_strlist = lappend(value_col_strlist, s);
 								subsel_valuelists = lappend(subsel_valuelists, l);
 							}
 						}
@@ -2990,7 +2990,7 @@ tsql_alter_server_role:
 			n->is_grant = true;
 			n->granted_roles = list_make1(ap);
 			n->grantee_roles = list_make1($7);
-			n->admin_opt = false;
+			n->opt = NIL;
 			n->grantor = NULL;
 			$$ = (Node *) n;
 		}
@@ -3008,7 +3008,7 @@ tsql_alter_server_role:
 			n->is_grant = false;
 			n->granted_roles = list_make1(ap);
 			n->grantee_roles = list_make1($7);
-			n->admin_opt = false;
+			n->opt = NIL;
 			n->grantor = NULL;
 			$$ = (Node *) n;
 		}
@@ -3165,7 +3165,7 @@ opt_from:	FROM									{}
 
 tsql_IndexStmt:
 			CREATE opt_unique tsql_opt_cluster tsql_opt_columnstore
-			INDEX opt_concurrently opt_index_name
+			INDEX opt_concurrently opt_single_name
 			ON relation_expr access_method_clause '(' index_params ')'
 			opt_include where_clause opt_reloptions
 			tsql_opt_on_filegroup
@@ -3183,7 +3183,7 @@ tsql_IndexStmt:
 					n->excludeOpNames = NIL;
 					n->idxcomment = NULL;
 					n->indexOid = InvalidOid;
-					n->oldNode = InvalidOid;
+					n->oldNumber = InvalidOid;
 					n->primary = false;
 					n->isconstraint = false;
 					n->deferrable = false;

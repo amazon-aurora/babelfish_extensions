@@ -1238,7 +1238,7 @@ SPUnprepare(TDSRequestSP req)
 	/* Just to satisfy argument requirement */
 	MemSet(fcinfo, 0, SizeForFunctionCallInfo(1));
 	fcinfo->nargs = 1;
-	fcinfo->args[0].value = PointerGetDatum(req->handle);
+	fcinfo->args[0].value = (Datum)(req->handle);
 	fcinfo->args[0].isnull = false;
 
 	TDSStatementBeginCallback(NULL, NULL);
@@ -1844,53 +1844,6 @@ ReadParameters(TDSRequestSP request, uint64_t offset, StringInfo message, int *p
 			case TDS_TYPE_XML:
 				{
 					temp->maxLen = message->data[offset++];
-					retStatus = ReadPlp(temp, message, &offset);
-					CheckPLPStatusNotOK(temp, retStatus);
-				}
-				break;
-			case TDS_TYPE_CLRUDT:
-				{
-					uint16_t	len;
-					uint8_t   typenamelen;
-					StringInfoData   typeName;
-
-					initStringInfo(&typeName);
-
-					memcpy(&len, &message->data[offset], sizeof(len));
-					offset += sizeof(len);
-
-					temp->maxLen = len;
-
-					/* Read the type name for the given CLR-UDT */
-					memcpy(&typenamelen, &message->data[offset], sizeof(typenamelen));
-					offset += sizeof(typenamelen);
-
-					TdsUTF16toUTF8StringInfo(&typeName, &(message->data[offset]), 2*typenamelen);
-					offset += 2*typenamelen;
-
-					if (!(pg_strcasecmp(typeName.data, "geometry") == 0 || pg_strcasecmp(typeName.data, "geography") == 0))
-					{
-						ereport(ERROR,
-							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("The incoming tabular data stream (TDS) remote procedure call (RPC) protocol stream is incorrect. "
-									"UdtTypeName is incorrect.")));
-					}
-
-					/* Set column metadata for given CLR-UDT type depending upon the underlying typename. */
-					if (pg_strcasecmp(typeName.data, "geometry") == 0)
-					{
-						SetColMetadataForGeometryType(&temp->paramMeta, tdsType, TDS_MAXLEN_POINT, "", "geometry");
-						temp->type = TDS_TYPE_GEOMETRY;
-						tdsType = TDS_TYPE_GEOMETRY;
-					}
-					else
-					{
-						SetColMetadataForGeographyType(&temp->paramMeta, tdsType, TDS_MAXLEN_POINT, "", "geography");
-						temp->type = TDS_TYPE_GEOGRAPHY;
-						tdsType = TDS_TYPE_GEOGRAPHY;
-					}
-
-					resetStringInfo(&typeName);
 					retStatus = ReadPlp(temp, message, &offset);
 					CheckPLPStatusNotOK(temp, retStatus);
 				}
@@ -2937,9 +2890,9 @@ HandleSPCursorRequest(TDSRequestSP req)
 	PG_TRY();
 	{
 		StringInfo	buf = makeStringInfo();
-		ParameterToken token = req->cursorExtraArg3;
+		ParameterToken token1 = req->cursorExtraArg3;
 
-		TdsReadUnicodeDataFromTokenCommon(req->messageData, token, buf);
+		TdsReadUnicodeDataFromTokenCommon(req->messageData, token1, buf);
 		appendStringInfoCharMacro(buf, '\0');
 
 		ret = pltsql_plugin_handler_ptr->sp_cursor_callback((int) req->cursorHandle, optype, rownum, buf->data, values);

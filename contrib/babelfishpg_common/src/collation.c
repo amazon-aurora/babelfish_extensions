@@ -1,5 +1,7 @@
 #include "postgres.h"
+#include "varatt.h"
 
+#include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -1234,7 +1236,8 @@ collation_is_CI_AS(Oid colloid)
 	 * colStrength secondary, or level2, corresponds to a CI_AS collation,
 	 * unless colCaseLevel=yes is also specified
 	 */
-	if (0 != strstr(lowerstr(collcollate), lowerstr("colStrength=secondary")) &&	/* CI_AS */
+	if ((strstr(lowerstr(collcollate), lowerstr("colStrength=secondary")) ||
+		 strstr(lowerstr(collcollate), lowerstr("level2"))) &&	/* CI_AS */
 		0 == strstr(lowerstr(collcollate), lowerstr("colCaseLevel=yes")))	/* without a
 																			 * colCaseLevel - not
 																			 * CS_AI */
