@@ -12,6 +12,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include "varatt.h"
 
 #include "access/hash.h"
 #include "catalog/pg_collation.h"
@@ -26,8 +27,10 @@
 #include "parser/scansup.h"
 #include "port/pg_bswap.h"
 #include "regex/regex.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/bytea.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/pg_locale.h"
@@ -275,7 +278,10 @@ varbinaryout(PG_FUNCTION_ARGS)
 			 bytea_output);
 		rp = result = NULL;		/* keep compiler quiet */
 	}
-	*rp = '\0';
+	
+	if (rp)
+		*rp = '\0';
+	
 	PG_RETURN_CSTRING(result);
 }
 

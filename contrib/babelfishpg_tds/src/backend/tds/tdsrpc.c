@@ -17,6 +17,7 @@
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
+#include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 
 #include "src/include/tds_debug.h"
@@ -508,6 +509,7 @@ SPExecuteSQL(TDSRequestSP req)
 	initStringInfo(&s);
 	FillQueryFromParameterToken(req, &s);
 
+	set_ps_display("active");
 	activity = psprintf("SP_EXECUTESQL: %s", s.data);
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -641,6 +643,7 @@ SPPrepare(TDSRequestSP req)
 	initStringInfo(&s);
 	FillQueryFromParameterToken(req, &s);
 
+	set_ps_display("active");
 	activity = psprintf("SP_PREPARE: %s", s.data);
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -717,6 +720,7 @@ SPExecute(TDSRequestSP req)
 
 	char	   *activity = psprintf("SP_EXECUTE Handle: %d", req->handle);
 
+	set_ps_display("active");
 	TdsErrorContext->err_text = "Processing SP_EXECUTE Request";
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -859,6 +863,7 @@ SPPrepExec(TDSRequestSP req)
 	initStringInfo(&s);
 	FillQueryFromParameterToken(req, &s);
 
+	set_ps_display("active");
 	activity = psprintf("SP_PREPEXEC: %s", s.data);
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -1105,6 +1110,7 @@ SPCustomType(TDSRequestSP req)
 	initStringInfo(&s);
 	FillStoredProcedureCallFromParameterToken(req, &s);
 
+	set_ps_display("active");
 	activity = psprintf("SP_CUSTOMTYPE: %s", s.data);
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -1229,6 +1235,7 @@ SPUnprepare(TDSRequestSP req)
 
 	char	   *activity = psprintf("SP_UNPREPARE Handle: %d", req->handle);
 
+	set_ps_display("active");
 	TdsErrorContext->err_text = "Processing SP_UNPREPARE Request";
 	pgstat_report_activity(STATE_RUNNING, activity);
 	pfree(activity);
@@ -1238,7 +1245,7 @@ SPUnprepare(TDSRequestSP req)
 	/* Just to satisfy argument requirement */
 	MemSet(fcinfo, 0, SizeForFunctionCallInfo(1));
 	fcinfo->nargs = 1;
-	fcinfo->args[0].value = PointerGetDatum(req->handle);
+	fcinfo->args[0].value = (Datum)(req->handle);
 	fcinfo->args[0].isnull = false;
 
 	TDSStatementBeginCallback(NULL, NULL);
@@ -2334,10 +2341,15 @@ static void
 SendCursorResponse(TDSRequestSP req)
 {
 	int			cmd_type = TDS_CMD_UNKNOWN;
-	Portal		portal;
-
 	/* fetch the portal */
-	portal = GetPortalFromCursorHandle(req->cursorHandle, false);
+	Portal		portal = GetPortalFromCursorHandle(req->cursorHandle, false);
+	PlannedStmt *plannedStmt = PortalGetPrimaryStmt(portal);
+	List 		*targetList = NIL;
+
+	if (portal->strategy != PORTAL_MULTI_QUERY)
+	{
+		targetList = FetchStatementTargetList((Node *) plannedStmt);
+	}
 
 	/*
 	 * If we are in aborted transaction state, we can't run
@@ -2366,7 +2378,7 @@ SendCursorResponse(TDSRequestSP req)
 	 * break the protocol.  We also need to fetch the primary keys for dynamic
 	 * and keyset cursors (XXX: these cursors are not yet implemented).
 	 */
-	PrepareRowDescription(portal->tupDesc, FetchPortalTargetList(portal),
+	PrepareRowDescription(portal->tupDesc, plannedStmt, targetList,
 						  portal->formats, true,
 						  (req->scrollopt & (SP_CURSOR_SCROLLOPT_DYNAMIC | SP_CURSOR_SCROLLOPT_KEYSET)));
 
@@ -2460,7 +2472,7 @@ HandleSPCursorOpenCommon(TDSRequestSP req)
 		if (req->spType == SP_CURSOREXEC)
 		{
 			char	   *activity = psprintf("SP_CURSOREXEC Handle: %d", (int) req->cursorPreparedHandle);
-
+			set_ps_display("active");
 			pgstat_report_activity(STATE_RUNNING, activity);
 			pfree(activity);
 
@@ -2479,6 +2491,7 @@ HandleSPCursorOpenCommon(TDSRequestSP req)
 			switch (req->spType)
 			{
 				case SP_CURSOROPEN:
+					set_ps_display("active");
 					activity = psprintf("SP_CURSOROPEN: %s", buf.data);
 					pgstat_report_activity(STATE_RUNNING, activity);
 					pfree(activity);
@@ -2487,6 +2500,7 @@ HandleSPCursorOpenCommon(TDSRequestSP req)
 																			NULL /* TODO row_count */ , req->nTotalParams, req->boundParamsData, req->boundParamsNullList);
 					break;
 				case SP_CURSORPREPARE:
+					set_ps_display("active");
 					activity = psprintf("SP_CURSORPREPARE: %s", buf.data);
 					pgstat_report_activity(STATE_RUNNING, activity);
 					pfree(activity);
@@ -2495,6 +2509,7 @@ HandleSPCursorOpenCommon(TDSRequestSP req)
 																			   (int) req->nTotalBindParams, req->boundParamsOidList);
 					break;
 				case SP_CURSORPREPEXEC:
+					set_ps_display("active");
 					activity = psprintf("SP_CURSORPREPEXEC: %s", buf.data);
 					pgstat_report_activity(STATE_RUNNING, activity);
 					pfree(activity);
@@ -2937,9 +2952,9 @@ HandleSPCursorRequest(TDSRequestSP req)
 	PG_TRY();
 	{
 		StringInfo	buf = makeStringInfo();
-		ParameterToken token = req->cursorExtraArg3;
+		ParameterToken token1 = req->cursorExtraArg3;
 
-		TdsReadUnicodeDataFromTokenCommon(req->messageData, token, buf);
+		TdsReadUnicodeDataFromTokenCommon(req->messageData, token1, buf);
 		appendStringInfoCharMacro(buf, '\0');
 
 		ret = pltsql_plugin_handler_ptr->sp_cursor_callback((int) req->cursorHandle, optype, rownum, buf->data, values);

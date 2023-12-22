@@ -26,7 +26,7 @@
 #include "storage/ipc.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
-#include "utils/guc.h"
+#include "utils/guc_hooks.h"
 #include "utils/pidfile.h"
 #include "utils/portal.h"
 #include "utils/ps_status.h"
@@ -349,6 +349,7 @@ pe_authenticate(Port *port, const char **username)
 	ClientAuthInProgress = false;	/* client_min_messages is active now */
 
 	*username = port->user_name;
+	port->is_tds_conn = true;
 }
 
 static void

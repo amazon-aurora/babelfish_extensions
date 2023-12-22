@@ -15,6 +15,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -2395,7 +2396,7 @@ TdsRecvTypeTable(const char *message, const ParameterToken token)
 		{
 			TdsIoFunctionInfo tempFuncInfo;
 			int			currentColumn = 0;
-			char	   *currentQuery = " ";
+			char	   *currentQuery = pstrdup(" ");
 
 			while (currentColumn != token->tvpInfo->colCount)
 			{
@@ -3727,7 +3728,7 @@ TdsTypeSqlVariantToDatum(StringInfo buf)
 		if (sign == 1 && num != 0)
 			decString++;
 		res = TdsSetVarFromStrWrapper(decString);
-		memcpy(READ_DATA(result, variantHeaderLen), (bytea *) DatumGetPointer(res), dataLen);
+		memcpy(READ_DATA(result, variantHeaderLen), (bytea *) (Pointer)(res), dataLen);
 	}
 	else
 	{

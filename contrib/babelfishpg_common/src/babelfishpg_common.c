@@ -2,6 +2,7 @@
 #include "catalog/pg_collation.h"
 #include "commands/typecmds.h"
 #include "optimizer/pathnode.h"
+#include "varatt.h"
 
 #include "fmgr.h"
 #include "instr.h"
@@ -152,9 +153,6 @@ _PG_init(void)
 void
 _PG_fini(void)
 {
-	handle_type_and_collation_hook = NULL;
-	avoid_collation_override_hook = NULL;
-	define_type_default_collation_hook = NULL;
 	CLUSTER_COLLATION_OID_hook = prev_CLUSTER_COLLATION_OID_hook;
 	TranslateCollation_hook = prev_TranslateCollation_hook;
 	PreCreateCollation_hook = prev_PreCreateCollation_hook;
@@ -201,6 +199,7 @@ get_common_utility_plugin(void)
 		common_utility_plugin_var.TdsGetVariantBaseType = &TdsGetVariantBaseType;
 		common_utility_plugin_var.lookup_tsql_datatype_oid = &lookup_tsql_datatype_oid;
 		common_utility_plugin_var.GetUTF8CodePoint = &GetUTF8CodePoint;
+		common_utility_plugin_var.TsqlUTF8LengthInUTF16 = &TsqlUTF8LengthInUTF16;
 	}
 	return &common_utility_plugin_var;
 }

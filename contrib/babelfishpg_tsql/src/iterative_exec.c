@@ -595,7 +595,7 @@ get_stat_trace(ExecCodes *exec_code, ExecStat *stat, StringInfo buf)
 
 	/* Header */
 	snprintf(local_buf, TRACE_LOCAL_BUF_SIZE,
-			 "Execution Summary: %s.%s total execution code size %zu, total execution time %zums\n",
+			 "Execution Summary: %s.%s total execution code size %zu, total execution time %lums\n",
 			 exec_code->proc_namespace, exec_code->proc_name,
 			 code_size, stat->total_duration);
 	appendStringInfoString(buf, local_buf);
@@ -1191,7 +1191,7 @@ dispatch_stmt_handle_error(PLtsql_execstate *estate,
 	int			rc = PLTSQL_RC_OK;
 	volatile bool internal_sp_started;
 	volatile int before_lxid = MyProc->lxid;
-	volatile int before_subtxn_id;
+	volatile int before_subtxn_id = 0;
 	MemoryContext cur_ctxt = CurrentMemoryContext;
 	ResourceOwner oldowner = CurrentResourceOwner;
 	SimpleEcontextStackEntry *volatile topEntry = simple_econtext_stack;
@@ -1508,11 +1508,11 @@ exec_stmt_iterative(PLtsql_execstate *estate, ExecCodes *exec_codes, ExecConfig_
 				{
 					int			err_handler_pc;
 					int			i;
-					PLtsql_errctx *cur_err_ctx = *(PLtsql_errctx **) vec_at(estate->err_ctx_stack,
+					PLtsql_errctx *cur_err_ctx1 = *(PLtsql_errctx **) vec_at(estate->err_ctx_stack,
 																			estate->cur_err_ctx_idx);
 
 					/* restore error context */
-					err_handler_pc = cur_err_ctx->target_pc;
+					err_handler_pc = cur_err_ctx1->target_pc;
 
 					/* Cleanup dangling errors */
 					for (i = (int) vec_size(estate->err_ctx_stack) - 1; i > (int) estate->cur_err_ctx_idx; i--)

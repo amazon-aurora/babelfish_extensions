@@ -1,5 +1,6 @@
 #include "postgres.h"
 #include "funcapi.h"
+#include "varatt.h"
 
 #include "foreign/foreign.h"
 #include "libpq/pqformat.h"
@@ -679,7 +680,7 @@ tdsTypeTypmod(int datatype, int datalen, bool is_metadata, int precision, int sc
 			{
 				LINKED_SERVER_DEBUG_FINER("LINKED SERVER: time info - scale: %d", scale);
 
-				if (scale >= 0 || scale < 7)
+				if (scale >= 0 && scale < 7)
 					return scale;
 				else
 					return -1;

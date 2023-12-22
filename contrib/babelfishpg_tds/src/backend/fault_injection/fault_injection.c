@@ -88,9 +88,9 @@ FaultInjectionInitialize()
 		/* should not try to insert same entry multiple times */
 		Assert(foundPtr == false);
 
-		if (entry == NULL)
+		if (new_entry == NULL)
 		{
-			ereport(DEBUG5,
+			ereport(ERROR,
 					(errmsg("FaultInjectionLookupHashEntry() could not insert fault injection hash entry:'%s' ",
 							entry->faultName)));
 		}
@@ -271,6 +271,7 @@ TriggerFault(FaultInjectorType_e type, void *arg)
 	foreach(lc, list)
 	{
 		FaultInjectorEntry_s *entry = (FaultInjectorEntry_s *) lfirst(lc);
+		ListCell   *lc1; 
 
 		/* otherwise it should have been removed */
 		Assert(entry->num_occurrences > 0);
@@ -285,11 +286,11 @@ TriggerFault(FaultInjectorType_e type, void *arg)
 			if (entry->num_occurrences == 0)
 				tmp_list = lappend(tmp_list, entry);
 
-			foreach(lc, tmp_list)
+			foreach(lc1, tmp_list)
 			{
-				FaultInjectorEntry_s *entry = (FaultInjectorEntry_s *) lfirst(lc);
+				FaultInjectorEntry_s *entry1 = (FaultInjectorEntry_s *) lfirst(lc1);
 
-				FaultInjectionDisableTest(entry);
+				FaultInjectionDisableTest(entry1);
 			}
 
 			list_free(tmp_list);

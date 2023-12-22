@@ -261,9 +261,6 @@ static tsql_has_linked_srv_permissions_hook_type prev_tsql_has_linked_srv_permis
 plansource_complete_hook_type prev_plansource_complete_hook = NULL;
 plansource_revalidate_hook_type prev_plansource_revalidate_hook = NULL;
 planner_node_transformer_hook_type prev_planner_node_transformer_hook = NULL;
-check_lang_as_clause_hook_type check_lang_as_clause_hook = NULL;
-write_stored_proc_probin_hook_type write_stored_proc_probin_hook = NULL;
-make_fn_arguments_from_stored_proc_probin_hook_type make_fn_arguments_from_stored_proc_probin_hook = NULL;
 pltsql_nextval_hook_type prev_pltsql_nextval_hook = NULL;
 pltsql_resetcache_hook_type prev_pltsql_resetcache_hook = NULL;
 pltsql_setval_hook_type prev_pltsql_setval_hook = NULL;
@@ -278,7 +275,7 @@ static bool
 check_identity_insert(char** newval, void **extra, GucSource source)
 {
 	/*
-	 * Workers synchronize the parameter at the beginning of each parallel 
+	 * Workers synchronize the parameter at the beginning of each parallel
 	 * operation. Avoid performing parameter assignment uring parallel operation.
 	 */
 	if (IsParallelWorker() && !InitializingParallelWorker)
@@ -518,12 +515,12 @@ pltsql_pre_parse_analyze(ParseState *pstate, RawStmt *parseTree)
 					/* Skip if dbid and owner column already exists */
 					foreach(lc, stmt->cols)
 					{
-						ResTarget  *col = (ResTarget *) lfirst(lc);
+						ResTarget  *col1 = (ResTarget *) lfirst(lc);
 
-						if (pg_strcasecmp(col->name, "dbid") == 0)
+						if (pg_strcasecmp(col1->name, "dbid") == 0)
 							dbid_found = true;
 						if (relid == sysdatabases_oid &&
-							pg_strcasecmp(col->name, "owner") == 0)
+							pg_strcasecmp(col1->name, "owner") == 0)
 							owner_found = true;
 					}
 					if (dbid_found && (owner_found || relid != sysdatabases_oid))
@@ -1018,6 +1015,7 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 										{
 											char	*colname = NULL;
 											int		 colname_len = 0;
+											ListCell *elements2;
 
 											/* T-SQL Parser might have directly prepared IndexElem instead of String*/
 											if (nodeTag(lfirst(lc)) == T_IndexElem) {
@@ -1029,15 +1027,15 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 												colname_len = strlen(colname);
 											}
 
-											foreach(elements, stmt->tableElts)
+											foreach(elements2, stmt->tableElts)
 											{
-												Node	*element = lfirst(elements);
-												if (nodeTag(element) == T_ColumnDef)
+												Node	*element2 = lfirst(elements2);
+												if (nodeTag(element2) == T_ColumnDef)
 												{
-													ColumnDef* def = (ColumnDef *) element;
+													ColumnDef* def = (ColumnDef *) element2;
 
-													if (strlen(def->colname) == colname_len && 
-														strncmp(def->colname, colname, colname_len) == 0 && 
+													if (strlen(def->colname) == colname_len &&
+														strncmp(def->colname, colname, colname_len) == 0 &&
 														has_nullable_constraint(def))
 													{
 														ereport(ERROR,
@@ -1045,9 +1043,9 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 															errmsg("Nullable UNIQUE constraint is not supported. Please use babelfishpg_tsql.escape_hatch_unique_constraint to ignore "
 																"or add a NOT NULL constraint")));
 													}
-												}	
+												}
 											}
-										}		
+										}
 									}
 
 									if (rowversion_column_name)
@@ -1950,7 +1948,7 @@ pltsql_sequence_datatype_map(ParseState *pstate,
 	if (list_len > 1)
 		list_free(new_type_names);
 
-	aclresult = pg_type_aclcheck(*newtypid, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(TypeRelationId, *newtypid, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, *newtypid);
 
@@ -2293,7 +2291,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							if (atstmt->relation->schemaname != NULL)
 							{
 								/*
-								* As syntax1 ( { ENABLE | DISABLE } TRIGGER <trigger> ON <table> ) 
+								* As syntax1 ( { ENABLE | DISABLE } TRIGGER <trigger> ON <table> )
 								* is mapped to syntax2 ( ALTER TABLE <table> { ENABLE | DISABLE } TRIGGER <trigger> ),
 								* objtype of atstmt for syntax1 is temporarily set to OBJECT_TRIGGER to identify whether the
 								* query was originally of syntax1 or syntax2, here astmt->objtype is reset back to OBJECT_TABLE
@@ -2331,9 +2329,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_CreateRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 				{
-					const char *prev_current_user;
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
 					List	   *login_options = NIL;
 					List	   *user_options = NIL;
@@ -2342,6 +2339,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		isuser = false;
 					bool		isrole = false;
 					bool		from_windows = false;
+					const char	*old_createrole_self_grant;
+					Oid save_userid;
+					int save_sec_context;
 
 					/* Check if creating login or role. Expect islogin first */
 					if (stmt->options != NIL)
@@ -2619,83 +2619,62 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						if (get_role_oid(stmt->role, true) != InvalidOid)
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("The Server principal '%s' already exists", stmt->role)));
+					}
 
-						/* Set current user to sysadmin for create permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
+					/*
+					 * check whether sql user name and role name contains
+					 * '\' or not
+					 */
+					if (isrole || !from_windows)
+						validateUserAndRole(stmt->role);
 
-						bbf_set_current_user("sysadmin");
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					old_createrole_self_grant = pstrdup(GetConfigOption("createrole_self_grant", false, true));
 
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+					PG_TRY();
+					{
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to SA for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+						SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
+
+						if (prev_ProcessUtility)
+							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+												params, queryEnv, dest,
+												qc);
+						else
+							standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 													params, queryEnv, dest,
 													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
 
+						if (islogin)
+						{
 							stmt->options = list_concat(stmt->options,
 														login_options);
 							create_bbf_authid_login_ext(stmt);
 						}
-						PG_CATCH();
+						else
 						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-
-						return;
-					}
-					else if (isuser || isrole)
-					{
-						/*
-						 * check whether sql user name and role name contains
-						 * '\' or not
-						 */
-						if (isrole || !from_windows)
-							validateUserAndRole(stmt->role);
-
-						/* Set current user to dbo user for create permissions */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						bbf_set_current_user(get_dbo_role_name(get_cur_db_name()));
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-													params, queryEnv, dest,
-													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-
-							stmt->options = list_concat(stmt->options,
-														user_options);
-
 							/*
 							 * If the stmt is CREATE USER, it must have a
 							 * corresponding login and a schema name
 							 */
+							stmt->options = list_concat(stmt->options,
+														user_options);
 							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
 						}
-						PG_CATCH();
-						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-
-						return;
 					}
+					PG_FINALLY();
+					{
+						SetConfigOption("createrole_self_grant", old_createrole_self_grant, PGC_USERSET, PGC_S_OVERRIDE);
+						SetUserIdAndSecContext(save_userid, save_sec_context);
+					}
+					PG_END_TRY();
+
+					return;
 				}
 				break;
 			}
@@ -2710,9 +2689,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		islogin = false;
 					bool		isuser = false;
 					bool		isrole = false;
-					Oid			prev_current_user;
-
-					prev_current_user = GetUserId();
 
 					/* Check if creating login or role. Expect islogin first */
 					if (stmt->options != NIL)
@@ -2821,6 +2797,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						Oid			datdba;
 						bool		has_password = false;
 						char	   *temp_login_name = NULL;
+						Oid			save_userid;
+						int			save_sec_context;
 
 						datdba = get_role_oid("sysadmin", false);
 
@@ -2877,9 +2855,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
-
-						/* Set current user to sysadmin for alter permissions */
-						SetCurrentRoleId(datdba, false);
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to bbf_role_admin for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						GetUserIdAndSecContext(&save_userid, &save_sec_context);
+						SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 						PG_TRY();
 						{
@@ -2896,14 +2878,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														login_options);
 							alter_bbf_authid_login_ext(stmt);
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
-							SetCurrentRoleId(prev_current_user, false);
-							PG_RE_THROW();
+							SetUserIdAndSecContext(save_userid, save_sec_context);
 						}
 						PG_END_TRY();
-
-						SetCurrentRoleId(prev_current_user, false);
 
 						return;
 					}
@@ -2913,11 +2892,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						char	   *db_name;
 						char	   *user_name;
 						char	   *cur_user;
-						Oid			dbo_id;
+						Oid			prev_current_user;
 
 						db_name = get_cur_db_name();
 						dbo_name = get_dbo_role_name(db_name);
-						dbo_id = get_role_oid(dbo_name, false);
 						user_name = stmt->role->rolename;
 						cur_user = GetUserNameFromId(GetUserId(), false);
 
@@ -2960,8 +2938,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							}
 						}
 
-						/* Set current user to dbo for alter permissions */
-						SetCurrentRoleId(dbo_id, false);
+						/* 
+						 * We have performed all permissions checks.
+						 * Set current user to bbf_role_admin for create permissions.
+						 * Save the previous user to be restored after creating the login.
+						 */
+						prev_current_user = GetUserId();
+						SetCurrentRoleId(get_bbf_role_admin_oid(), true);
 
 						PG_TRY();
 						{
@@ -2978,14 +2961,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														user_options);
 							alter_bbf_authid_user_ext(stmt);
 						}
-						PG_CATCH();
+						PG_FINALLY();
 						{
-							SetCurrentRoleId(prev_current_user, false);
-							PG_RE_THROW();
+							SetCurrentRoleId(prev_current_user, true);
 						}
 						PG_END_TRY();
 
-						SetCurrentRoleId(prev_current_user, false);
 						set_session_properties(db_name);
 						pfree(cur_user);
 						pfree(db_name);
@@ -2997,9 +2978,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_DropRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(DROP DATABASE )") != 0)
 				{
-					const char *prev_current_user;
 					DropRoleStmt *stmt = (DropRoleStmt *) parsetree;
 					bool		drop_user = false;
 					bool		drop_role = false;
@@ -3010,6 +2990,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					char	   *role_name = NULL;
 					bool		other = false;
 					ListCell   *item;
+					char	   *db_name;
+					Oid save_userid;
+					int save_sec_context;
 
 					/* Check if roles are users that need role name mapping */
 					if (stmt->roles != NIL)
@@ -3025,8 +3008,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (drop_user || drop_role)
 						{
-							char	   *db_name = NULL;
-
 							stmt->roles = list_delete_cell(stmt->roles,
 														   list_head(stmt->roles));
 							pfree(headrol);
@@ -3165,11 +3146,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/* If not user or role, then login */
-					if (!drop_user && !drop_role)
+					if (drop_login)
 					{
 						int			role_oid = get_role_oid(role_name, true);
-
-						if (role_oid == InvalidOid)
+						
+						if (role_oid == InvalidOid || !is_member_of_role(GetSessionUserId(), get_sysadmin_oid()))
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3183,45 +3164,31 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									 errmsg("Could not drop login '%s' as the user is currently logged in.", role_name)));
 					}
 
-					if (all_logins || all_users || all_roles)
+					/*
+					 * Set current user to bbf_role_admin for drop
+					 * permissions
+					 */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+					PG_TRY();
 					{
-						/*
-						 * Set current user as appropriate for drop
-						 * permissions
-						 */
-						prev_current_user = GetUserNameFromId(GetUserId(), false);
-
-						/*
-						 * Only use dbo if dropping a user/role in a Babelfish
-						 * session.
-						 */
-						if (drop_user || drop_role)
-							bbf_set_current_user(get_dbo_role_name(get_cur_db_name()));
+						if (prev_ProcessUtility)
+							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+												params, queryEnv, dest,
+												qc);
 						else
-							bbf_set_current_user("sysadmin");
-
-						PG_TRY();
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
+							standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 													params, queryEnv, dest,
 													qc);
-							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context,
-														params, queryEnv, dest,
-														qc);
-						}
-						PG_CATCH();
-						{
-							bbf_set_current_user(prev_current_user);
-							PG_RE_THROW();
-						}
-						PG_END_TRY();
-
-						bbf_set_current_user(prev_current_user);
-
-						return;
 					}
+					PG_FINALLY();
+					{
+						SetUserIdAndSecContext(save_userid, save_sec_context);
+					}
+					PG_END_TRY();
+
+					return;
 				}
 				break;
 			}
@@ -3347,20 +3314,22 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 			}
 		case T_GrantRoleStmt:
-			if (sql_dialect == SQL_DIALECT_TSQL)
+			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
+				Oid save_userid;
+				int save_sec_context;
 
 				if (is_alter_server_stmt(grant_role))
 				{
-					const char *prev_current_user;
-					const char *session_user_name;
-
 					check_alter_server_stmt(grant_role);
-					prev_current_user = GetUserNameFromId(GetUserId(), false);
-					session_user_name = GetUserNameFromId(GetSessionUserId(), false);
-
-					bbf_set_current_user(session_user_name);
+					
+					/*
+					 * Set to bbf_role_admin to grant the role
+					 * We have already checked for permissions
+					 */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 
@@ -3372,27 +3341,24 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 													queryEnv, dest, qc);
 
 					}
-					PG_CATCH();
+					PG_FINALLY();
 					{
 						/* Clean up. Restore previous state. */
-						bbf_set_current_user(prev_current_user);
-						PG_RE_THROW();
+						SetUserIdAndSecContext(save_userid, save_sec_context);
 					}
 					PG_END_TRY();
-					/* Clean up. Restore previous state. */
-					bbf_set_current_user(prev_current_user);
 					return;
 				}
 				else if (is_alter_role_stmt(grant_role))
 				{
-					const char *prev_current_user;
-					const char *session_user_name;
-
 					check_alter_role_stmt(grant_role);
-					prev_current_user = GetUserNameFromId(GetUserId(), false);
-					session_user_name = GetUserNameFromId(GetSessionUserId(), false);
-
-					bbf_set_current_user(session_user_name);
+					
+					/*
+					 * Set to bbf_role_admin to grant the role
+					 * We have already checked for permissions
+					 */
+					GetUserIdAndSecContext(&save_userid, &save_sec_context);
+					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
 						if (prev_ProcessUtility)
@@ -3403,15 +3369,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 													queryEnv, dest, qc);
 
 					}
-					PG_CATCH();
+					PG_FINALLY();
 					{
 						/* Clean up. Restore previous state. */
-						bbf_set_current_user(prev_current_user);
-						PG_RE_THROW();
+						SetUserIdAndSecContext(save_userid, save_sec_context);
 					}
 					PG_END_TRY();
-					/* Clean up. Restore previous state. */
-					bbf_set_current_user(prev_current_user);
 					return;
 				}
 			}
@@ -4284,7 +4247,7 @@ pltsql_call_handler(PG_FUNCTION_ARGS)
 		scope_level = pltsql_new_scope_identity_nest_level();
 
 		prev_procid = procid_var;
-		PG_TRY();
+		PG_TRY(2);
 		{
 			set_procid(func->fn_oid);
 
@@ -4318,7 +4281,7 @@ pltsql_call_handler(PG_FUNCTION_ARGS)
 
 			set_procid(prev_procid);
 		}
-		PG_CATCH();
+		PG_CATCH(2);
 		{
 			set_procid(prev_procid);
 			/* Decrement use-count, restore cur_estate, and propagate error */
@@ -4332,7 +4295,7 @@ pltsql_call_handler(PG_FUNCTION_ARGS)
 			sql_dialect = saved_dialect;
 			return retval;
 		}
-		PG_END_TRY();
+		PG_END_TRY(2);
 	}
 	PG_FINALLY();
 	{
@@ -4368,7 +4331,7 @@ pltsql_inline_handler(PG_FUNCTION_ARGS)
 	PLtsql_function *func;
 	FmgrInfo	flinfo;
 	EState	   *simple_eval_estate;
-	Datum		retval;
+	Datum		retval = 0;
 	int			rc;
 	int			saved_dialect = sql_dialect;
 	int			nargs = PG_NARGS();
@@ -4396,6 +4359,7 @@ pltsql_inline_handler(PG_FUNCTION_ARGS)
 	/* Set statement_timestamp() */
 	SetCurrentStatementStartTimestamp();
 
+	set_ps_display("active");
 	pgstat_report_activity(STATE_RUNNING, codeblock->source_text);
 
 	if (nargs > 1)
@@ -5214,8 +5178,7 @@ pltsql_revert_guc(int nest_level)
 	}
 
 	still_dirty = false;
-	num_guc_variables = GetNumConfigOptions();
-	guc_variables = get_guc_variables();
+	guc_variables = get_guc_variables(&num_guc_variables);
 	for (i = 0; i < num_guc_variables; i++)
 	{
 		struct config_generic *gconf = guc_variables[i];
@@ -5386,7 +5349,7 @@ get_oid_type_string(int type_oid)
 	return type_string;
 }
 
-static int64 
+static int64
 get_identity_into_args(Node *node)
 {
 	int64 val = 0;
@@ -5479,7 +5442,7 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 					{
 					case 1:
 						typeoid = get_identity_into_args(farg_node);
-						typename = typeStringToTypeName(get_oid_type_string(typeoid));
+						typename = typeStringToTypeName(get_oid_type_string(typeoid), NULL);
 						break;
 					case 2:
 						seedvalue = get_identity_into_args(farg_node);
@@ -5798,7 +5761,7 @@ bbf_set_tran_isolation(char *new_isolation_level_str)
 
 	if(new_isolation_int_val != DefaultXactIsoLevel)
 	{
-		if(FirstSnapshotSet || IsSubTransaction() || 
+		if(FirstSnapshotSet || IsSubTransaction() ||
 				(new_isolation_int_val == XACT_SERIALIZABLE && RecoveryInProgress()))
 		{
 			if(escape_hatch_set_transaction_isolation_level == EH_IGNORE)

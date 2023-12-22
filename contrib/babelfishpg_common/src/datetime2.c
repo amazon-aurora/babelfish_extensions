@@ -49,9 +49,10 @@ datetime2_in_str(char *str, int32 typmod)
 	struct pg_tm tt,
 			   *tm = &tt;
 	int			tz;
-	int			dtype;
+	int			dtype = -1;
 	int			nf;
 	int			dterr;
+	DateTimeErrorExtra extra;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];
 	char		workbuf[MAXDATELEN + MAXDATEFIELDS];
@@ -68,7 +69,7 @@ datetime2_in_str(char *str, int32 typmod)
 	dterr = ParseDateTime(str, workbuf, sizeof(workbuf),
 						  field, ftype, MAXDATEFIELDS, &nf);
 	if (dterr == 0)
-		dterr = DecodeDateTime(field, ftype, nf, &dtype, tm, &fsec, &tz);
+		dterr = DecodeDateTime(field, ftype, nf, &dtype, tm, &fsec, &tz, &extra);
 
 	/*
 	 * dterr == 1 means that input is TIME format(e.g 12:34:59.123) initialize
@@ -83,7 +84,7 @@ datetime2_in_str(char *str, int32 typmod)
 	}
 
 	if (dterr != 0)
-		DateTimeParseError(dterr, str, "datetime2");
+		DateTimeParseError(dterr, &extra, str, "datetime2", NULL);
 
 	/*
 	 * Caps upper limit on fractional seconds(999999 microseconds) so that the
