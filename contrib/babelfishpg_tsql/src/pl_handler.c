@@ -2339,9 +2339,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		isuser = false;
 					bool		isrole = false;
 					bool		from_windows = false;
+					Oid 		save_userid;
+					int 		save_sec_context;
 					const char	*old_createrole_self_grant;
-					Oid save_userid;
-					int save_sec_context;
 
 					/* Check if creating login or role. Expect islogin first */
 					if (stmt->options != NIL)
@@ -2628,15 +2628,17 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (isrole || !from_windows)
 						validateUserAndRole(stmt->role);
 
+					/* Save the previous user to be restored after creating the login. */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
 					old_createrole_self_grant = pstrdup(GetConfigOption("createrole_self_grant", false, true));
 
 					PG_TRY();
 					{
-						/* 
-						 * We have performed all permissions checks.
-						 * Set current user to SA for create permissions.
-						 * Save the previous user to be restored after creating the login.
+						/*
+						 * We have performed all the permissions checks.
+						 * Set current user to bbf_role_admin for create permissions.
+						 * Set createrole_self_grant to "inherit" so that bbf_role_admin
+						 * inherits the new role.
 						 */
 						SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 						SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
@@ -2650,22 +2652,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 													params, queryEnv, dest,
 													qc);
 
-						if (islogin)
-						{
-							stmt->options = list_concat(stmt->options,
-														login_options);
-							create_bbf_authid_login_ext(stmt);
-						}
-						else
-						{
-							/*
-							 * If the stmt is CREATE USER, it must have a
-							 * corresponding login and a schema name
-							 */
-							stmt->options = list_concat(stmt->options,
-														user_options);
-							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
-						}
 					}
 					PG_FINALLY();
 					{
@@ -2673,6 +2659,23 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						SetUserIdAndSecContext(save_userid, save_sec_context);
 					}
 					PG_END_TRY();
+
+					if (islogin)
+					{
+						stmt->options = list_concat(stmt->options,
+													login_options);
+						create_bbf_authid_login_ext(stmt);
+					}
+					else
+					{
+						/*
+							* If the stmt is CREATE USER, it must have a
+							* corresponding login and a schema name
+							*/
+						stmt->options = list_concat(stmt->options,
+													user_options);
+						create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
+					}
 
 					return;
 				}
@@ -2794,11 +2797,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (islogin)
 					{
-						Oid			datdba;
+						Oid 		datdba;
 						bool		has_password = false;
 						char	   *temp_login_name = NULL;
-						Oid			save_userid;
-						int			save_sec_context;
+						Oid 		save_userid;
+						int 		save_sec_context;
 
 						datdba = get_role_oid("sysadmin", false);
 
@@ -2855,10 +2858,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
-						/* 
-						 * We have performed all permissions checks.
-						 * Set current user to bbf_role_admin for create permissions.
-						 * Save the previous user to be restored after creating the login.
+						/*
+						 * We have performed all the permissions checks.
+						 * Set current user to bbf_role_admin for alter permissions.
 						 */
 						GetUserIdAndSecContext(&save_userid, &save_sec_context);
 						SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
@@ -2892,7 +2894,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						char	   *db_name;
 						char	   *user_name;
 						char	   *cur_user;
-						Oid			prev_current_user;
+						Oid     	prev_current_user;
 
 						db_name = get_cur_db_name();
 						dbo_name = get_dbo_role_name(db_name);
@@ -2938,10 +2940,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							}
 						}
 
-						/* 
-						 * We have performed all permissions checks.
-						 * Set current user to bbf_role_admin for create permissions.
-						 * Save the previous user to be restored after creating the login.
+						/*
+						 * We have performed all the permissions checks.
+						 * Set current user to bbf_role_admin for alter permissions.
 						 */
 						prev_current_user = GetUserId();
 						SetCurrentRoleId(get_bbf_role_admin_oid(), true);
@@ -2991,8 +2992,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					bool		other = false;
 					ListCell   *item;
 					char	   *db_name;
-					Oid save_userid;
-					int save_sec_context;
+					Oid 		save_userid;
+					int 		save_sec_context;
 
 					/* Check if roles are users that need role name mapping */
 					if (stmt->roles != NIL)
@@ -3149,7 +3150,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					if (drop_login)
 					{
 						int			role_oid = get_role_oid(role_name, true);
-						
+
 						if (role_oid == InvalidOid || !is_member_of_role(GetSessionUserId(), get_sysadmin_oid()))
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
@@ -3165,8 +3166,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/*
-					 * Set current user to bbf_role_admin for drop
-					 * permissions
+					 * We have performed all the permissions checks.
+					 * Set current user to bbf_role_admin for drop permissions.
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
 					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
@@ -3317,13 +3318,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
-				Oid save_userid;
-				int save_sec_context;
+				Oid 	save_userid;
+				int 	save_sec_context;
 
 				if (is_alter_server_stmt(grant_role))
 				{
 					check_alter_server_stmt(grant_role);
-					
+
 					/*
 					 * Set to bbf_role_admin to grant the role
 					 * We have already checked for permissions
@@ -3352,10 +3353,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				else if (is_alter_role_stmt(grant_role))
 				{
 					check_alter_role_stmt(grant_role);
-					
+
 					/*
-					 * Set to bbf_role_admin to grant the role
-					 * We have already checked for permissions
+					 * We have performed all the permissions checks.
+					 * Set current user to bbf_role_admin for grant permissions.
 					 */
 					GetUserIdAndSecContext(&save_userid, &save_sec_context);
 					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
