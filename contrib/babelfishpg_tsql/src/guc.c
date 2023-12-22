@@ -476,7 +476,7 @@ assign_ansi_defaults(bool newval, void *extra)
 		pltsql_ansi_warnings = true;
 		pltsql_ansi_null_dflt_on = true;
 		pltsql_ansi_padding = true;
-		SetConfigOption("babelfishpg_tsql.implicit_transactions", "ON", PGC_USERSET, PGC_S_CLIENT);
+		SetConfigOption("babelfishpg_tsql.implicit_transactions", "ON", PGC_USERSET, PGC_S_OVERRIDE);
 		pltsql_quoted_identifier = true;
 
 		if (pltsql_protocol_plugin_ptr && *pltsql_protocol_plugin_ptr && (*pltsql_protocol_plugin_ptr)->set_guc_stat_var)
@@ -499,7 +499,7 @@ assign_ansi_defaults(bool newval, void *extra)
 		/* Call the assign hook function for ANSI_NULLS as well */
 		assign_transform_null_equals(false, NULL);
 
-		SetConfigOption("babelfishpg_tsql.implicit_transactions", "OFF", PGC_USERSET, PGC_S_CLIENT);
+		SetConfigOption("babelfishpg_tsql.implicit_transactions", "OFF", PGC_USERSET, PGC_S_OVERRIDE);
 		pltsql_quoted_identifier = false;
 
 		if (pltsql_protocol_plugin_ptr && *pltsql_protocol_plugin_ptr && (*pltsql_protocol_plugin_ptr)->set_guc_stat_var)
