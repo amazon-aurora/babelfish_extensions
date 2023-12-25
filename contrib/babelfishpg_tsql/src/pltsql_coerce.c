@@ -986,6 +986,32 @@ is_tsql_char_type_with_len(Oid type)
 			utilptr->is_tsql_nvarchar_datatype(type);
 }
 
+static bool
+starts_with(const char *text, const char *pat)
+{
+	int i = 0;
+	int textlen = strlen(text);
+	int patlen = strlen(pat);
+
+	if (text == NULL || pat == NULL || textlen < patlen)
+		return false;
+
+	/* skip initial spaces in the main text string */
+	for (i = 0; i < strlen(text); i++)
+	{
+		if (text[i] != ' ')
+			break;
+	}
+
+	for (i = 0; i < patlen; i++)
+	{
+		if (text[i] != pat[i])
+			return false;
+	}
+
+	return true;
+}
+
 static Node *
 tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 								int32 targetTypeMod, int32 baseTypeMod,
@@ -1004,6 +1030,7 @@ tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 	else
 	{
 		int			i;
+		bool		val_is_non_integer = starts_with(value, "0x") || starts_with(value, "0b") || starts_with(value, "0o") ;
 
 		if (ccontext != COERCION_EXPLICIT)
 		{
@@ -1020,6 +1047,22 @@ tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 						(errcode(ERRCODE_CANNOT_COERCE),
 						 errmsg("cannot coerce string literal to varbinary datatype")));
 		}
+
+		if (val_is_non_integer &&
+			(baseTypeId == INT2OID ||
+			 baseTypeId == INT4OID))
+		{
+			const char *dtname = baseTypeId == INT2OID ? "smallint" : "int";
+			ereport(ERROR,
+					(errcode(ERRCODE_CANNOT_COERCE),
+						 errmsg("Conversion failed when converting the varchar value '%s' to data type %s.",
+								value, dtname)));
+		}
+		else if (val_is_non_integer &&
+				 baseTypeId == INT8OID)
+			ereport(ERROR,
+					(errcode(ERRCODE_CANNOT_COERCE),
+						 errmsg("Error converting data type varchar to bigint.")));
 
 		/*
 		 * T-SQL treats an empty string literal as 0 in certain datatypes,
