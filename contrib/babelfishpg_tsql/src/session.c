@@ -1,6 +1,7 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "miscadmin.h"
+#include "varatt.h"
 
 #include "utils/acl.h"
 #include "utils/builtins.h"
@@ -267,7 +268,7 @@ babelfish_db_name(PG_FUNCTION_ARGS)
 	if (dbname == NULL)
 		PG_RETURN_NULL();
 
-	PG_RETURN_TEXT_P(CStringGetTextDatum(dbname));
+	PG_RETURN_TEXT_P(cstring_to_text(dbname));
 }
 
 /*
@@ -281,6 +282,7 @@ sp_set_session_context(PG_FUNCTION_ARGS)
 	VarChar    *key_arg;
 	SessionCxtEntry *result_entry;
 	char	   *key;
+	int			encoded_key_bytelen;
 	bool		found;
 	MemoryContext oldContext;
 	int			i;
@@ -293,6 +295,12 @@ sp_set_session_context(PG_FUNCTION_ARGS)
 	if (strlen(key) == 0)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("The parameters supplied for the procedure \"sp_set_session_context\" are not valid.")));
+
+	encoded_key_bytelen = ((*common_utility_plugin_ptr->TsqlUTF8LengthInUTF16)(VARDATA_ANY(key_arg), VARSIZE_ANY_EXHDR(key_arg))) * 2;	/* Each UTF16 character is 2 bytes */
+
+	if (encoded_key_bytelen > 256)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("Cannot set key '%s' in the session context. The size of the key cannot exceed 256 bytes.", key)));
 
 	/* Strip Whitespace */
 	i = strlen(key);

@@ -7,6 +7,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 #include "access/hash.h"
 #include "utils/builtins.h"
 #include "utils/date.h"
@@ -21,7 +22,7 @@
 #include "datetime.h"
 
 static void AdjustDatetimeoffsetForTypmod(Timestamp *time, int32 typmod);
-static void CheckDatetimeoffsetRange(const tsql_datetimeoffset *df);
+static void CheckDatetimeoffsetRange(const tsql_datetimeoffset *df, Node *escontext);
 static int	datetimeoffset_cmp_internal(tsql_datetimeoffset *df1, tsql_datetimeoffset *df2);
 static void datetimeoffset_timestamp_internal(const tsql_datetimeoffset *df, Timestamp *time);
 static void EncodeDatetimeoffsetTimezone(char *str, int tz, int style);
@@ -89,12 +90,13 @@ datetimeoffset_in(PG_FUNCTION_ARGS)
 	struct pg_tm tt,
 			   *tm = &tt;
 	int			tz;
-	int			dtype;
+	int			dtype = -1;
 	int			nf;
 	int			dterr;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];
 	char		workbuf[MAXDATELEN + MAXDATEFIELDS];
+	DateTimeErrorExtra extra;
 
 	datetimeoffset = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 
@@ -115,7 +117,8 @@ datetimeoffset_in(PG_FUNCTION_ARGS)
 						  field, ftype, MAXDATEFIELDS, &nf);
 
 	if (dterr == 0)
-		dterr = DecodeDateTime(field, ftype, nf, &dtype, tm, &fsec, &tz);
+		dterr = DecodeDateTime(field, ftype, nf, 
+							   &dtype, tm, &fsec, &tz, &extra);
 	/* dterr == 1 means that input is TIME format(e.g 12:34:59.123) */
 	/* initialize other necessary date parts and accept input format */
 	if (dterr == 1)
@@ -126,7 +129,7 @@ datetimeoffset_in(PG_FUNCTION_ARGS)
 		dterr = 0;
 	}
 	if (dterr != 0)
-		DateTimeParseError(dterr, str, "timestamp with time zone");
+		DateTimeParseError(dterr, &extra, str, "timestamp with time zone", fcinfo->context);
 
 	/*
 	 * When time zone offset it not specified in input string
@@ -166,7 +169,7 @@ datetimeoffset_in(PG_FUNCTION_ARGS)
 	}
 	AdjustDatetimeoffsetForTypmod(&tsql_ts, typmod);
 	datetimeoffset->tsql_ts = (int64) tsql_ts;
-	CheckDatetimeoffsetRange(datetimeoffset);
+	CheckDatetimeoffsetRange(datetimeoffset, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(datetimeoffset);
 }
@@ -224,7 +227,7 @@ datetimeoffset_recv(PG_FUNCTION_ARGS)
 				 errmsg("datetimeoffset time zone out of range")));
 
 	AdjustDatetimeoffsetForTypmod(&(result->tsql_ts), typmod);
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -428,7 +431,7 @@ datetimeoffset_pl_interval(PG_FUNCTION_ARGS)
 	tmp += span->time;
 	result->tsql_ts = tmp + df->tsql_tz * USECS_PER_MINUTE;
 	result->tsql_tz = df->tsql_tz;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -506,7 +509,7 @@ smalldatetime_datetimeoffset(PG_FUNCTION_ARGS)
 	result = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 	result->tsql_ts = time;
 	result->tsql_tz = 0;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -521,7 +524,7 @@ datetimeoffset_smalldatetime(PG_FUNCTION_ARGS)
 	Timestamp	result;
 
 	result = df->tsql_ts;
-	CheckSmalldatetimeRange(result);
+	CheckSmalldatetimeRange(result, fcinfo->context);
 	AdjustTimestampForSmallDatetime(&result);
 
 	PG_RETURN_TIMESTAMP(result);
@@ -539,7 +542,7 @@ datetime_datetimeoffset(PG_FUNCTION_ARGS)
 	result = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 	result->tsql_ts = time;
 	result->tsql_tz = 0;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -554,7 +557,7 @@ datetimeoffset_datetime(PG_FUNCTION_ARGS)
 	Timestamp	result;
 
 	result = df->tsql_ts;
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 
 	PG_RETURN_TIMESTAMP(result);
 }
@@ -571,7 +574,7 @@ datetime2_datetimeoffset(PG_FUNCTION_ARGS)
 	result = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 	result->tsql_ts = time;
 	result->tsql_tz = 0;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -586,7 +589,7 @@ datetimeoffset_datetime2(PG_FUNCTION_ARGS)
 	Timestamp	result;
 
 	result = df->tsql_ts;
-	CheckDatetime2Range(result);
+	CheckDatetime2Range(result, fcinfo->context);
 
 	PG_RETURN_TIMESTAMP(result);
 }
@@ -603,7 +606,7 @@ timestamp_datetimeoffset(PG_FUNCTION_ARGS)
 	result = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 	result->tsql_ts = time;
 	result->tsql_tz = 0;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -634,7 +637,7 @@ date_datetimeoffset(PG_FUNCTION_ARGS)
 	result = (tsql_datetimeoffset *) palloc(DATETIMEOFFSET_LEN);
 	result->tsql_ts = (int64) dateVal * USECS_PER_DAY;
 	result->tsql_tz = 0;
-	CheckDatetimeoffsetRange(result);
+	CheckDatetimeoffsetRange(result, fcinfo->context);
 
 	PG_RETURN_DATETIMEOFFSET(result);
 }
@@ -730,7 +733,7 @@ get_datetimeoffset_tzoffset_internal(PG_FUNCTION_ARGS)
  * for 0001-01-01 through 9999-12-31
  */
 static void
-CheckDatetimeoffsetRange(const tsql_datetimeoffset *df)
+CheckDatetimeoffsetRange(const tsql_datetimeoffset *df, Node *escontext)
 {
 	Timestamp	time;
 
@@ -744,7 +747,7 @@ CheckDatetimeoffsetRange(const tsql_datetimeoffset *df)
 	datetimeoffset_timestamp_internal(df, &time);
 	if (time < lower_bound || time >= upper_bound)
 	{
-		ereport(ERROR,
+		errsave(escontext,
 				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 				 errmsg("data out of range for datetimeoffset")));
 	}

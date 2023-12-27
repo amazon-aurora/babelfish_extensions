@@ -226,7 +226,6 @@ get_product_level_helper()
 
 	initStringInfo(&temp);
 
-	Assert(BABELFISH_VERSION_STR != NULL);
 	minor_version = atoi(get_version_number(BABELFISH_VERSION_STR, 1));
 	if (minor_version == 0)
 	{
@@ -485,7 +484,7 @@ serverproperty(PG_FUNCTION_ARGS)
 	{
 		/* We need a valid date in here */
 		const char *date = "2021-01-01 00:00:00-08";
-		Datum		data = (*common_utility_plugin_ptr->datetime_in_str) ((char *) date);
+		Datum		data = (*common_utility_plugin_ptr->datetime_in_str) ((char *) date, fcinfo->context);
 
 		/*
 		 * bytea        *result  =
@@ -498,7 +497,7 @@ serverproperty(PG_FUNCTION_ARGS)
 
 		Datum result = DirectFunctionCall1(common_utility_plugin_ptr->datetime2sqlvariant, data);
 
-		PG_RETURN_BYTEA_P(result);
+		return result;
 	}
 	else if (strcasecmp(property, "ResourceVersion") == 0)
 	{
@@ -527,7 +526,7 @@ serverproperty(PG_FUNCTION_ARGS)
 
 		Datum result = DirectFunctionCall1(common_utility_plugin_ptr->tinyint2sqlvariant, data);
 
-		PG_RETURN_BYTEA_P(result);
+		return result;
 	}
 	else if (strcasecmp(property, "SqlCharSetName") == 0)
 	{

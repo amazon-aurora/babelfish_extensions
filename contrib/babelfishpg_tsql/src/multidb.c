@@ -19,7 +19,7 @@
 /* rewrite function for data structures */
 static void rewrite_rangevar(RangeVar *rv);
 static void rewrite_objectwithargs(ObjectWithArgs *obj);
-void		rewrite_plain_name(List *name); /* Value Strings */
+List*		rewrite_plain_name(List *name); /* Value Strings */
 static void rewrite_schema_name(String *schema);
 static void rewrite_role_name(RoleSpec *role);
 
@@ -135,7 +135,7 @@ rewrite_object_refs(Node *stmt)
 								{
 									TypeName   *typename = (TypeName *) def->typeName;
 
-									rewrite_plain_name(typename->names);
+									typename->names = rewrite_plain_name(typename->names);
 								}
 
 								break;
@@ -300,7 +300,7 @@ rewrite_object_refs(Node *stmt)
 								{
 									TypeName   *typename = (TypeName *) def->typeName;
 
-									rewrite_plain_name(typename->names);
+									typename->names = rewrite_plain_name(typename->names);
 								}
 								break;
 							}
@@ -463,13 +463,13 @@ rewrite_object_refs(Node *stmt)
 					TypeName   *typename = p->argType;
 
 					/* handle type */
-					rewrite_plain_name(typename->names);
+					typename->names = rewrite_plain_name(typename->names);
 
 					/* default value */
 					rewrite_relation_walker(p->defexpr, (void *) NULL);
 				}
 
-				rewrite_plain_name(create_func->funcname);
+				create_func->funcname = rewrite_plain_name(create_func->funcname);
 				if (list_length(create_func->options) >= 3)
 				{
 					DefElem    *defElem = (DefElem *) lthird(create_func->options);
@@ -510,7 +510,7 @@ rewrite_object_refs(Node *stmt)
 						}
 					case OBJECT_TYPE:
 						{
-							rewrite_plain_name((List *) rename->object);
+							rename->object = (Node *)rewrite_plain_name((List *) rename->object);
 							break;
 						}
 					case OBJECT_SCHEMA:
@@ -569,7 +569,7 @@ rewrite_object_refs(Node *stmt)
 				CreateTrigStmt *create_trig = (CreateTrigStmt *) stmt;
 
 				rewrite_rangevar(create_trig->relation);
-				rewrite_plain_name(create_trig->funcname);
+				create_trig->funcname = rewrite_plain_name(create_trig->funcname);
 				break;
 			}
 		case T_CreateSchemaStmt:
@@ -610,7 +610,7 @@ rewrite_object_refs(Node *stmt)
 						}
 					case OBJECT_TYPE:
 						{
-							rewrite_plain_name((List *) alter_owner->object);
+							alter_owner->object = (Node *)rewrite_plain_name((List *) alter_owner->object);
 							break;
 						}
 					default:
@@ -629,14 +629,14 @@ rewrite_object_refs(Node *stmt)
 			{
 				CallStmt   *call = (CallStmt *) stmt;
 
-				rewrite_plain_name(call->funccall->funcname);
+				call->funccall->funcname = rewrite_plain_name(call->funccall->funcname);
 				break;
 			}
 		case T_DefineStmt:
 			{
 				DefineStmt *define_stmt = (DefineStmt *) stmt;
 
-				rewrite_plain_name(define_stmt->defnames);
+				define_stmt->defnames = rewrite_plain_name(define_stmt->defnames);
 				break;
 			}
 		case T_CompositeTypeStmt:
@@ -650,36 +650,36 @@ rewrite_object_refs(Node *stmt)
 			{
 				CreateEnumStmt *enum_stmt = (CreateEnumStmt *) stmt;
 
-				rewrite_plain_name(enum_stmt->typeName);
+				enum_stmt->typeName = rewrite_plain_name(enum_stmt->typeName);
 				break;
 			}
 		case T_CreateRangeStmt:
 			{
 				CreateRangeStmt *create_range = (CreateRangeStmt *) stmt;
 
-				rewrite_plain_name(create_range->typeName);
+				create_range->typeName = rewrite_plain_name(create_range->typeName);
 				break;
 			}
 		case T_AlterEnumStmt:
 			{
 				AlterEnumStmt *alter_enum = (AlterEnumStmt *) stmt;
 
-				rewrite_plain_name(alter_enum->typeName);
+				alter_enum->typeName = rewrite_plain_name(alter_enum->typeName);
 				break;
 			}
 		case T_AlterTypeStmt:
 			{
 				AlterTypeStmt *alter_type = (AlterTypeStmt *) stmt;
 
-				rewrite_plain_name(alter_type->typeName);
+				alter_type->typeName = rewrite_plain_name(alter_type->typeName);
 				break;
 			}
 		case T_CreateDomainStmt:
 			{
 				CreateDomainStmt *create_domain = (CreateDomainStmt *) stmt;
 
-				rewrite_plain_name(create_domain->domainname);
-				rewrite_plain_name(create_domain->typeName->names);
+				create_domain->domainname = rewrite_plain_name(create_domain->domainname);
+				create_domain->typeName->names = rewrite_plain_name(create_domain->typeName->names);
 				break;
 			}
 		default:
@@ -761,8 +761,8 @@ select_json_modify(SelectStmt *stmt)
 				rewrite_plain_name(json_mod_fc->funcname);
 				if (is_json_modify(json_mod_fc->funcname) && is_select_for_json(from_sel_stmt))
 				{
-					Node	   *n = lfourth(json_mod_fc->args);
-					A_Const    *escape = (A_Const *) n;
+					Node	   *n1 = lfourth(json_mod_fc->args);
+					A_Const    *escape = (A_Const *) n1;
 
 					escape->val.boolval.boolval = true;
 				}
@@ -1006,10 +1006,10 @@ set_schemaname_dbo_to_sys(RangeVar *rv)
 static void
 rewrite_objectwithargs(ObjectWithArgs *obj)
 {
-	rewrite_plain_name(obj->objname);
+	obj->objname = rewrite_plain_name(obj->objname);
 }
 
-void
+List *
 rewrite_plain_name(List *name)
 {
 	switch (list_length(name))
@@ -1061,6 +1061,7 @@ rewrite_plain_name(List *name)
 		default:
 			break;
 	}
+	return name;
 }
 
 static void
@@ -1214,9 +1215,9 @@ get_current_physical_schema_name(PG_FUNCTION_ARGS)
 	if (cur_db_name)
 		ret = get_physical_schema_name(cur_db_name, schema_name);
 	else
-		PG_RETURN_TEXT_P(CStringGetTextDatum(schema_name));
+		PG_RETURN_TEXT_P(cstring_to_text(schema_name));
 
-	PG_RETURN_TEXT_P(CStringGetTextDatum(ret));
+	PG_RETURN_TEXT_P(cstring_to_text(ret));
 }
 
 

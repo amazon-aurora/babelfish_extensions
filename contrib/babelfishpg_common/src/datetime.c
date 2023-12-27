@@ -9,6 +9,7 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+#include "varatt.h"
 #include "utils/builtins.h"
 #include "utils/date.h"
 #include "utils/datetime.h"
@@ -57,13 +58,13 @@ PG_FUNCTION_INFO_V1(dateadd_datetime);
 PG_FUNCTION_INFO_V1(timestamp_diff);
 PG_FUNCTION_INFO_V1(timestamp_diff_big);
 
-void		CheckDatetimeRange(const Timestamp time);
+void		CheckDatetimeRange(const Timestamp time, Node *escontext);
 void		CheckDatetimePrecision(fsec_t fsec);
 
 #define DTK_NANO 32
 
 Datum
-datetime_in_str(char *str)
+datetime_in_str(char *str, Node *escontext)
 {
 #ifdef NOT_USED
 	Oid			typelem = PG_GETARG_OID(1);
@@ -73,9 +74,10 @@ datetime_in_str(char *str)
 	struct pg_tm tt,
 			   *tm = &tt;
 	int			tz;
-	int			dtype;
+	int			dtype = -1;
 	int			nf;
 	int			dterr;
+	DateTimeErrorExtra extra;
 	char	   *field[MAXDATEFIELDS];
 	int			ftype[MAXDATEFIELDS];
 	char		workbuf[MAXDATELEN + MAXDATEFIELDS];
@@ -93,7 +95,8 @@ datetime_in_str(char *str)
 	dterr = ParseDateTime(str, workbuf, sizeof(workbuf),
 						  field, ftype, MAXDATEFIELDS, &nf);
 	if (dterr == 0)
-		dterr = DecodeDateTime(field, ftype, nf, &dtype, tm, &fsec, &tz);
+		dterr = DecodeDateTime(field, ftype, nf, 
+							   &dtype, tm, &fsec, &tz, &extra);
 	/* dterr == 1 means that input is TIME format(e.g 12:34:59.123) */
 	/* initialize other necessary date parts and accept input format */
 	if (dterr == 1)
@@ -104,7 +107,7 @@ datetime_in_str(char *str)
 		dterr = 0;
 	}
 	if (dterr != 0)
-		DateTimeParseError(dterr, str, "datetime");
+		DateTimeParseError(dterr, &extra, str, "datetime", escontext);
 	switch (dtype)
 	{
 		case DTK_DATE:
@@ -136,7 +139,7 @@ datetime_in_str(char *str)
 	 * TODO: round datetime fsec to fixed bins (e.g. .000, .003, .007) see:
 	 * BABEL-1081
 	 */
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, escontext);
 	CheckDatetimePrecision(fsec);
 
 	PG_RETURN_TIMESTAMP(result);
@@ -153,7 +156,7 @@ datetime_in(PG_FUNCTION_ARGS)
 {
 	char	   *str = PG_GETARG_CSTRING(0);
 
-	return datetime_in_str(str);
+	return datetime_in_str(str, fcinfo->context);
 }
 
 /* datetime_out()
@@ -189,11 +192,11 @@ datetime_out(PG_FUNCTION_ARGS)
  * CheckDatetimeRange --- Check if timestamp is out of range for datetime
  */
 void
-CheckDatetimeRange(const Timestamp time)
+CheckDatetimeRange(const Timestamp time, Node *escontext)
 {
 	if (!IS_VALID_DATETIME(time))
 	{
-		ereport(ERROR,
+		errsave(escontext,
 				(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 				 errmsg("data out of range for datetime")));
 	}
@@ -229,7 +232,7 @@ date_datetime(PG_FUNCTION_ARGS)
 	else
 		result = dateVal * USECS_PER_DAY;
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -270,7 +273,7 @@ timestamp_datetime(PG_FUNCTION_ARGS)
 {
 	Timestamp	result = PG_GETARG_TIMESTAMP(0);
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -301,7 +304,7 @@ timestamptz_datetime(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 					 errmsg("data out of range for datetime")));
 	}
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -346,7 +349,7 @@ varchar_datetime(PG_FUNCTION_ARGS)
 	Datum		txt = PG_GETARG_DATUM(0);
 	char	   *str = TextDatumGetCString(txt);
 
-	return datetime_in_str(str);
+	return datetime_in_str(str, fcinfo->context);
 }
 
 /* datetime_char()
@@ -390,7 +393,7 @@ char_datetime(PG_FUNCTION_ARGS)
 	Datum		txt = PG_GETARG_DATUM(0);
 	char	   *str = TextDatumGetCString(txt);
 
-	return datetime_in_str(str);
+	return datetime_in_str(str, fcinfo->context);
 }
 
 /*
@@ -417,7 +420,7 @@ datetime_pl_int4(PG_FUNCTION_ARGS)
 	/* add interval */
 	result = DirectFunctionCall2(timestamp_pl_interval, timestamp, PointerGetDatum(input_interval));
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -463,7 +466,7 @@ int4_mi_datetime(PG_FUNCTION_ARGS)
 	 */
 	result = DirectFunctionCall2(timestamp_pl_interval, default_timestamp, PointerGetDatum(result_interval));
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -523,7 +526,7 @@ datetime_pl_float8(PG_FUNCTION_ARGS)
 	/* add interval */
 	result = DirectFunctionCall2(timestamp_pl_interval, timestamp, PointerGetDatum(input_interval));
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -573,7 +576,7 @@ float8_mi_datetime(PG_FUNCTION_ARGS)
 	result = DirectFunctionCall2(timestamp_pl_interval, default_timestamp, PointerGetDatum(result_interval));
 
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -603,7 +606,7 @@ float8_pl_datetime(PG_FUNCTION_ARGS)
 	/* add interval */
 	result = DirectFunctionCall2(timestamp_pl_interval, timestamp, PointerGetDatum(input_interval));
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -634,7 +637,7 @@ datetime_mi_float8(PG_FUNCTION_ARGS)
 	/* subtract interval */
 	result = DirectFunctionCall2(timestamp_mi_interval, timestamp, PointerGetDatum(input_interval));
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -675,7 +678,7 @@ datetime_pl_datetime(PG_FUNCTION_ARGS)
 	/* add interval */
 	result = timestamp1 + diff;
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -696,7 +699,7 @@ datetime_mi_datetime(PG_FUNCTION_ARGS)
 	/* subtract interval */
 	result = timestamp1 - diff;
 
-	CheckDatetimeRange(result);
+	CheckDatetimeRange(result, fcinfo->context);
 	PG_RETURN_TIMESTAMP(result);
 }
 
@@ -803,7 +806,7 @@ datetime_to_numeric(PG_FUNCTION_ARGS)
 {
 	Timestamp timestamp_left = PG_GETARG_TIMESTAMP(0);
 	float8 result = calculateDaysFromDefaultDatetime(timestamp_left);
-	PG_RETURN_NUMERIC(DirectFunctionCall1(float8_numeric, Float8GetDatum(result)));
+	return (DirectFunctionCall1(float8_numeric, Float8GetDatum(result)));
 }
 
 /*
@@ -1371,7 +1374,7 @@ dateadd_datetime(PG_FUNCTION_ARGS) {
 		 * This check is required because the range of valid timestamps
 		 * is greater than the range of valid datetimes
 		 */
-		CheckDatetimeRange(result);
+		CheckDatetimeRange(result, fcinfo->context);
 	}
 	PG_CATCH();
 	{

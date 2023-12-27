@@ -1,4 +1,5 @@
 #include "postgres.h"
+#include "varatt.h"
 
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
@@ -22,7 +23,6 @@
 #include "access/table.h"
 #include "access/genam.h"
 #include "catalog.h"
-#include "parser/gramparse.h"
 #include "hooks.h"
 #include "tcop/utility.h"
 
@@ -37,6 +37,8 @@ bool		pltsql_suppress_string_truncation_error(void);
 bool		is_tsql_any_char_datatype(Oid oid); /* sys.char / sys.nchar /
 												 * sys.varchar / sys.nvarchar */
 bool		is_tsql_text_ntext_or_image_datatype(Oid oid);
+
+bool		is_tsql_binary_or_varbinary_datatype(Oid oid);
 
 bool
 pltsql_createFunction(ParseState *pstate, PlannedStmt *pstmt, const char *queryString, ProcessUtilityContext context, 
@@ -1082,6 +1084,12 @@ is_tsql_text_ntext_or_image_datatype(Oid oid)
 		(*common_utility_plugin_ptr->is_tsql_image_datatype) (oid);
 }
 
+bool is_tsql_binary_or_varbinary_datatype(Oid oid)
+{
+	return (*common_utility_plugin_ptr->is_tsql_sys_binary_datatype) (oid) ||
+		(*common_utility_plugin_ptr->is_tsql_sys_varbinary_datatype) (oid);
+}
+
 /*
  * Try to acquire a lock with no wait
  */
@@ -1381,7 +1389,7 @@ tsql_get_proc_oid(char *proname, Oid pronamespace, Oid user_id)
 		procform = (Form_pg_proc) GETSTRUCT(tuple);
 		/* then consider only procs in specified namespace */
 		if (procform->pronamespace == pronamespace &&
-			pg_proc_aclcheck(procform->oid, user_id, ACL_EXECUTE) == ACLCHECK_OK)
+			object_aclcheck(ProcedureRelationId, procform->oid, user_id, ACL_EXECUTE) == ACLCHECK_OK)
 		{
 			result = procform->oid;
 
@@ -1528,7 +1536,7 @@ tsql_get_proc_nsp_oid(Oid object_id)
 	bool		isnull;
 
 	/* retrieve pronamespace in pg_proc by oid */
-	tuple = SearchSysCache1(PROCOID, CStringGetDatum(object_id));
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_id));
 
 	if (HeapTupleIsValid(tuple))
 	{
@@ -1560,7 +1568,7 @@ tsql_get_constraint_nsp_oid(Oid object_id, Oid user_id)
 	bool		isnull;
 
 	/* retrieve connamespace in pg_constraint by oid */
-	tuple = SearchSysCache1(CONSTROID, CStringGetDatum(object_id));
+	tuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(object_id));
 
 	if (HeapTupleIsValid(tuple))
 	{
@@ -1824,7 +1832,10 @@ is_unique_index(Oid relid, const char *index_name)
 							{
 								unique_key_count++;
 								if (unique_key_count > 1)
+								{
+									ReleaseSysCache(attTuple);
 									break;
+								}
 							}
 						}
                         ReleaseSysCache(attTuple);

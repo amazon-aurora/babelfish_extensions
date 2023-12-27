@@ -7,6 +7,7 @@
  */
 
 #include "postgres.h"
+#include "varatt.h"
 
 #include "access/htup_details.h"
 #include "access/parallel.h"	/* InitializingParallelWorker */
@@ -46,6 +47,8 @@ extern func_select_candidate_hook_type func_select_candidate_hook;
 extern coerce_string_literal_hook_type coerce_string_literal_hook;
 extern select_common_type_hook_type select_common_type_hook;
 extern select_common_typmod_hook_type select_common_typmod_hook;
+
+extern bool babelfish_dump_restore;
 
 PG_FUNCTION_INFO_V1(init_tsql_coerce_hash_tab);
 PG_FUNCTION_INFO_V1(init_tsql_datatype_precedence_hash_tab);
@@ -111,7 +114,7 @@ tsql_cast_raw_info_t tsql_cast_raw_infos[] =
 	{PG_CAST_ENTRY, "sys", "bbf_varbinary", "pg_catalog", "int4", NULL, 'i', 'f'},
 	{PG_CAST_ENTRY, "sys", "bbf_varbinary", "pg_catalog", "int2", NULL, 'i', 'f'},
 	{TSQL_CAST_ENTRY, "sys", "bbf_varbinary", "sys", "rowversion", "varbinaryrowversion", 'i', 'f'},
-	{TSQL_CAST_WITHOUT_FUNC_ENTRY, "sys", "bbf_varbinary", "sys", "bbf_binary", NULL, 'i', 'b'},
+	{TSQL_CAST_ENTRY, "sys", "bbf_varbinary", "sys", "bbf_binary", "varbinarybinary", 'i', 'f'},
 /*  binary     {only allow to cast to integral data type) */
 	{PG_CAST_ENTRY, "sys", "bbf_binary", "pg_catalog", "int8", NULL, 'i', 'f'},
 	{PG_CAST_ENTRY, "sys", "bbf_binary", "pg_catalog", "int4", NULL, 'i', 'f'},
@@ -638,9 +641,26 @@ init_tsql_coerce_hash_tab(PG_FUNCTION_ARGS)
 
 						if (!OidIsValid(entry->castfunc))
 						{
+							/*
+							 * varbinary to binary implicit type cast without function should be allowed during MVU
+							 * since the cast function might not exists when source version is before 14_11 and 15_6
+							 */ 
+							if (babelfish_dump_restore && ((*common_utility_plugin_ptr->is_tsql_varbinary_datatype) (castsource) 
+								&& (*common_utility_plugin_ptr->is_tsql_binary_datatype) (casttarget)))
+							{
+								entry->castfunc = 0;
+								entry->castcontext = COERCION_CODE_IMPLICIT;
+								entry->castmethod = COERCION_METHOD_BINARY;
+								value = hash_search(ht_tsql_cast_info, key, HASH_ENTER, NULL);
+								*(tsql_cast_info_entry_t *) value = *entry;
+								continue;
+							}
 							/* function is not loaded. wait for next scan */
-							inited_ht_tsql_cast_info = false;
-							continue;
+							else
+							{
+								inited_ht_tsql_cast_info = false;
+								continue;
+							}
 						}
 					}
 					break;
@@ -966,6 +986,32 @@ is_tsql_char_type_with_len(Oid type)
 			utilptr->is_tsql_nvarchar_datatype(type);
 }
 
+static bool
+starts_with(const char *text, const char *pat)
+{
+	int i = 0;
+	int textlen = strlen(text);
+	int patlen = strlen(pat);
+
+	if (text == NULL || pat == NULL || textlen < patlen)
+		return false;
+
+	/* skip initial spaces in the main text string */
+	for (i = 0; i < strlen(text); i++)
+	{
+		if (text[i] != ' ')
+			break;
+	}
+
+	for (i = 0; i < patlen; i++)
+	{
+		if (text[i] != pat[i])
+			return false;
+	}
+
+	return true;
+}
+
 static Node *
 tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 								int32 targetTypeMod, int32 baseTypeMod,
@@ -984,6 +1030,7 @@ tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 	else
 	{
 		int			i;
+		bool		val_is_non_integer = starts_with(value, "0x") || starts_with(value, "0b") || starts_with(value, "0o") ;
 
 		if (ccontext != COERCION_EXPLICIT)
 		{
@@ -1000,6 +1047,22 @@ tsql_coerce_string_literal_hook(ParseCallbackState *pcbstate, Oid targetTypeId,
 						(errcode(ERRCODE_CANNOT_COERCE),
 						 errmsg("cannot coerce string literal to varbinary datatype")));
 		}
+
+		if (val_is_non_integer &&
+			(baseTypeId == INT2OID ||
+			 baseTypeId == INT4OID))
+		{
+			const char *dtname = baseTypeId == INT2OID ? "smallint" : "int";
+			ereport(ERROR,
+					(errcode(ERRCODE_CANNOT_COERCE),
+						 errmsg("Conversion failed when converting the varchar value '%s' to data type %s.",
+								value, dtname)));
+		}
+		else if (val_is_non_integer &&
+				 baseTypeId == INT8OID)
+			ereport(ERROR,
+					(errcode(ERRCODE_CANNOT_COERCE),
+						 errmsg("Error converting data type varchar to bigint.")));
 
 		/*
 		 * T-SQL treats an empty string literal as 0 in certain datatypes,
@@ -1304,7 +1367,7 @@ select_common_type_for_isnull(ParseState *pstate, List *exprs)
 static int32
 tsql_select_common_typmod_hook(ParseState *pstate, List *exprs, Oid common_type)
 {
-	int32		max_typmods;
+	int32		max_typmods=0;
 	ListCell	*lc;
 	common_utility_plugin *utilptr = common_utility_plugin_ptr;
 

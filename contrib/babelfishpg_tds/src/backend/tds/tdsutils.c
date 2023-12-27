@@ -21,6 +21,7 @@
 #include "access/table.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
+#include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "src/include/tds_int.h"
 #include "nodes/nodes.h"
@@ -64,7 +65,6 @@ static bool handle_alter_role_set (AlterRoleSetStmt* alter_role_set_stmt);
 static bool handle_dropdb(DropdbStmt *dropdb_stmt);
 
 static char *get_role_name(RoleSpec *role);
-static bool have_createdb_privilege(void);
 char	   *get_rolespec_name_internal(const RoleSpec *role, bool missing_ok);
 
 /*
@@ -991,7 +991,7 @@ handle_rename(RenameStmt *rename_stmt)
 			return true;
 
 		/* must be owner */
-		if (!pg_database_ownercheck(target_db_id, GetUserId()))
+		if (!object_ownercheck(DatabaseRelationId, target_db_id, GetUserId()))
 			return true;
 
 		/* must have createdb rights */
@@ -1062,7 +1062,7 @@ handle_alter_role(AlterRoleStmt* alter_role_stmt)
 			role_oid = get_role_oid(name, true);
 
 			/* Permission checks */
-			if (OidIsValid(role_oid) && OidIsValid(babelfish_db_oid) && pg_database_ownercheck(babelfish_db_oid, role_oid))
+			if (OidIsValid(role_oid) && OidIsValid(babelfish_db_oid) && object_ownercheck(DatabaseRelationId, babelfish_db_oid, role_oid))
 				master_user = true;
 		}
 
@@ -1165,28 +1165,6 @@ handle_alter_role_set (AlterRoleSetStmt* alter_role_set_stmt)
 }
 
 /*
- * Check if current user has create db privileges
- */
-static bool
-have_createdb_privilege(void)
-{
-	bool		result = false;
-	HeapTuple	utup;
-
-	/* Superusers can always do everything */
-	if (superuser())
-		return true;
-
-	utup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(GetUserId()));
-	if (HeapTupleIsValid(utup))
-	{
-		result = ((Form_pg_authid) GETSTRUCT(utup))->rolcreatedb;
-		ReleaseSysCache(utup);
-	}
-	return result;
-}
-
-/*
  *  check_babelfish_renamedb_restrictions
  *
  *  Implements following one additional limitation to rename database stmt
@@ -1232,7 +1210,7 @@ handle_dropdb(DropdbStmt *dropdb_stmt)
 		return true;
 
 	/* Permission checks */
-	if (!pg_database_ownercheck(target_db_id, GetUserId()))
+	if (!object_ownercheck(DatabaseRelationId, target_db_id, GetUserId()))
 		return true;
 
 	check_babelfish_dropdb_restrictions(target_db_id);

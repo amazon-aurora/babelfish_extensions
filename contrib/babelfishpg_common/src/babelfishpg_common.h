@@ -51,7 +51,7 @@ typedef struct common_utility_plugin
 	bool		(*is_tsql_datetimeoffset_datatype) (Oid oid);
 	bool		(*is_tsql_decimal_datatype) (Oid oid);
 	bool		(*is_tsql_rowversion_or_timestamp_datatype) (Oid oid);
-	Datum		(*datetime_in_str) (char *str);
+	Datum		(*datetime_in_str) (char *str, Node *escontext);
 	Datum		(*datetime2sqlvariant) (PG_FUNCTION_ARGS);
 	Datum		(*timestamp_datetimeoffset) (PG_FUNCTION_ARGS);
 	Datum		(*tinyint2sqlvariant) (PG_FUNCTION_ARGS);
@@ -70,5 +70,5 @@ typedef struct common_utility_plugin
 										  bool *isBaseDate, int *variantHeaderLen);
 	Oid			(*lookup_tsql_datatype_oid) (const char *typestr);
 	int32_t		(*GetUTF8CodePoint) (const unsigned char *in, int len, int *consumed_p);
-
+	int			(*TsqlUTF8LengthInUTF16) (const void *vin, int len);
 } common_utility_plugin;

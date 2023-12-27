@@ -8,6 +8,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_language.h"
+#include "catalog/pg_namespace.h"
 #include "commands/proclang.h"
 #include "executor/tstoreReceiver.h"
 #include "nodes/parsenodes.h"
@@ -1453,11 +1454,11 @@ exec_stmt_exec_batch(PLtsql_execstate *estate, PLtsql_stmt_exec_batch *stmt)
 	int32		restypmod;
 	char	   *querystr;
 	InlineCodeBlock *codeblock;
-	volatile LocalTransactionId before_lxid;
+	volatile LocalTransactionId before_lxid = 0;
 	LocalTransactionId after_lxid;
-	SimpleEcontextStackEntry *topEntry;
-	volatile int save_nestlevel;
-	volatile int scope_level;
+	SimpleEcontextStackEntry *topEntry = NULL;
+	volatile int save_nestlevel = 0;
+	volatile int scope_level = 0;
 	char	   *old_db_name = get_cur_db_name();
 	char	   *cur_db_name = NULL;
 
@@ -2121,39 +2122,39 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
+				bool		isnull1;
+				Oid			restype1;
+				int32		restypmod1;
 				int			save_nestlevel;
 				int			scope_level;
 				InlineCodeBlockArgs *args = NULL;
 
-				batch = exec_eval_expr(estate, stmt->query, &isnull, &restype, &restypmod);
-				if (isnull)
+				batch = exec_eval_expr(estate, stmt->query, &isnull1, &restype1, &restypmod1);
+				if (isnull1)
 					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 									errmsg("batch string argument of sp_executesql is null")));
 
-				batchstr = convert_value_to_string(estate, batch, restype);
+				batchstr = convert_value_to_string(estate, batch, restype1);
 
 				args = create_args(0);
 				if (stmt->param_def)
 				{
 					Datum		paramdef;
-					Oid			restype;
-					int32		restypmod;
+					Oid			restype2;
+					int32		restypmod2;
 					char	   *paramdefstr;
-					bool		isnull;
+					bool		isnull2;
 
 					/*
 					 * Evaluate the parameter definition
 					 */
-					paramdef = exec_eval_expr(estate, stmt->param_def, &isnull, &restype, &restypmod);
+					paramdef = exec_eval_expr(estate, stmt->param_def, &isnull2, &restype2, &restypmod2);
 
-					if (isnull)
+					if (isnull2)
 						ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 										errmsg("NULL param definition")));
 
-					paramdefstr = convert_value_to_string(estate, paramdef, restype);
+					paramdefstr = convert_value_to_string(estate, paramdef, restype2);
 
 					if (strcmp(paramdefstr, "") != 0)	/* check edge cases for
 														 * sp_executesql */
@@ -2218,30 +2219,30 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 			{
 				Datum		batch;
 				char	   *batchstr;
-				bool		isnull;
-				Oid			restype;
-				int32		restypmod;
+				bool		isnull3;
+				Oid			restype3;
+				int32		restypmod3;
 				InlineCodeBlockArgs *args = NULL;
 				Datum		paramdef;
 				char	   *paramdefstr;
 
-				batch = exec_eval_expr(estate, stmt->query, &isnull, &restype, &restypmod);
-				if (isnull)
+				batch = exec_eval_expr(estate, stmt->query, &isnull3, &restype3, &restypmod3);
+				if (isnull3)
 					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 									errmsg("batch string argument of sp_prepexec is null")));
 
-				batchstr = convert_value_to_string(estate, batch, restype);
+				batchstr = convert_value_to_string(estate, batch, restype3);
 
 				args = create_args(0);
 
 				/*
 				 * Evaluate the parameter definition
 				 */
-				paramdef = exec_eval_expr(estate, stmt->param_def, &isnull, &restype, &restypmod);
+				paramdef = exec_eval_expr(estate, stmt->param_def, &isnull3, &restype3, &restypmod3);
 
-				if (!isnull)
+				if (!isnull3)
 				{
-					paramdefstr = convert_value_to_string(estate, paramdef, restype);
+					paramdefstr = convert_value_to_string(estate, paramdef, restype3);
 
 					read_param_def(args, paramdefstr);
 
@@ -2276,7 +2277,7 @@ exec_stmt_deallocate(PLtsql_execstate *estate, PLtsql_stmt_deallocate *stmt)
 {
 	PLtsql_var *curvar;
 	Portal		portal;
-	char	   *curname;
+	char	   *curname = NULL;
 	MemoryContext oldcontext;
 
 	Assert(estate->datums[stmt->curvar]->dtype == PLTSQL_DTYPE_VAR);
@@ -2514,7 +2515,7 @@ read_param_def(InlineCodeBlockArgs *args, const char *paramdefstr)
 		 * be more than 2 since db name can not be a qualifier for a UDT and
 		 * error will be thrown in the parser itself.
 		 */
-		rewrite_plain_name(p->argType->names);
+		p->argType->names = rewrite_plain_name(p->argType->names);
 
 		typenameTypeIdAndMod(NULL, p->argType, &(args->argtypes[i]), &(args->argtypmods[i]));
 		i++;
@@ -3288,7 +3289,7 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 	}
 
 	/* Permission check */
-	if (!(pg_namespace_ownercheck(nsp_oid, GetUserId()) ||
+	if (!(object_ownercheck(NamespaceRelationId, nsp_oid, GetUserId()) ||
 			has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)) ||
 				login_is_db_owner))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA, nsp_name);
@@ -3756,6 +3757,9 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 	Oid			datdba;
 	bool		login_is_db_owner;
 	bool		is_create;
+	List		*res;
+	Node	   	*res_stmt;
+	PlannedStmt *wrapper;
 
 	Assert(stmt->schema_name != NULL);
 
@@ -3778,7 +3782,7 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 					stmt->schema_name)));
 
 	// Check if the user has necessary permissions for CREATE/DROP FULLTEXT INDEX
-	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner && !pg_namespace_ownercheck(schemaOid, GetUserId()))
+	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner && !object_ownercheck(NamespaceRelationId, schemaOid, GetUserId()))
 	{
 		const char *error_msg = is_create ? "A default full-text catalog does not exist in the database or user does not have permission to perform this action" : "Cannot drop the full-text index, because it does not exist or you do not have permission";
     	ereport(ERROR, 
@@ -3801,7 +3805,7 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 	if (is_create)
 	{
 		uniq_index_name = construct_unique_index_name((char *) stmt->index_name, table_name);
-		if(is_unique_index(relid, (const char *) uniq_index_name))
+		if(is_unique_index(relid, (const char *) uniq_index_name) || is_unique_index(relid, (const char *)stmt->index_name))
 		{
 			column_name = stmt->column_name;
 			ft_index_name = construct_unique_index_name("ft_index", table_name);
@@ -3833,6 +3837,29 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 	/* The above query will be
 	 * executed using ProcessUtility()
 	 */
-	exec_utility_cmd_helper(query_str);
+	res = raw_parser(query_str, RAW_PARSE_DEFAULT);
+	res_stmt = ((RawStmt *) linitial(res))->stmt;
+
+	/* need to make a wrapper PlannedStmt */
+	wrapper = makeNode(PlannedStmt);
+	wrapper->commandType = CMD_UTILITY;
+	wrapper->canSetTag = false;
+	wrapper->utilityStmt = res_stmt;
+	wrapper->stmt_location = 0;
+	wrapper->stmt_len = 1;
+
+	/* do this step */
+	ProcessUtility(wrapper,
+				is_create ? "(CREATE FULLTEXT INDEX STATEMENT )" : "(DELETE FULLTEXT INDEX STATEMENT )",
+				false,
+				PROCESS_UTILITY_SUBCOMMAND,
+				NULL,
+				NULL,
+				None_Receiver,
+				NULL);
+
+	/* make sure later steps can see the object created here */
+	CommandCounterIncrement();
+
 	return PLTSQL_RC_OK;
 }

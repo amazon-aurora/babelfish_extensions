@@ -238,6 +238,12 @@ GO
 
 ALTER ROLE ownership_restrictions_from_pg_login1 VALID UNTIL 'infinity';
 GO
+~~ERROR (Code: 0)~~
+
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: Only roles with the CREATEROLE attribute and the ADMIN option on role "ownership_restrictions_from_pg_login1" may alter this role.
+    Server SQLState: 42501)~~
+
 
 ALTER ROLE ownership_restrictions_from_pg_login1 rename to master_ownership_restrictions_from_pg_role5;
 GO
@@ -371,12 +377,14 @@ GO
 -- after connection limit set to 1, shouldn't be able to connect to multiple sessions
 ALTER ROLE ownership_restrictions_from_pg_login1 WITH CONNECTION LIMIT 1;
 GO
+~~ERROR (Code: 0)~~
+
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: Only roles with the CREATEROLE attribute and the ADMIN option on role "ownership_restrictions_from_pg_login1" may alter this role.
+    Server SQLState: 42501)~~
+
 
 -- tsql user=ownership_restrictions_from_pg_login1 password=12345678
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: too many connections for role "ownership_restrictions_from_pg_login1" )~~
-
 
 -- psql user=ownership_restrictions_from_pg_login1 password=12345678
 ALTER ROLE ownership_restrictions_from_pg_login1 set babelfishpg_tsql.ownership_restrictions_from_pg_test_variable = 101;
@@ -637,7 +645,8 @@ ALTER ROLE ownership_restrictions_from_pg_login1 VALID UNTIL 'infinity';
 GO
 ~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: Only roles with the CREATEROLE attribute and the ADMIN option on role "ownership_restrictions_from_pg_login1" may alter this role.
     Server SQLState: 42501)~~
 
 
@@ -653,7 +662,8 @@ ALTER ROLE ownership_restrictions_from_pg_login1 with ENCRYPTED password '123456
 GO
 ~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: To change another role's password, the current user must have the CREATEROLE attribute and the ADMIN option on the role.
     Server SQLState: 42501)~~
 
 
@@ -661,7 +671,8 @@ ALTER ROLE ownership_restrictions_from_pg_login1 with password NULL;
 GO
 ~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: To change another role's password, the current user must have the CREATEROLE attribute and the ADMIN option on the role.
     Server SQLState: 42501)~~
 
 
@@ -669,7 +680,8 @@ ALTER ROLE ownership_restrictions_from_pg_login1 with password '12345678';
 GO
 ~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: To change another role's password, the current user must have the CREATEROLE attribute and the ADMIN option on the role.
     Server SQLState: 42501)~~
 
 
@@ -789,7 +801,8 @@ ALTER ROLE ownership_restrictions_from_pg_login1 WITH CONNECTION LIMIT 1;
 GO
 ~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied
+~~ERROR (Message: ERROR: permission denied to alter role
+  Detail: Only roles with the CREATEROLE attribute and the ADMIN option on role "ownership_restrictions_from_pg_login1" may alter this role.
     Server SQLState: 42501)~~
 
 
@@ -836,6 +849,7 @@ WHERE sys.suser_name(usesysid) = 'ownership_restrictions_from_pg_login1' AND bac
 GO
 ~~START~~
 bool
+t
 t
 ~~END~~
 

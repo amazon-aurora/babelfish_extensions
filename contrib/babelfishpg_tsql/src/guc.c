@@ -49,7 +49,7 @@ bool		pltsql_allow_windows_login = true;
 bool		pltsql_allow_fulltext_parser = false;
 
 bool		pltsql_xact_abort = false;
-bool		pltsql_implicit_transactions = false;
+bool		pltsql_implicit_transactions = true;
 bool		pltsql_cursor_close_on_commit = false;
 bool		pltsql_disable_batch_auto_commit = false;
 bool		pltsql_disable_internal_savepoint = false;
@@ -60,7 +60,7 @@ bool		pltsql_showplan_all = false;
 bool		pltsql_showplan_text = false;
 bool		pltsql_showplan_xml = false;
 bool		pltsql_fmtonly = false;
-bool		pltsql_enable_tsql_information_schema = true;
+bool		pltsql_enable_tsql_information_schema = false;
 bool		pltsql_no_browsetable = false;
 
 char	   *pltsql_host_destribution = NULL;
@@ -665,7 +665,7 @@ define_custom_variables(void)
 							 &pltsql_allow_antlr_to_unsupported_grammar_for_testing,
 							 false,
 							 PGC_SUSET, /* only superuser can set */
-							 GUC_NO_SHOW_ALL,
+							 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 							 NULL, NULL, NULL);
 
 	/* temporary GUC for enable or disable windows login */
@@ -683,7 +683,7 @@ define_custom_variables(void)
 							 gettext_noop("GUC for enabling or disabling full text search features"),
 							 NULL,
 							 &pltsql_allow_fulltext_parser,
-							 false,
+							 true,
 							 PGC_SUSET,
 							 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_SUPERUSER_ONLY,
 							 NULL, NULL, NULL);
@@ -884,7 +884,7 @@ define_custom_variables(void)
 							 gettext_noop("enable implicit transactions"),
 							 NULL,
 							 &pltsql_implicit_transactions,
-							 false,
+							 true,
 							 PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 							 NULL, NULL, NULL);
@@ -1229,6 +1229,7 @@ int			escape_hatch_checkpoint = EH_IGNORE;
 int			escape_hatch_set_transaction_isolation_level = EH_STRICT;
 int			pltsql_isolation_level_repeatable_read = ISOLATION_OFF;
 int 		pltsql_isolation_level_serializable = ISOLATION_OFF;
+int 		escape_hatch_identity_function = EH_STRICT;
 
 void
 define_escape_hatch_variables(void)
@@ -1598,6 +1599,17 @@ define_escape_hatch_variables(void)
 							 &pltsql_isolation_level_serializable,
 							 ISOLATION_OFF,
 							 bbf_isolation_options,
+							 PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+							 NULL, NULL, NULL);
+	
+	/* IDENTITY() in SELECT-INTO */
+	DefineCustomEnumVariable("babelfishpg_tsql.escape_hatch_identity_function",
+							 gettext_noop("escape hatch for IDENTITY() in SELECT-INTO"),
+							 NULL,
+							 &escape_hatch_identity_function,
+							 EH_STRICT,
+							 escape_hatch_options,
 							 PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 							 NULL, NULL, NULL);
