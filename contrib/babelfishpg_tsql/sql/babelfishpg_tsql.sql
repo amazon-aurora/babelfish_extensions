@@ -3654,4 +3654,3 @@ BEGIN
 END
 $$;
 GRANT EXECUTE ON PROCEDURE sys.sp_changedbowner(IN sys.sysname, IN sys.VARCHAR(5)) TO PUBLIC;
-

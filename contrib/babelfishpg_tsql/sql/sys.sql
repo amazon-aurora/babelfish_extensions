@@ -136,3 +136,17 @@ CREATE TABLE sys.babelfish_configurations (
     comment_syscurconfigs sys.nvarchar(255),
     comment_sysconfigures sys.nvarchar(255)
 ) WITH (OIDS = FALSE);
+
+CREATE TABLE sys.babelfish_config_table(
+	config_name varchar(100) NOT NULL PRIMARY KEY COLLATE "C",
+	config_value varchar(100));
+
+GRANT SELECT ON sys.babelfish_config_table TO PUBLIC;
+
+SELECT pg_catalog.pg_extension_config_dump('sys.babelfish_config_table', '');
+
+CREATE OR REPLACE PROCEDURE sys.populate_bbf_config_catalog()
+LANGUAGE C
+AS 'babelfishpg_tsql', 'populate_bbf_config_catalog';
+
+CALL sys.populate_bbf_config_catalog();

@@ -333,6 +333,37 @@ typedef struct FormData_bbf_extended_properties
 typedef FormData_bbf_extended_properties *Form_bbf_extended_properties;
 
 /*****************************************
+ *			BABEL CONFIGURATIONS
+ *****************************************/
+typedef enum BabelfishConfigType
+{
+	BBF_CONFIG_MIGRATION_MODE,
+	BBF_CONFIG_DEFAULT_LOCALE
+} BabelfishConfigType;
+
+#define BBF_CONFIG_TABLE_NAME "babelfish_config_table"
+#define BBF_CONFIG_IDX_NAME "babelfish_config_pkey"
+#define Anum_bbf_config_name 1
+#define Anum_bbf_config_value 2
+#define BBF_CONFIG_NUM_COLS 2
+extern Oid	bbf_config_oid;
+extern Oid	bbf_config_idx_oid;
+
+extern Oid get_bbf_config_oid(void);
+// extern Oid get_bbf_config_idx_oid(void);
+extern char *get_value_from_bbf_config(BabelfishConfigType config);
+extern void update_bbf_config_catalog(bool isInsert, BabelfishConfigType config, const char* value);
+//extern void populate_bbf_config_catalog(void);
+
+typedef struct FormData_bbf_config
+{
+	VarChar		config_name;
+	VarChar		config_value;
+} FormData_bbf_config;
+
+typedef FormData_bbf_config *Form_bbf_config;
+
+/*****************************************
  *			Metadata Check Rule
  *****************************************/
 

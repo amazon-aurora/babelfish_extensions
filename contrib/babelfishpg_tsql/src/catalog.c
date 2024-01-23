@@ -96,6 +96,12 @@ Oid			bbf_extended_properties_oid = InvalidOid;
 Oid			bbf_extended_properties_idx_oid = InvalidOid;
 
 /*****************************************
+ *			BABEL CONFIGURATIONS
+ *****************************************/
+Oid			bbf_config_oid;
+Oid			bbf_config_idx_oid;
+
+/*****************************************
  * 			Catalog General
  *****************************************/
 
@@ -188,6 +194,10 @@ init_catalog(PG_FUNCTION_ARGS)
 	/* bbf_servers_def */
 	bbf_servers_def_oid = get_relname_relid(BBF_SERVERS_DEF_TABLE_NAME, sys_schema_oid);
 	bbf_servers_def_idx_oid = get_relname_relid(BBF_SERVERS_DEF_IDX_NAME, sys_schema_oid);
+
+	/* bbf_config */
+	bbf_config_oid = get_relname_relid(BBF_CONFIG_TABLE_NAME, sys_schema_oid);
+	bbf_config_idx_oid = get_relname_relid(BBF_CONFIG_IDX_NAME, sys_schema_oid);
 
 	if (sysdatabases_oid != InvalidOid)
 		initTsqlSyscache();
@@ -2096,6 +2106,14 @@ get_server_name(HeapTuple tuple, TupleDesc dsc)
 	return CStringGetDatum(servername);
 }
 
+// static Datum
+// get_babelfish_config_name(HeapTuple tuple, TupleDesc dsc)
+// {
+// 	Form_bbf_config config = ((Form_bbf_config) GETSTRUCT(tuple));
+
+// 	return PointerGetDatum(&(config->config_name));
+// }
+
 /*****************************************
  * 			Condition check funcs
  *****************************************/
@@ -2953,4 +2971,152 @@ update_db_owner(const char *new_owner_name, const char *db_name)
 	heap_freetuple(tuple);
 	table_endscan(tblscan);	
 	table_close(sysdatabases_rel, RowExclusiveLock);	
+}
+
+Oid
+get_bbf_config_oid()
+{
+	if (!OidIsValid(bbf_config_oid))
+		bbf_config_oid = get_relname_relid(BBF_CONFIG_TABLE_NAME,
+											 get_namespace_oid("sys", false));
+
+	return bbf_config_oid;
+}
+
+char*
+get_value_from_bbf_config(BabelfishConfigType config)
+{
+	Relation	bbf_config_rel;
+	HeapTuple	tuple;
+	ScanKeyData	key;
+	TableScanDesc	scan;
+	char		*config_value;
+	char		*config_name_str;
+
+	switch (config)
+	{
+		case BBF_CONFIG_MIGRATION_MODE:
+			config_name_str = "babelfishpg_tsql.migration_mode";
+			break;
+		case BBF_CONFIG_DEFAULT_LOCALE:
+			config_name_str = "babelfishpg_tsql.default_locale";
+			break;
+		default:
+			elog(ERROR, "unknown babelfish configuration");
+	}
+
+	bbf_config_rel = table_open(get_bbf_config_oid(),
+										 AccessShareLock);
+
+	ScanKeyInit(&key,
+				Anum_bbf_config_name,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(config_name_str));
+
+	scan = table_beginscan_catalog(bbf_config_rel, 1, &key);
+
+	tuple = heap_getnext(scan, ForwardScanDirection);
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isNull;
+		config_value = TextDatumGetCString(heap_getattr(tuple, Anum_bbf_config_value,
+														 RelationGetDescr(bbf_config_rel), &isNull));
+		if (isNull)
+			config_value = NULL;
+	}
+
+	table_endscan(scan);
+	table_close(bbf_config_rel, AccessShareLock);
+	return config_value;
+}
+
+void
+update_bbf_config_catalog(bool isInsert, BabelfishConfigType config, const char* value)
+{
+	Relation	bbf_config_rel;
+	TupleDesc	bbf_config_rel_dsc;
+	Datum		new_record[BBF_CONFIG_NUM_COLS];
+	bool		new_record_nulls[BBF_CONFIG_NUM_COLS];
+	bool		new_record_repl[BBF_CONFIG_NUM_COLS];
+	ScanKeyData		key;
+	HeapTuple		tuple, old_tuple;
+	TableScanDesc	tblscan;
+	const char	*config_name_str;
+
+	MemSet(new_record_repl, false, sizeof(new_record_repl));
+
+	bbf_config_rel = table_open(get_bbf_config_oid(), RowExclusiveLock);
+	bbf_config_rel_dsc = RelationGetDescr(bbf_config_rel);
+
+	MemSet(new_record_nulls, false, sizeof(new_record_nulls));
+
+	switch (config)
+	{
+		case BBF_CONFIG_MIGRATION_MODE:
+			config_name_str = "babelfishpg_tsql.migration_mode";
+			break;
+		case BBF_CONFIG_DEFAULT_LOCALE:
+			config_name_str = "babelfishpg_tsql.default_locale";
+			break;
+		default:
+			elog(ERROR, "unknown babelfish configuration");
+	}
+
+	new_record[Anum_bbf_config_name - 1] = CStringGetTextDatum(config_name_str);
+	new_record[Anum_bbf_config_value - 1] = CStringGetTextDatum(value);
+
+	if(isInsert)
+	{
+		tuple = heap_form_tuple(bbf_config_rel_dsc,
+								new_record, new_record_nulls);
+		CatalogTupleInsert(bbf_config_rel, tuple);
+	}
+	else
+	{
+		ScanKeyInit(&key,
+					Anum_bbf_config_name,
+					BTEqualStrategyNumber, F_TEXTEQ,
+					CStringGetTextDatum(config_name_str));
+		tblscan = table_beginscan_catalog(bbf_config_rel, 1, &key);
+		old_tuple = heap_getnext(tblscan, ForwardScanDirection);
+
+		if (!old_tuple)
+		{
+			table_endscan(tblscan);
+			table_close(bbf_config_rel, RowExclusiveLock);
+			elog(ERROR, "babelfish configuration %s does not exist in catalog", config_name_str);
+		}
+
+		new_record_repl[Anum_bbf_config_value - 1] = true;
+
+		for(int i = 1; i < BBF_CONFIG_NUM_COLS; i++)
+		{
+			if(!new_record_repl[i])
+			{
+				bool isNull;
+				new_record[i] = heap_getattr(old_tuple, i+1,
+												RelationGetDescr(bbf_config_rel), &isNull);
+			}
+		}
+
+		tuple = heap_modify_tuple(old_tuple, bbf_config_rel_dsc,
+									new_record, new_record_nulls, new_record_repl);
+
+		CatalogTupleUpdate(bbf_config_rel, &tuple->t_self, tuple);
+		table_endscan(tblscan);
+
+	}
+
+	heap_freetuple(tuple);
+	table_close(bbf_config_rel, RowExclusiveLock);
+}
+
+PG_FUNCTION_INFO_V1(populate_bbf_config_catalog);
+Datum
+populate_bbf_config_catalog(PG_FUNCTION_ARGS)
+{
+	update_bbf_config_catalog(true, BBF_CONFIG_MIGRATION_MODE, GetConfigOption("babelfishpg_tsql.migration_mode", true, false));
+	update_bbf_config_catalog(true, BBF_CONFIG_DEFAULT_LOCALE, GetConfigOption("babelfishpg_tsql.default_locale", true, false));
+
+	PG_RETURN_INT32(0);
 }
