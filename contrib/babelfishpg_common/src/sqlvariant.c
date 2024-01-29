@@ -491,7 +491,7 @@ do_compare(char *oprname, bytea *arg1, bytea *arg2, Oid fncollation)
 
 		/* do implicit cast */
 		/* typmod is not considered during a implicit cast comparison */
-		if (type_code1 < type_code2)	/* CAST arg2 to arg1 */
+		if (type_code1 > type_code2)	/* CAST arg2 to arg1 */
 		{
 			temp_datum = do_cast(type_oid2, type_oid1, d2, -1, fncollation, COERCION_IMPLICIT, &cast_by_relabel);
 			result = compare_value(oprname, type_oid1, d1, temp_datum, fncollation);
