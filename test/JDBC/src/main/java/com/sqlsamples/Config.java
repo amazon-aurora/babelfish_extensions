@@ -32,6 +32,9 @@ public class Config {
     static String testFileRoot = properties.getProperty("testFileRoot");
     static boolean isUpgradeTestMode =  Boolean.parseBoolean(properties.getProperty("isUpgradeTestMode"));
     static long defaultSLA = Long.parseLong(properties.getProperty("defaultSLA"));
+    static String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
+    static String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+    static String sessionToken = System.getenv("AWS_SESSION_TOKEN");
 
     static String connectionString = constructConnectionString();
 

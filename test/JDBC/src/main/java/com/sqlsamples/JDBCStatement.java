@@ -10,6 +10,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.SQLWarning;
 import static com.sqlsamples.HandleException.handleSQLExceptionWithFile;
+import static com.sqlsamples.Config.*;
+import static com.sqlsamples.Config.accessKey;
+import static com.sqlsamples.Config.secretKey;
+import static com.sqlsamples.Config.sessionToken;
 
 public class JDBCStatement {
 
@@ -41,7 +45,27 @@ public class JDBCStatement {
             boolean resultSetExist = false;
             boolean warningExist = false;
             int resultsProcessed = 0;
+            StringBuilder query = new StringBuilder();
             try {
+                if (SQL.startsWith("env#!#"))
+                {
+                    String[] result = SQL.split("#!#");
+                    for (String r : result)
+                    {
+                        if (r.startsWith("AWS_ACCESS_KEY_ID"))
+                            query.append(accessKey);
+                        else if (r.startsWith("AWS_SECRET_ACCESS_KEY"))
+                            query.append(secretKey);
+                        else if (r.startsWith("AWS_SESSION_TOKEN"))
+                            query.append(sessionToken);
+                        else if (r.startsWith("env"))
+                            continue;
+                        else
+                            query.append(r);
+                    }
+                    SQL = query.toString();
+                }
+                
                 resultSetExist = stmt_bbl.execute(SQL);
                 sqlwarn = stmt_bbl.getWarnings();
                 if(sqlwarn != null) warningExist = true;

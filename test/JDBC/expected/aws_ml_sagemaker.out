@@ -1,0 +1,669 @@
+-- tsql
+exec sp_execute_postgresql 'create extension aws_ml';
+go
+
+-- psql
+GRANT usage ON SCHEMA aws_sagemaker TO master_dbo;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA aws_sagemaker TO master_dbo;
+GO
+-- create the function that enables us to insert creds into the rds hash table of credentials
+CREATE OR REPLACE FUNCTION public.pg_rds_insert_creds(feature text, credentials text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_insert_creds'
+LANGUAGE C STRICT;
+go
+
+CREATE OR REPLACE FUNCTION public.pg_rds_remove_credentials(feature text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_remove_credentials'
+LANGUAGE C STRICT;
+go
+
+select pg_rds_remove_credentials('SageMaker');
+go
+~~START~~
+void
+
+~~END~~
+
+
+#Setup Credentials
+env#!#select pg_rds_insert_creds('SageMaker', '{"AccessKeyId":"#!#AWS_ACCESS_KEY_ID#!#","SecretAccessKey":"#!#AWS_SECRET_ACCESS_KEY#!#","SessionToken":"#!#AWS_SESSION_TOKEN#!#","RoleFeatureName":"SageMaker"}');
+go
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+--- random forest test ---
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', null, 'PA', 77, 510, 'no', 'yes', 24, 149.4, 74, 123.9, 72, 174.3, 84, 10.1, 6, 1);
+go
+~~START~~
+varchar
+False.
+~~END~~
+
+
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', null, 'PA', 77, 510, 'no', 'yes', 24, 149.4, 74, 123.9, 72, 174.3, 84, 10.1, 6);
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received server error (500) from primary with message "<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-random-forest-customer-churn in account 825464935349 for more information.")~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', null, 'PA', 77, 510, 'no', 'yes', 24, 149.4, 74, 123.9, 72, 174.3, 84, 10.1, 6, 'asdf')
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received server error (500) from primary with message "<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-random-forest-customer-churn in account 825464935349 for more information.")~~
+
+
+-- batch mode --
+CREATE TABLE customer_churn (state VARCHAR(100),acc_length bigint,area_code bigint,phone VARCHAR(100),int_plan VARCHAR(100),vmail_plan VARCHAR(100),vmail_msg bigint, day_mins float, day_calls bigint,
+                day_charge float ,eve_mins float ,eve_calls bigint ,eve_charge float ,night_mins float ,night_calls bigint ,night_charge float,int_mins float,
+                int_calls bigint,int_charge float,cust_service_calls bigint,churn VARCHAR(100));
+go
+
+
+insert into customer_churn VALUES('AR',115,408,'338-1400','no','no',0,268,115,45.56,153.6,106,13.06,232.3,65,10.45,17,1,4.59,3,'False.');
+insert into customer_churn VALUES('TX',106,510,'395-3026','no','no',0,210.6,96,35.8,249.2,85,21.18,191.4,88,8.61,12.4,1,3.35,2,'True.');
+insert into customer_churn VALUES('IN',65,415,'329-6603','no','no',0,129.1,137,21.95,228.5,83,19.42,208.8,111,9.4,12.7,6,3.43,4,'True.');
+insert into customer_churn VALUES('NY',161,415,'351-7269','no','no',0,332.9,67,56.59,317.8,97,27.01,160.6,128,7.23,5.4,9,1.46,4,'True.');
+insert into customer_churn VALUES('CO',77,408,'393-7984','no','no',0,62.4,89,10.61,169.9,121,14.44,209.6,64,9.43,5.7,6,1.54,5,'True.');
+insert into customer_churn VALUES('AZ',12,408,'360-1596','no','no',0,249.6,118,42.43,252.4,119,21.45,280.2,90,12.61,11.8,3,3.19,1,'True.');
+insert into customer_churn VALUES('KS',128,415,'382-4657','no','yes',25,265.1,110,45.07,197.4,99,16.78,244.7,91,11.01,10,3,2.7,1,'False.');
+insert into customer_churn VALUES('OH',107,415,'371-7191','no','yes',26,161.6,123,27.47,195.5,103,16.62,254.4,103,11.45,13.7,3,3.7,1,'False.');
+insert into customer_churn VALUES('NJ',137,415,'358-1921','no','no',0,243.4,114,41.38,121.2,110,10.3,162.6,104,7.32,12.2,5,3.29,0,'False.');
+insert into customer_churn VALUES('OH',84,408,'375-9999','yes','no',0,299.4,71,50.9,61.9,88,5.26,196.9,89,8.86,6.6,7,1.78,2,'False.');
+go
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+
+Begin Transaction;
+go
+UPDATE customer_churn
+SET churn = (aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000,
+    state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls,
+    night_mins, night_calls, int_mins, int_calls, cust_service_calls))
+where
+    churn <>
+	aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000,
+					state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins,
+					eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls);
+go
+~~ROW COUNT: 2~~
+
+UPDATE customer_churn
+SET churn = (aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', null,
+    state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls,
+    night_mins, night_calls, int_mins, int_calls, cust_service_calls))
+where
+    churn <>
+	aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', null,
+					state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins,
+					eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls);
+go
+Rollback Transaction;
+go
+
+-- explicit cross join(s) on invoke endpiont --
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+AR#!#115#!#408#!#338-1400#!#no#!#no#!#0#!#268.0#!#115#!#45.56#!#153.6#!#106#!#13.06#!#232.3#!#65#!#10.45#!#17.0#!#1#!#4.59#!#3#!#False.#!#True.
+AZ#!#12#!#408#!#360-1596#!#no#!#no#!#0#!#249.6#!#118#!#42.43#!#252.4#!#119#!#21.45#!#280.2#!#90#!#12.61#!#11.8#!#3#!#3.19#!#1#!#True.#!#True.
+CO#!#77#!#408#!#393-7984#!#no#!#no#!#0#!#62.4#!#89#!#10.61#!#169.9#!#121#!#14.44#!#209.6#!#64#!#9.43#!#5.7#!#6#!#1.54#!#5#!#True.#!#True.
+IN#!#65#!#415#!#329-6603#!#no#!#no#!#0#!#129.1#!#137#!#21.95#!#228.5#!#83#!#19.42#!#208.8#!#111#!#9.4#!#12.7#!#6#!#3.43#!#4#!#True.#!#True.
+KS#!#128#!#415#!#382-4657#!#no#!#yes#!#25#!#265.1#!#110#!#45.07#!#197.4#!#99#!#16.78#!#244.7#!#91#!#11.01#!#10.0#!#3#!#2.7#!#1#!#False.#!#False.
+NJ#!#137#!#415#!#358-1921#!#no#!#no#!#0#!#243.4#!#114#!#41.38#!#121.2#!#110#!#10.3#!#162.6#!#104#!#7.32#!#12.2#!#5#!#3.29#!#0#!#False.#!#False.
+NY#!#161#!#415#!#351-7269#!#no#!#no#!#0#!#332.9#!#67#!#56.59#!#317.8#!#97#!#27.01#!#160.6#!#128#!#7.23#!#5.4#!#9#!#1.46#!#4#!#True.#!#True.
+OH#!#107#!#415#!#371-7191#!#no#!#yes#!#26#!#161.6#!#123#!#27.47#!#195.5#!#103#!#16.62#!#254.4#!#103#!#11.45#!#13.7#!#3#!#3.7#!#1#!#False.#!#False.
+OH#!#84#!#408#!#375-9999#!#yes#!#no#!#0#!#299.4#!#71#!#50.9#!#61.9#!#88#!#5.26#!#196.9#!#89#!#8.86#!#6.6#!#7#!#1.78#!#2#!#False.#!#False.
+TX#!#106#!#510#!#395-3026#!#no#!#no#!#0#!#210.6#!#96#!#35.8#!#249.2#!#85#!#21.18#!#191.4#!#88#!#8.61#!#12.4#!#1#!#3.35#!#2#!#True.#!#False.
+~~END~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 3, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+AR#!#115#!#408#!#338-1400#!#no#!#no#!#0#!#268.0#!#115#!#45.56#!#153.6#!#106#!#13.06#!#232.3#!#65#!#10.45#!#17.0#!#1#!#4.59#!#3#!#False.#!#True.
+AZ#!#12#!#408#!#360-1596#!#no#!#no#!#0#!#249.6#!#118#!#42.43#!#252.4#!#119#!#21.45#!#280.2#!#90#!#12.61#!#11.8#!#3#!#3.19#!#1#!#True.#!#True.
+CO#!#77#!#408#!#393-7984#!#no#!#no#!#0#!#62.4#!#89#!#10.61#!#169.9#!#121#!#14.44#!#209.6#!#64#!#9.43#!#5.7#!#6#!#1.54#!#5#!#True.#!#True.
+IN#!#65#!#415#!#329-6603#!#no#!#no#!#0#!#129.1#!#137#!#21.95#!#228.5#!#83#!#19.42#!#208.8#!#111#!#9.4#!#12.7#!#6#!#3.43#!#4#!#True.#!#True.
+KS#!#128#!#415#!#382-4657#!#no#!#yes#!#25#!#265.1#!#110#!#45.07#!#197.4#!#99#!#16.78#!#244.7#!#91#!#11.01#!#10.0#!#3#!#2.7#!#1#!#False.#!#False.
+NJ#!#137#!#415#!#358-1921#!#no#!#no#!#0#!#243.4#!#114#!#41.38#!#121.2#!#110#!#10.3#!#162.6#!#104#!#7.32#!#12.2#!#5#!#3.29#!#0#!#False.#!#False.
+NY#!#161#!#415#!#351-7269#!#no#!#no#!#0#!#332.9#!#67#!#56.59#!#317.8#!#97#!#27.01#!#160.6#!#128#!#7.23#!#5.4#!#9#!#1.46#!#4#!#True.#!#True.
+OH#!#107#!#415#!#371-7191#!#no#!#yes#!#26#!#161.6#!#123#!#27.47#!#195.5#!#103#!#16.62#!#254.4#!#103#!#11.45#!#13.7#!#3#!#3.7#!#1#!#False.#!#False.
+OH#!#84#!#408#!#375-9999#!#yes#!#no#!#0#!#299.4#!#71#!#50.9#!#61.9#!#88#!#5.26#!#196.9#!#89#!#8.86#!#6.6#!#7#!#1.78#!#2#!#False.#!#False.
+TX#!#106#!#510#!#395-3026#!#no#!#no#!#0#!#210.6#!#96#!#35.8#!#249.2#!#85#!#21.18#!#191.4#!#88#!#8.61#!#12.4#!#1#!#3.35#!#2#!#True.#!#False.
+~~END~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 10, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+AR#!#115#!#408#!#338-1400#!#no#!#no#!#0#!#268.0#!#115#!#45.56#!#153.6#!#106#!#13.06#!#232.3#!#65#!#10.45#!#17.0#!#1#!#4.59#!#3#!#False.#!#True.
+AZ#!#12#!#408#!#360-1596#!#no#!#no#!#0#!#249.6#!#118#!#42.43#!#252.4#!#119#!#21.45#!#280.2#!#90#!#12.61#!#11.8#!#3#!#3.19#!#1#!#True.#!#True.
+CO#!#77#!#408#!#393-7984#!#no#!#no#!#0#!#62.4#!#89#!#10.61#!#169.9#!#121#!#14.44#!#209.6#!#64#!#9.43#!#5.7#!#6#!#1.54#!#5#!#True.#!#True.
+IN#!#65#!#415#!#329-6603#!#no#!#no#!#0#!#129.1#!#137#!#21.95#!#228.5#!#83#!#19.42#!#208.8#!#111#!#9.4#!#12.7#!#6#!#3.43#!#4#!#True.#!#True.
+KS#!#128#!#415#!#382-4657#!#no#!#yes#!#25#!#265.1#!#110#!#45.07#!#197.4#!#99#!#16.78#!#244.7#!#91#!#11.01#!#10.0#!#3#!#2.7#!#1#!#False.#!#False.
+NJ#!#137#!#415#!#358-1921#!#no#!#no#!#0#!#243.4#!#114#!#41.38#!#121.2#!#110#!#10.3#!#162.6#!#104#!#7.32#!#12.2#!#5#!#3.29#!#0#!#False.#!#False.
+NY#!#161#!#415#!#351-7269#!#no#!#no#!#0#!#332.9#!#67#!#56.59#!#317.8#!#97#!#27.01#!#160.6#!#128#!#7.23#!#5.4#!#9#!#1.46#!#4#!#True.#!#True.
+OH#!#107#!#415#!#371-7191#!#no#!#yes#!#26#!#161.6#!#123#!#27.47#!#195.5#!#103#!#16.62#!#254.4#!#103#!#11.45#!#13.7#!#3#!#3.7#!#1#!#False.#!#False.
+OH#!#84#!#408#!#375-9999#!#yes#!#no#!#0#!#299.4#!#71#!#50.9#!#61.9#!#88#!#5.26#!#196.9#!#89#!#8.86#!#6.6#!#7#!#1.78#!#2#!#False.#!#False.
+TX#!#106#!#510#!#395-3026#!#no#!#no#!#0#!#210.6#!#96#!#35.8#!#249.2#!#85#!#21.18#!#191.4#!#88#!#8.61#!#12.4#!#1#!#3.35#!#2#!#True.#!#False.
+~~END~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+AR#!#115#!#408#!#338-1400#!#no#!#no#!#0#!#268.0#!#115#!#45.56#!#153.6#!#106#!#13.06#!#232.3#!#65#!#10.45#!#17.0#!#1#!#4.59#!#3#!#False.#!#True.
+AZ#!#12#!#408#!#360-1596#!#no#!#no#!#0#!#249.6#!#118#!#42.43#!#252.4#!#119#!#21.45#!#280.2#!#90#!#12.61#!#11.8#!#3#!#3.19#!#1#!#True.#!#True.
+CO#!#77#!#408#!#393-7984#!#no#!#no#!#0#!#62.4#!#89#!#10.61#!#169.9#!#121#!#14.44#!#209.6#!#64#!#9.43#!#5.7#!#6#!#1.54#!#5#!#True.#!#True.
+IN#!#65#!#415#!#329-6603#!#no#!#no#!#0#!#129.1#!#137#!#21.95#!#228.5#!#83#!#19.42#!#208.8#!#111#!#9.4#!#12.7#!#6#!#3.43#!#4#!#True.#!#True.
+KS#!#128#!#415#!#382-4657#!#no#!#yes#!#25#!#265.1#!#110#!#45.07#!#197.4#!#99#!#16.78#!#244.7#!#91#!#11.01#!#10.0#!#3#!#2.7#!#1#!#False.#!#False.
+NJ#!#137#!#415#!#358-1921#!#no#!#no#!#0#!#243.4#!#114#!#41.38#!#121.2#!#110#!#10.3#!#162.6#!#104#!#7.32#!#12.2#!#5#!#3.29#!#0#!#False.#!#False.
+NY#!#161#!#415#!#351-7269#!#no#!#no#!#0#!#332.9#!#67#!#56.59#!#317.8#!#97#!#27.01#!#160.6#!#128#!#7.23#!#5.4#!#9#!#1.46#!#4#!#True.#!#True.
+OH#!#107#!#415#!#371-7191#!#no#!#yes#!#26#!#161.6#!#123#!#27.47#!#195.5#!#103#!#16.62#!#254.4#!#103#!#11.45#!#13.7#!#3#!#3.7#!#1#!#False.#!#False.
+OH#!#84#!#408#!#375-9999#!#yes#!#no#!#0#!#299.4#!#71#!#50.9#!#61.9#!#88#!#5.26#!#196.9#!#89#!#8.86#!#6.6#!#7#!#1.78#!#2#!#False.#!#False.
+TX#!#106#!#510#!#395-3026#!#no#!#no#!#0#!#210.6#!#96#!#35.8#!#249.2#!#85#!#21.18#!#191.4#!#88#!#8.61#!#12.4#!#1#!#3.35#!#2#!#True.#!#False.
+~~END~~
+
+select * from (select * from customer_churn cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls)) as foo
+    cross join aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar#!#varchar
+AR#!#115#!#408#!#338-1400#!#no#!#no#!#0#!#268.0#!#115#!#45.56#!#153.6#!#106#!#13.06#!#232.3#!#65#!#10.45#!#17.0#!#1#!#4.59#!#3#!#False.#!#True.#!#True.
+AZ#!#12#!#408#!#360-1596#!#no#!#no#!#0#!#249.6#!#118#!#42.43#!#252.4#!#119#!#21.45#!#280.2#!#90#!#12.61#!#11.8#!#3#!#3.19#!#1#!#True.#!#True.#!#True.
+CO#!#77#!#408#!#393-7984#!#no#!#no#!#0#!#62.4#!#89#!#10.61#!#169.9#!#121#!#14.44#!#209.6#!#64#!#9.43#!#5.7#!#6#!#1.54#!#5#!#True.#!#True.#!#True.
+IN#!#65#!#415#!#329-6603#!#no#!#no#!#0#!#129.1#!#137#!#21.95#!#228.5#!#83#!#19.42#!#208.8#!#111#!#9.4#!#12.7#!#6#!#3.43#!#4#!#True.#!#True.#!#True.
+KS#!#128#!#415#!#382-4657#!#no#!#yes#!#25#!#265.1#!#110#!#45.07#!#197.4#!#99#!#16.78#!#244.7#!#91#!#11.01#!#10.0#!#3#!#2.7#!#1#!#False.#!#False.#!#False.
+NJ#!#137#!#415#!#358-1921#!#no#!#no#!#0#!#243.4#!#114#!#41.38#!#121.2#!#110#!#10.3#!#162.6#!#104#!#7.32#!#12.2#!#5#!#3.29#!#0#!#False.#!#False.#!#False.
+NY#!#161#!#415#!#351-7269#!#no#!#no#!#0#!#332.9#!#67#!#56.59#!#317.8#!#97#!#27.01#!#160.6#!#128#!#7.23#!#5.4#!#9#!#1.46#!#4#!#True.#!#True.#!#True.
+OH#!#107#!#415#!#371-7191#!#no#!#yes#!#26#!#161.6#!#123#!#27.47#!#195.5#!#103#!#16.62#!#254.4#!#103#!#11.45#!#13.7#!#3#!#3.7#!#1#!#False.#!#False.#!#False.
+OH#!#84#!#408#!#375-9999#!#yes#!#no#!#0#!#299.4#!#71#!#50.9#!#61.9#!#88#!#5.26#!#196.9#!#89#!#8.86#!#6.6#!#7#!#1.78#!#2#!#False.#!#False.#!#False.
+TX#!#106#!#510#!#395-3026#!#no#!#no#!#0#!#210.6#!#96#!#35.8#!#249.2#!#85#!#21.18#!#191.4#!#88#!#8.61#!#12.4#!#1#!#3.35#!#2#!#True.#!#False.#!#False.
+~~END~~
+
+
+-- multiple join with multiple tables
+create table state (state text);
+go
+insert into state VALUES('OH');
+go
+~~ROW COUNT: 1~~
+
+insert into state VALUES('AR');
+go
+~~ROW COUNT: 1~~
+
+insert into state VALUES('TX');
+go
+~~ROW COUNT: 1~~
+
+create index idx on state(state);
+go
+
+create table int_plan (int_plan text);
+go
+insert into int_plan VALUES('yes');
+go
+~~ROW COUNT: 1~~
+
+insert into int_plan VALUES('no');
+go
+~~ROW COUNT: 1~~
+
+
+
+select * from customer_churn join state join int_plan cross join
+aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 100, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg,
+				   day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: syntax error near 'order' at line 3 and character position 115)~~
+
+
+-- invoke_endpoint in select list and where clause --
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) from customer_churn
+where aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'False.' order by state;
+go
+~~START~~
+varchar
+False.
+False.
+False.
+False.
+False.
+~~END~~
+
+-- different max_rows_per_batch - should not combine these
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 3, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) from customer_churn
+where aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 10, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'True.' order by state;
+go
+~~START~~
+varchar
+True.
+True.
+True.
+True.
+True.
+~~END~~
+
+
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 3, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) from customer_churn
+where aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 3, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'True.' order by state;
+go
+~~START~~
+varchar
+True.
+True.
+True.
+True.
+True.
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 10, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) from customer_churn
+where aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 10, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'True.' order by state;
+go
+~~START~~
+varchar
+True.
+True.
+True.
+True.
+True.
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 100, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) from customer_churn
+where aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 100, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'False.' order by state;
+go
+~~START~~
+varchar
+False.
+False.
+False.
+False.
+False.
+~~END~~
+
+
+-- udf with cast --
+create function churn(@state varchar(100), @acc_length bigint, @area_code bigint, @int_plan varchar(100), @vmail_plan varchar(100), @mail_msg bigint,
+       	  	  	   	 @ay_mins float, @day_calls bigint, @double bigint, @eve_calls bigint, @night_mins float,
+				 @night_calls bigint, @int_mins float, @int_calls bigint, @cust_service_calls bigint) AS BEGIN
+DECLARE @response varchar(2)
+SELECT @response = CAST(aws_sagemaker.invoke_endpoint('endpoint-random-forest-customer-churn', 1000, @state, @acc_length, @area_code, @int_plan, @vmail_plan, @vmail_msg, @day_mins, @day_calls, @eve_mins, @eve_calls, @night_mins, @night_calls, @int_mins, @int_calls, @cust_service_calls) as VARCHAR(2));
+Return @response
+END
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: syntax error near 'AS' at line 4 and character position 90)~~
+
+
+-- explicit cross join(s) on udf --
+select * from customer_churn cross join churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls,
+       night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: function churn("varchar", bigint, bigint, "varchar", "varchar", bigint, double precision, bigint, double precision, bigint, double precision, bigint, double precision, bigint, bigint) does not exist)~~
+
+select * from (select * from customer_churn cross join churn(@state, @acc_length, @area_code, @int_plan, @vmail_plan, @vmail_msg, @day_mins,
+       day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls)) as foo
+       cross join churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins,
+       	     	  	       night_calls, int_mins, int_calls, cust_service_calls)
+order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: column "@state" does not exist)~~
+
+
+-- udf in select list and where clause --
+select churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls)
+from customer_churn
+where churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'Fa'
+order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: function churn("varchar", bigint, bigint, "varchar", "varchar", bigint, double precision, bigint, double precision, bigint, double precision, bigint, double precision, bigint, bigint) does not exist)~~
+
+select churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls)
+from customer_churn
+where churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'Tr'
+order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: function churn("varchar", bigint, bigint, "varchar", "varchar", bigint, double precision, bigint, double precision, bigint, double precision, bigint, double precision, bigint, bigint) does not exist)~~
+
+select churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls)
+from customer_churn
+where churn(state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) = 'Fa'
+order by state;
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: function churn("varchar", bigint, bigint, "varchar", "varchar", bigint, double precision, bigint, double precision, bigint, double precision, bigint, double precision, bigint, bigint) does not exist)~~
+
+
+-- batch mode: modelname is a column of the table
+drop table customer_churn;
+go
+create table customer_churn (model TEXT,state VARCHAR(100),acc_length bigint,area_code bigint,phone VARCHAR(100),int_plan VARCHAR(100),vmail_plan VARCHAR(100),vmail_msg bigint,day_mins float,day_calls bigint,day_charge float,eve_mins float,eve_calls float,eve_charge float,night_mins float,night_calls bigint,night_charge float,int_mins float,int_calls float,int_charge float,cust_service_calls float,churn VARCHAR(100));
+go
+insert into customer_churn values('endpoint-random-forest-customer-churn','AR',115,408,'338-1400','no','no',0,268,115,45.56,153.6,106,13.06,232.3,65,10.45,17,1,4.59,3,'False.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values('endpoint-random-forest-customer-churn-1','TX',106,510,'395-3026','no','no',0,210.6,96,35.8,249.2,85,21.18,191.4,88,8.61,12.4,1,3.35,2,'True.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values('endpoint-random-forest-customer-churn-1','IN',65,415,'329-6603','no','no',0,129.1,137,21.95,228.5,83,19.42,208.8,111,9.4,12.7,6,3.43,4,'True.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values('endpoint-random-forest-customer-churn','NY',161,415,'351-7269','no','no',0,332.9,67,56.59,317.8,97,27.01,160.6,128,7.23,5.4,9,1.46,4,'True.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values('endpoint-random-forest-customer-churn-1','CO',77,408,'393-7984','no','no',0,62.4,89,10.61,169.9,121,14.44,209.6,64,9.43,5.7,6,1.54,5,'True.');
+go
+~~ROW COUNT: 1~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint(model, 2, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+text#!#varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#float#!#float#!#float#!#bigint#!#float#!#float#!#float#!#float#!#float#!#varchar#!#varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: batch mode function aws_sagemaker.invoke_endpoint currently requires all rows in a batch to have the same endpoint_name)~~
+
+select count(*) from customer_churn cross join aws_sagemaker.invoke_endpoint(model, 1, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls);
+go
+~~START~~
+int
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Endpoint endpoint-random-forest-customer-churn-1 of account 825464935349 not found.")~~
+
+
+-- batch mode: batch_size is a column, test consistency
+drop table customer_churn;
+go
+create table customer_churn (batch_size int, model TEXT,state VARCHAR(100),acc_length bigint,area_code bigint,phone VARCHAR(100),int_plan VARCHAR(100),vmail_plan VARCHAR(100),vmail_msg bigint,day_mins float,day_calls bigint,day_charge float,eve_mins float,eve_calls bigint,eve_charge float,night_mins float,     night_calls bigint,night_charge float,int_mins float,int_calls bigint,int_charge float,cust_service_calls bigint,churn VARCHAR(100));
+go
+insert into customer_churn values(1, 'endpoint-random-forest-customer-churn','AR',115,408,'338-1400','no','no',0,268,115,45.56,153.6,106,13.06,232.3,65,10.45,17,1,4.59,3,'False.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values(3, 'endpoint-random-forest-customer-churn','NY',161,415,'351-7269','no','no',0,332.9,67,56.59,317.8,97,27.01,160.6,128,7.23,5.4,9,1.46,4,'True.');
+go
+~~ROW COUNT: 1~~
+
+insert into customer_churn values(1, 'endpoint-random-forest-customer-churn','OH',84,408,'375-9999','yes','no',0,299.4,71,50.9,61.9,88,5.26,196.9,89,8.86,6.6,7,1.78,2,'False.');
+go
+~~ROW COUNT: 1~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint(model, batch_size, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+int#!#text#!#varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: batch mode function aws_sagemaker.invoke_endpoint currently requires all rows in a batch to have the same max_rows_per_batch)~~
+
+
+update customer_churn set model='endpoint-random-forest-customer-churn-1' where batch_size=1;
+go
+~~ROW COUNT: 2~~
+
+select * from customer_churn cross join aws_sagemaker.invoke_endpoint(model, batch_size, state, acc_length, area_code, int_plan, vmail_plan, vmail_msg, day_mins, day_calls, eve_mins, eve_calls, night_mins, night_calls, int_mins, int_calls, cust_service_calls) order by state;
+go
+~~START~~
+int#!#text#!#varchar#!#bigint#!#bigint#!#varchar#!#varchar#!#varchar#!#bigint#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#float#!#bigint#!#float#!#bigint#!#varchar#!#varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: batch mode function aws_sagemaker.invoke_endpoint currently requires all rows in a batch to have the same max_rows_per_batch)~~
+
+
+--- xgboost test ---
+select aws_sagemaker.invoke_endpoint('endpoint-xgboost-abalone', null, 1, 0.64, 1.5, 0.18, 0.4995, 0.593, 0.314, 1.431);
+go
+~~START~~
+varchar
+4.33498620987
+~~END~~
+
+
+-- wrong number of arguments, and wrong type for one argument
+select aws_sagemaker.invoke_endpoint('endpoint-xgboost-abalone', 1, 1, 0.64, 1.5, 0.18, 0.4995, 0.593, 0.314)
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received client error (400) from primary with message "Unable to evaluate payload provided: Feature size of csv inference data 7 is not consistent with feature size of trained model 9". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-xgboost-abalone in account 825464935349 for more information.")~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-xgboost-abalone', 1, 1, 0.64, 1.5, 0.18, 0.4995, 0.593, 0.314, 'asdf')
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received client error (415) from primary with message "Loading csv data failed with Exception, please ensure data is in csv format:
+ <type 'exceptions.ValueError'>
+ could not convert string to float: asdf". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-xgboost-abalone in account 825464935349 for more information.")~~
+
+
+
+--- linear learner test ---
+select aws_sagemaker.invoke_endpoint('endpoint-linear-learner-cancer-prediction', 1, 25.22, 24.91, 171.5, 1878, 0.1063, 0.2665, 0.3339, 0.1845, 0.1829, 0.06782, 0.8973, 1.474, 7.382, 120, 0.008166, 0.05693, 0.0573, 0.0203, 0.01065, 0.005893, 30, 33.62, 211.7, 2562, 0.1573, 0.6076, 0.6476, 0.2867, 0.2355, 0.1051);
+go
+~~START~~
+varchar
+1.70477199554
+~~END~~
+
+
+select aws_sagemaker.invoke_endpoint('endpoint-linear-learner-cancer-prediction', 1, 25.22, 24.91, 171.5, 1878, 0.1063, 0.2665, 0.3339, 0.1845, 0.1829, 0.06782, 0.8973, 1.474, 7.382, 120, 0.008166, 0.05693, 0.0573, 0.0203, 0.01065, 0.005893, 30, 33.62, 211.7, 2562, 0.1573, 0.6076, 0.6476, 0.2867, 0.2355)
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received client error (400) from primary with message "unable to evaluate payload provided". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-linear-learner-cancer-prediction in account 825464935349 for more information.")~~
+
+
+select aws_sagemaker.invoke_endpoint('endpoint-linear-learner-cancer-prediction', 1, 25.22, 24.91, 171.5, 1878, 0.1063, 0.2665, 0.3339, 0.1845, 0.1829, 0.06782, 0.8973, 1.474, 7.382, 120, 0.008166, 0.05693, 0.0573, 0.0203, 0.01065, 0.005893, 30, 33.62, 211.7, 2562, 0.1573, 0.6076, 0.6476, 0.2867, 0.2355, 'asdf')
+go
+~~START~~
+varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invoke_endpoint failed with error message: "Received client error (400) from primary with message "unable to evaluate payload provided". See https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logEventViewer:group=/aws/sagemaker/Endpoints/endpoint-linear-learner-cancer-prediction in account 825464935349 for more information.")~~
+
+
+--- multi-output test ---
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 1, 1.6);
+go
+~~START~~
+varchar
+(2.612604056480828,-1.0109573040569249)
+~~END~~
+
+
+create table tt (f float);
+go
+
+insert into tt values (1.5);
+go
+~~ROW COUNT: 1~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 1, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 2, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+~~END~~
+
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 4, f) from tt;
+insert into tt values (.52);
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+~~END~~
+
+~~ROW COUNT: 1~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 1, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 2, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 4, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+~~END~~
+
+
+insert into tt values (-.52);
+go
+~~ROW COUNT: 1~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 1, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+(-1.0274328519265483,2.310765689207759)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 2, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+(-1.0274328519265483,2.310765689207759)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 4, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+(-1.0274328519265483,2.310765689207759)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', 5, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+(-1.0274328519265483,2.310765689207759)
+~~END~~
+
+select aws_sagemaker.invoke_endpoint('endpoint-multi-output', null, f) from tt;
+go
+~~START~~
+varchar
+(2.606935196571823,-0.9486664155958127)
+(0.24903145290943493,1.9989005299788167)
+(-1.0274328519265483,2.310765689207759)
+~~END~~
+
+
+-- test passing 128 parameter, ERROR:  cannot pass more than 100 arguments to a function
+select aws_sagemaker.invoke_endpoint('endpoint-xgboost-mnist', 1, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: cannot pass more than 100 arguments to a function)~~
+
+
+-- psql
+-- Cleanup
+select pg_rds_remove_credentials('SageMaker');
+drop function public.pg_rds_insert_creds;
+drop function public.pg_rds_remove_credentials;
+go
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+drop table tt;
+drop table int_plan;
+drop table state;
+drop table customer_churn;
+go
+exec sp_execute_postgresql 'drop extension aws_ml';
+go

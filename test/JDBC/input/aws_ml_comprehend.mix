@@ -1,0 +1,201 @@
+-- parallel_query_expected
+-- sla 100000
+-- tsql
+exec sp_execute_postgresql 'create extension aws_ml';
+go
+
+-- psql
+GRANT usage ON SCHEMA aws_comprehend TO master_dbo;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA aws_comprehend TO master_dbo;
+GO
+
+-- psql
+-- create the function that enables us to insert creds into the rds hash table of credentials
+CREATE OR REPLACE FUNCTION public.pg_rds_insert_creds(feature text, credentials text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_insert_creds'
+LANGUAGE C STRICT;
+go
+
+CREATE OR REPLACE FUNCTION public.pg_rds_remove_credentials(feature text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_remove_credentials'
+LANGUAGE C STRICT;
+go
+
+select pg_rds_remove_credentials('Comprehend');
+go
+
+-- tsql
+select aws_comprehend.detect_sentiment('asdf', 'en'); -- function aws_comprehend.detect_sentiment(unknown, unknown) does not exist
+go
+
+-- psql
+-- Test incorrect credentials
+select pg_rds_insert_creds('Comprehend', '{"AccessKeyId":"asdf","SecretAccessKey":"asdf","SessionToken":"","RoleFeatureName":"Comprehend"}');
+go
+
+-- tsql
+select aws_comprehend.detect_sentiment('asdf', 'en');
+go
+
+-- psql
+-- Test null credentials
+select pg_rds_insert_creds('Comprehend', '{"AccessKeyId":null,"SecretAccessKey":null,"SessionToken":"","RoleFeatureName":"Comprehend"}');
+go
+select aws_comprehend.detect_sentiment('asdf', 'en');
+go
+
+#Setup Credentials
+env#!#select pg_rds_insert_creds('Comprehend', '{"AccessKeyId":"#!#AWS_ACCESS_KEY_ID#!#","SecretAccessKey":"#!#AWS_SECRET_ACCESS_KEY#!#","SessionToken":"#!#AWS_SESSION_TOKEN#!#","RoleFeatureName":"Comprehend"}');
+go
+
+-- tsql
+select aws_comprehend.detect_sentiment('asdf', 'asdf');
+go
+
+-- Test NULL language code
+select aws_comprehend.detect_sentiment('asdf', null);
+go
+
+-- Test empty string language code
+select aws_comprehend.detect_sentiment('asdf', '');
+go
+
+-- Test empty string input
+select aws_comprehend.detect_sentiment('', 'en');
+go
+
+-- Test NULL input
+select aws_comprehend.detect_sentiment(null, 'en');
+go
+
+-- Test happy cases
+select sentiment from aws_comprehend.detect_sentiment('Amazon.com, Inc. is located in Seattle, WA and was founded July 5th, 1994 by Jeff Bezos, allowing customers to buy everything from books to blenders. Seattle is north of Portland and south of Vancouver, BC. Other notable Seattle - based companies are Starbucks and Boeing.', 'en');
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en');
+go
+select sentiment from aws_comprehend.detect_sentiment('This is horrible', 'en');
+go
+select sentiment from aws_comprehend.detect_sentiment('The screen is great, but the battery life sucks', 'en');
+go
+
+-- Test max_rows_per_batch parameter
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', 1);  -- success ("POSITIVE")
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', -1); -- invalid batch size: -1 
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', 0);  -- invalid batch size: 0
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', 99999999999); -- function aws_comprehend.detect_sentiment(bigint, unknown, unknown) does not exist
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', CAST(99999999999 AS int)); -- integer out of range
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en', 10000); -- maximum batch size limit exceeded
+go
+select sentiment from aws_comprehend.detect_sentiment('This is great', 'en'); -- success ("POSITIVE")
+go
+create table reviews (t text);
+go
+
+insert into reviews VALUES('Amazon.com, Inc. is located in Seattle, WA and was founded July 5th, 1994 by Jeff Bezos, allowing customers to buy everything from books to blenders. Seattle is north of Portland and south of Vancouver, BC. Other notable Seattle - based companies are Starbucks and Boeing.');
+insert into reviews VALUES('This is great');
+insert into reviews VALUES('This is horrible');
+insert into reviews VALUES('The screen is great, but the battery life sucks');
+go
+
+-- Test happy cases several invocations in one query 
+select sentiment from reviews cross join aws_comprehend.detect_sentiment(reviews.t, 'en');
+go
+select (aws_comprehend.detect_sentiment(reviews.t, 'en')).sentiment from reviews;
+go
+
+-- Test having function invocation in the arguments
+select sentiment from reviews cross join aws_comprehend.detect_sentiment(TRIM(reviews.t), 'en');
+go
+select (aws_comprehend.detect_sentiment(TRIM(reviews.t), 'en')).sentiment from reviews;
+go
+
+-- Test having multiple batch functions in one query
+select sentiment from reviews cross join CONCAT((aws_comprehend.detect_sentiment(reviews.t, 'en')).sentiment, (aws_comprehend.detect_sentiment(TRIM(reviews.t), 'en')).sentiment) sentiment;
+go
+
+-- Test having batch functions taking input from multiple relations
+select count(*) from reviews as r1 cross join reviews as r2 cross join aws_comprehend.detect_sentiment(CONCAT(r1.t, r2.t), 'en');
+go
+
+-- Test having one of the items in the batch having invalid values
+insert into reviews values(null);
+go
+select sentiment from reviews cross join aws_comprehend.detect_sentiment(reviews.t, 'en');
+go
+
+-- batch mode: LanguageCode is a column of the table
+drop table reviews;
+go
+create table reviews(id bigint, description varchar(255), language text); 
+go
+insert into reviews VALUES(1, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(3, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(4, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(5, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(6, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(7, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(8, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(9, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(10, 'The screen is great, but the battery life sucks', 'en'); 
+go
+update reviews set language='fr' where id%2=1;
+go
+select *, aws_comprehend.detect_sentiment(description, language) from reviews;
+go
+select count(*) from reviews cross join aws_comprehend.detect_sentiment(description, language);
+go
+
+-- batch mode: batch_size is a column, test consistency
+drop table reviews;
+go
+create table reviews(id bigint, batch_size int, description varchar(255), language text); 
+go
+insert into reviews VALUES(1, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(2, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(3, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(4, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(5, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(6, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(7, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(8, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(9, 2, 'The screen is great, but the battery life sucks', 'en'); 
+insert into reviews VALUES(10, 2, 'The screen is great, but the battery life sucks', 'en'); 
+go
+update reviews set batch_size=3 where id%2=1;
+go
+select *, aws_comprehend.detect_sentiment(description, language, batch_size) from reviews;
+go
+
+update reviews set language='fr' where batch_size=3;
+go
+select *, aws_comprehend.detect_sentiment(description, language, batch_size) from reviews;
+go
+
+-- Test batch mode and non-batch mode return the same
+
+SELECT count(*)
+FROM
+   (SELECT aws_comprehend.detect_sentiment(reviews.description, 'en') FROM reviews) AS batch
+   INNER JOIN
+   (SELECT aws_comprehend.detect_sentiment('The screen is great, but the battery life sucks', 'en')) AS single
+   ON batch.detect_sentiment = single.detect_sentiment;
+go
+
+-- psql
+-- Cleanup
+select pg_rds_remove_credentials('Comprehend');
+drop function public.pg_rds_insert_creds;
+drop function public.pg_rds_remove_credentials;
+go
+-- tsql
+drop table reviews;
+exec sp_execute_postgresql 'drop extension aws_ml';
+go

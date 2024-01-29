@@ -1,0 +1,296 @@
+-- sla 150000
+-- tsql
+exec sp_execute_postgresql 'create extension aws_ml';
+go
+
+
+-- psql
+GRANT usage ON SCHEMA aws_bedrock TO master_dbo;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA aws_bedrock TO master_dbo;
+GO
+
+-- tsql
+CREATE FUNCTION make_json_1(@prompt varchar(MAX), @data TEXT)
+returns varchar(MAX)
+AS BEGIN
+    DECLARE @json_val varchar(MAX) ;
+    SET @json_val = CONCAT('{"prompt":"', @prompt, ' ', @data, '"}')
+    Return @json_val
+END
+go
+
+CREATE FUNCTION make_json_2(@prompt varchar(MAX), @data TEXT)
+returns varchar(MAX)
+AS BEGIN
+    DECLARE @json_val varchar(MAX) ;
+    SET @json_val = CONCAT('{"inputText":"', @prompt, ' ', @data, '"}')
+    Return @json_val
+END
+go
+
+CREATE TABLE ml_test_1 (a TEXT);
+go
+INSERT INTO ml_test_1 VALUES ('Cat'),('Dog'),('Pen'),('Paper'),('Human'),('Aurora'),('PostgreSQL'),('AWS'),('C++');
+go
+CREATE TABLE ml_test_2 (a TEXT);
+go
+CREATE TABLE ml_test_3 (a INT);
+go
+CREATE TABLE ml_test_4 (a NVARCHAR(MAX));
+go
+CREATE TABLE ml_test_5 (a JSON);
+go
+INSERT INTO ml_test_4 SELECT CAST(make_json_1('Write 1 sentence on ',a) AS NVARCHAR(MAX)) from ml_test_1;
+go
+INSERT INTO ml_test_5 SELECT CAST(make_json_2('',a) AS JSON) from ml_test_1;
+go
+CREATE TABLE ml_test_6 (a INT);
+go
+
+-- psql
+-- create the function that enables us to insert creds into the rds hash table of credentials
+CREATE OR REPLACE FUNCTION public.pg_rds_insert_creds(feature text, credentials text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_insert_creds'
+LANGUAGE C STRICT;
+go
+
+CREATE OR REPLACE FUNCTION public.pg_rds_remove_credentials(feature text)
+RETURNS VOID
+AS '$libdir/rdsutils', 'pg_rds_remove_credentials'
+LANGUAGE C STRICT;
+go
+
+CREATE OR REPLACE FUNCTION pg_rds_aws_creds_metadata()
+RETURNS TEXT
+AS '$libdir/rdsutils', 'pg_rds_aws_creds_metadata'
+LANGUAGE C STRICT;
+go
+
+select pg_rds_remove_credentials('Bedrock');
+go
+
+-- tsql
+-- Test Missing Credentials
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', CAST('{"inputText":"write 10 things about a black cat"}' as text));
+go
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- psql
+-- Test Incorrect Credentials
+select pg_rds_insert_creds('Bedrock', '{"AccessKeyId":"asdf","SecretAccessKey":"asdf","SessionToken":"","RoleFeatureName":"Bedrock"}');
+go
+
+-- tsql
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', CAST('{"inputText":"write 10 things about a black cat"}' as text));
+go
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- psql
+-- Test Null Credentials
+select pg_rds_insert_creds('Bedrock', '{"AccessKeyId":null,"SecretAccessKey":null,"SessionToken":"","RoleFeatureName":"Bedrock"}');
+go
+-- tsql
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', CAST('{"inputText":"write 10 things about a black cat"}' as text));
+go
+-- tsql
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', '{"inputText":"What is a black cat"}');
+go
+
+-- psql
+#Setup Credentials
+env#!#select pg_rds_insert_creds('Bedrock', '{"AccessKeyId":"#!#AWS_ACCESS_KEY_ID#!#","SecretAccessKey":"#!#AWS_SECRET_ACCESS_KEY#!#","SessionToken":"#!#AWS_SESSION_TOKEN#!#","RoleFeatureName":"Bedrock"}');
+go
+
+Select pg_rds_aws_creds_metadata();
+go
+
+-- tsql
+--- Invoke Model Tests ---
+-- Test NULL ModelID
+SELECT aws_bedrock.invoke_model(NULL,'application/json','application/json', CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test NULL Content Type
+SELECT aws_bedrock.invoke_model('amazon.dummy-model',NULL,'application/json', CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test NULL Accept Type
+SELECT aws_bedrock.invoke_model('amazon.dummy-model','application/json',NULL, CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test NULL Model Input
+SELECT aws_bedrock.invoke_model('amazon.dummy-model','application/json','application/json', NULL);
+go
+
+-- Test Invalid ModelID
+SELECT aws_bedrock.invoke_model('invalid-model','application/json','application/json', CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test Invalid Content Type
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/abcdxyz','application/json', CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test Invalid Accept Type
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/abcdxyz', CAST('{"prompt":"write 10 things about a black cat"}' as text));
+go
+
+-- Test Malformed Model Input
+SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', CAST('"write 10 things about a black cat"' as text));
+go
+
+-- Sanity Check
+SELECT 't' where aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', CAST('{"prompt":"write 1 sentence about a black cat"}' as text)) LIKE '%"text":%';
+go
+
+-- Select on text column
+SELECT count(aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json',make_json_1('Write 1 sentence on ',a))) from ml_test_1;
+go
+
+-- Select on nvarchar column
+SELECT count(aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json',CAST(a as text))) from ml_test_4;
+go
+
+-- Insert into select from table
+INSERT INTO ml_test_2 SELECT aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json',make_json_1('Write 1 sentence on ',a)) from ml_test_1;
+go
+
+SELECT COUNT(*) FROM ml_test_2 WHERE a LIKE '%"text":%';
+go
+
+-- function in predicate
+SELECT COUNT(*) FROM ml_test_4 WHERE aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json',CAST(a as text)) LIKE '%"text":%';
+go
+
+--UDF/Proc
+CREATE FUNCTION ml_func_1(@prompt NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS BEGIN
+DECLARE @response NVARCHAR(MAX);
+SELECT @response = aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', @prompt); 
+return @response
+END
+go
+
+SELECT 't' where ml_func_1(make_json_1('write 1 sentence about','cat')) LIKE '%"text":%';
+go
+
+CREATE PROCEDURE ml_proc_1(@prompt varchar(max)) as
+INSERT INTO ml_test_6 SELECT 1 where aws_bedrock.invoke_model('cohere.command-text-v14','application/json','application/json', @prompt) LIKE '%"text":%';
+go
+
+DECLARE @var varchar(max) = make_json_1('write 1 sentence about','cat');
+exec ml_proc_1 @var
+
+SELECT a FROM ml_test_6;
+go
+
+--- Invoke Model nvarchar Tests ---
+-- Test NULL ModelID
+SELECT aws_bedrock.invoke_model_get_embeddings(NULL,'application/json','embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test NULL Content Type
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1',NULL,'embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test NULL Key
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json',NULL, CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test NULL Model Input
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', NULL);
+go
+
+-- Test Invalid ModelID
+SELECT aws_bedrock.invoke_model_get_embeddings('invalid-model','application/json','embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test Invalid Key
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','Lorem Ipsum', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test Invalid Content Type
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/abcdxyz','embedding', CAST('{"inputText":"What is a black cat"}' as text));
+go
+
+-- Test Malformed Model Input
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', CAST('"What is a black cat"' as text));
+go
+
+-- Sanity Check
+SELECT 't' where cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', CAST('{"inputText":"What is a black cat"}' as text)))=1536;
+go
+
+-- Select on text column
+SELECT cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', make_json_2('',a))) FROM ml_test_1;
+go
+
+-- Select on NVARCHAR column
+SELECT cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding',CAST(a as text))) from ml_test_5;
+go
+
+-- Insert into select from table
+INSERT INTO ml_test_3 SELECT cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', make_json_2('',a))) FROM ml_test_1;
+go
+Select a from ml_test_3;
+go
+
+-- function in predicate
+SELECT COUNT(*) FROM ml_test_5 WHERE cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', CAST(a as text)))=1536;
+go
+
+-- UDF/PROC
+CREATE FUNCTION ml_func_2(@prompt varchar(max))
+RETURNS INT
+AS BEGIN
+DECLARE @var INT
+SELECT @var = cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', @prompt))
+Return @var
+END
+go
+
+SELECT ml_func_2(make_json_2('','cat'));
+go
+
+CREATE PROCEDURE ml_proc_2(@prompt text)
+AS
+INSERT INTO ml_test_6 SELECT cardinality(aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', @prompt));
+go
+
+DECLARE @var NVARCHAR(MAX) = make_json_2('','cat')
+exec ml_proc_2 @prompt=@var
+go
+SELECT a FROM ml_test_6;
+go
+
+-- Test Max Tokens (8192)
+SELECT aws_bedrock.invoke_model_get_embeddings('amazon.titan-embed-text-v1','application/json','embedding', '{"inputText":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}');
+go
+
+-- psql
+-- Need to terminate active session before cleaning up the login
+SELECT pg_rds_remove_credentials('Bedrock');
+go
+DROP FUNCTION public.pg_rds_insert_creds;
+DROP FUNCTION public.pg_rds_remove_credentials;
+go
+
+-- tsql
+-- Cleanup
+DROP FUNCTION ml_func_1;
+DROP FUNCTION ml_func_2;
+DROP PROCEDURE ml_proc_1;
+DROP PROCEDURE ml_proc_2;
+DROP FUNCTION make_json_1;
+DROP FUNCTION make_json_2;
+DROP TABLE ml_test_1;
+DROP TABLE ml_test_2;
+DROP TABLE ml_test_3;
+DROP TABLE ml_test_4;
+DROP TABLE ml_test_5;
+DROP TABLE ml_test_6;
+exec sp_execute_postgresql 'drop extension aws_ml';
+go
