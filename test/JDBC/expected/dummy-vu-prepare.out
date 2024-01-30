@@ -1,0 +1,8 @@
+create schema dummy_s1
+go 
+
+create login dummy_l1 with password = '12345678'
+go
+
+create user dummy_u1 for login dummy_l1 with default_schema = dummy_s1
+go
