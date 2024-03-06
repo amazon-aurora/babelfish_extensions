@@ -67,6 +67,10 @@ CREATE PROC dep_proc_upper AS
 select UPPER(a), UPPER(b), UPPER(c), UPPER(d) from upper_lower_dt WHERE UPPER(a) = N'ANIKAIT' and UPPER(b) = N'AGRAWAL' and UPPER(c) = N'ANIKAIT' and UPPER(d) = N'AGRAWAL';
 GO
 
+CREATE PROC dep_proc_upper1 @a VARCHAR, @b NVARCHAR, @c CHAR, @d NCHAR AS
+select UPPER(@a), UPPER(@b), UPPER(@c), UPPER(@d);
+GO
+
 CREATE FUNCTION dbo.dep_func_upper()
 RETURNS VARCHAR
 AS
