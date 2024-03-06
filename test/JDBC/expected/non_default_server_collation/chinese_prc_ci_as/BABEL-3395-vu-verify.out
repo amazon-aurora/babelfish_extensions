@@ -746,3 +746,10 @@ varchar
 a
 ~~END~~
 
+SELECT * from dep_view_lower1
+GO
+~~START~~
+varchar
+adjnfjh
+~~END~~
+

@@ -91,3 +91,9 @@ BEGIN
 RETURN (select TOP 1 LOWER(a) from upper_lower_dt);
 END
 GO
+
+CREATE VIEW dep_view_lower1 AS (
+    select 
+        lower(cast(N'ADJNFJH' as varchar)) as db1
+    );
+GO

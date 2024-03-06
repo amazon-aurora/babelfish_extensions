@@ -234,3 +234,5 @@ EXEC dep_proc_lower
 GO
 select dbo.dep_func_lower()
 GO
+SELECT * from dep_view_lower1
+GO
