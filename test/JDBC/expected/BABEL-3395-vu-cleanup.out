@@ -2,8 +2,6 @@ DROP VIEW IF EXISTS dep_view_upper
 GO
 DROP PROCEDURE IF EXISTS dep_proc_upper
 GO
-DROP PROCEDURE IF EXISTS dep_proc_upper1
-GO
 DROP FUNCTION IF EXISTS dep_func_upper
 GO
 DROP VIEW IF EXISTS dep_view_lower

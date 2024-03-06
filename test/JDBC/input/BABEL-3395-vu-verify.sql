@@ -225,12 +225,6 @@ SELECT * from dep_view_upper
 GO
 EXEC dep_proc_upper
 GO
-DECLARE @a VARCHAR(30) = N'Anikait Agrawal'
-DECLARE @b NVARCHAR(30) = N'Anikait Agrawal'
-DECLARE @c CHAR(30) = N'Anikait Agrawal'
-DECLARE @d NCHAR(30) = N'Anikait Agrawal'
-EXEC dep_proc_upper1 @a = @a, @b = @b, @c = @c, @d = @d;
-GO
 select dbo.dep_func_upper()
 GO
 

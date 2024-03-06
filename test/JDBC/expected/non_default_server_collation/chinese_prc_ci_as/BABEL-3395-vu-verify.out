@@ -707,7 +707,7 @@ SELECT * from dep_view_upper
 GO
 ~~START~~
 varchar#!#nvarchar#!#varchar#!#nvarchar
-ANIKAIT #!#AGRAWAL #!#ANIKAIT             #!#AGRAWAL                 
+ANIKAIT #!#AGRAWAL #!#ANIKAIT                       #!#AGRAWAL                       
 ~~END~~
 
 EXEC dep_proc_upper
@@ -729,7 +729,7 @@ SELECT * from dep_view_lower
 GO
 ~~START~~
 varchar#!#nvarchar#!#varchar#!#nvarchar
-anikait #!#agrawal #!#anikait             #!#agrawal                 
+anikait #!#agrawal #!#anikait                       #!#agrawal                       
 ~~END~~
 
 EXEC dep_proc_lower
