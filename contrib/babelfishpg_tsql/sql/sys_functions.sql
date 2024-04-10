@@ -3078,6 +3078,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
 
+-- Function to handle VARCHAR
+CREATE OR REPLACE FUNCTION sys.upper(sys.VARCHAR)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RETURN (SELECT pg_catalog.upper($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle CHAR
+CREATE OR REPLACE FUNCTION sys.upper(CHAR)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RETURN (SELECT pg_catalog.upper($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
 -- Function to handle NCHAR because of return type NVARCHAR
 CREATE OR REPLACE FUNCTION sys.upper(sys.NCHAR)
 RETURNS sys.NVARCHAR
@@ -3093,6 +3111,24 @@ RETURNS sys.NVARCHAR
 AS $$
 BEGIN
     RETURN (SELECT pg_catalog.upper($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle TEXT because it requires to throw error
+CREATE OR REPLACE FUNCTION sys.upper(TEXT)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RAISE EXCEPTION 'Argument data type text is invalid for argument 1 of upper function.';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle NTEXT because it requires to throw error
+CREATE OR REPLACE FUNCTION sys.upper(NTEXT)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RAISE EXCEPTION 'Argument data type ntext is invalid for argument 1 of upper function.';
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
 
@@ -3113,6 +3149,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
 
+-- Function to handle VARCHAR
+CREATE OR REPLACE FUNCTION sys.lower(sys.VARCHAR)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    -- Call the underlying function after preprocessing
+    RETURN (SELECT pg_catalog.lower($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle CHAR
+CREATE OR REPLACE FUNCTION sys.lower(CHAR)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    -- Call the underlying function after preprocessing
+    RETURN (SELECT pg_catalog.lower($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
 -- Function to handle NCHAR because of return type NVARCHAR
 CREATE OR REPLACE FUNCTION sys.lower(sys.NCHAR)
 RETURNS sys.NVARCHAR
@@ -3128,6 +3184,24 @@ RETURNS sys.NVARCHAR
 AS $$
 BEGIN
     RETURN (SELECT pg_catalog.lower($1));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle TEXT because it requires to throw error
+CREATE OR REPLACE FUNCTION sys.lower(TEXT)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RAISE EXCEPTION 'Argument data type text is invalid for argument 1 of lower function.';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
+
+-- Function to handle NTEXT because it requires to throw error
+CREATE OR REPLACE FUNCTION sys.lower(NTEXT)
+RETURNS sys.VARCHAR
+AS $$
+BEGIN
+    RAISE EXCEPTION 'Argument data type ntext is invalid for argument 1 of lower function.';
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE;
 

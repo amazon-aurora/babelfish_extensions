@@ -60,7 +60,7 @@ GO
 
 -- UPPER
 CREATE VIEW dep_view_upper AS
-select UPPER(CAST (a AS VARCHAR(30))) AS upper_a, UPPER(CAST (b AS NVARCHAR(30))) AS upper_b, UPPER(CAST (c AS CHAR(30))) AS upper_c, UPPER(CAST (d AS NCHAR(30))) AS upper_d from upper_lower_dt WHERE UPPER(CAST (a AS VARCHAR(30))) = N'ANIKAIT' and UPPER(CAST (b AS NVARCHAR(30))) = N'AGRAWAL' and UPPER(CAST (c AS CHAR(30))) = N'ANIKAIT' and UPPER(CAST (d AS NCHAR(30))) = N'AGRAWAL';
+select UPPER(a) AS upper_a, UPPER(b) AS upper_b, UPPER(c) AS upper_c, UPPER(d) AS upper_d from upper_lower_dt WHERE UPPER(a) = N'ANIKAIT' and UPPER(b) = N'AGRAWAL' and UPPER(c) = N'ANIKAIT' and UPPER(d) = N'AGRAWAL';
 GO
 
 CREATE PROC dep_proc_upper AS
@@ -77,7 +77,7 @@ GO
 
 -- LOWER
 CREATE VIEW dep_view_lower AS
-select LOWER(CAST (a AS VARCHAR(30))) AS lower_a, LOWER(CAST (b AS NVARCHAR(30))) AS lower_b, LOWER(CAST (c AS CHAR(30))) AS lower_c, LOWER(CAST (d AS NCHAR(30))) AS lower_d from upper_lower_dt WHERE LOWER(CAST (a AS VARCHAR(30))) = N'anikait' and LOWER(CAST (b AS NVARCHAR(30))) = N'agrawal' and LOWER(CAST (c AS CHAR(30))) = N'anikait' and LOWER(CAST (d AS NCHAR(30))) = N'agrawal';
+select LOWER(a) AS lower_a, LOWER(b) AS lower_b, LOWER(c) AS lower_c, LOWER(d) AS lower_d from upper_lower_dt WHERE LOWER(a) = N'anikait' and LOWER(b) = N'agrawal' and LOWER(c) = N'anikait' and LOWER(d) = N'agrawal';
 GO
 
 CREATE PROC dep_proc_lower AS

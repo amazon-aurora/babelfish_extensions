@@ -173,12 +173,12 @@ SELECT UPPER(NULL)
 SELECT LOWER(NULL)
 GO
 ~~START~~
-text
+varchar
 <NULL>
 ~~END~~
 
 ~~START~~
-text
+varchar
 <NULL>
 ~~END~~
 
@@ -601,16 +601,18 @@ point(1 2)
 Select UPPER(a), LOWER(a) from upper_lower_text
 GO
 ~~START~~
-text#!#text
-6F9619FF-8B86-D011-B42D-00C04FC964FF#!#6f9619ff-8b86-d011-b42d-00c04fc964ff
-~~END~~
+varchar#!#varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Argument data type text is invalid for argument 1 of upper function.)~~
 
 Select UPPER(a), LOWER(a) from upper_lower_ntext
 GO
 ~~START~~
-text#!#text
-6F9619FF-8B86-D011-B42D-00C04FC964FF#!#6f9619ff-8b86-d011-b42d-00c04fc964ff
-~~END~~
+varchar#!#varchar
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Argument data type ntext is invalid for argument 1 of upper function.)~~
 
 Select UPPER(a), LOWER(a) from upper_lower_image
 GO
@@ -706,7 +708,7 @@ SELECT * from dep_view_upper
 GO
 ~~START~~
 varchar#!#nvarchar#!#varchar#!#nvarchar
-ANIKAIT #!#AGRAWAL #!#ANIKAIT                       #!#AGRAWAL                       
+ANIKAIT #!#AGRAWAL #!#ANIKAIT             #!#AGRAWAL                 
 ~~END~~
 
 EXEC dep_proc_upper
@@ -728,7 +730,7 @@ SELECT * from dep_view_lower
 GO
 ~~START~~
 varchar#!#nvarchar#!#varchar#!#nvarchar
-anikait #!#agrawal #!#anikait                       #!#agrawal                       
+anikait #!#agrawal #!#anikait             #!#agrawal                 
 ~~END~~
 
 EXEC dep_proc_lower
