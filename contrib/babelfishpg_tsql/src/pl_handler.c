@@ -177,6 +177,7 @@ static void bbf_ExecDropStmt(DropStmt *stmt);
 
 static int isolation_to_int(char *isolation_level);
 static void bbf_set_tran_isolation(char *new_isolation_level_str);
+static void rewrite_constraint_names(ColumnDef *column, CreateStmt *stmt);
 
 typedef struct {
 	int oid;
@@ -1027,6 +1028,7 @@ pltsql_post_parse_analyze(ParseState *pstate, Query *query, JumbleState *jstate)
 									validate_rowversion_column_constraints(def);
 									def->constraints = lappend(def->constraints, get_rowversion_default_constraint(def->typeName));
 								}
+								rewrite_constraint_names((ColumnDef *) element,stmt);
 								break;
 							case T_Constraint:
 								{
@@ -6348,4 +6350,20 @@ bbf_set_tran_isolation(char *new_isolation_level_str)
 		}
 	}
 	return ;
+}
+
+/*
+ * We need to rewrite the constraint names that are supplied 
+ * as part of ColumnDef node to have similar behavior as 
+ * explicit constraint definitions.
+ */
+static void
+rewrite_constraint_names(ColumnDef *column, CreateStmt *stmt)
+{
+	ListCell *lc;
+	foreach(lc,column->constraints)
+	{
+		Constraint *c = lfirst_node(Constraint, lc);
+		c->conname = construct_unique_index_name(c->conname, stmt->relation->relname);
+	}
 }
