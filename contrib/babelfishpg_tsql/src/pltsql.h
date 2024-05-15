@@ -2111,6 +2111,7 @@ extern void update_GrantStmt(Node *n, const char *object, const char *obj_schema
 extern void update_RenameStmt(Node *n, const char *old_name, const char *new_name);
 extern void update_ViewStmt(Node *n, const char *view_schema);
 extern void pltsql_check_or_set_default_typmod(TypeName *typeName, int32 *typmod, bool is_cast);
+extern bool pltsql_check_type_is_table_type_bbf(const char * typeName, Oid typid);
 extern bool TryLockLogicalDatabaseForSession(int16 dbid, LOCKMODE lockmode);
 extern void UnlockLogicalDatabaseForSession(int16 dbid, LOCKMODE lockmode, bool force);
 extern char *bpchar_to_cstring(const BpChar *bpchar);

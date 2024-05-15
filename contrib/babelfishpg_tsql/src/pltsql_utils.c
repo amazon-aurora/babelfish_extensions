@@ -371,6 +371,41 @@ pltsql_createFunction(ParseState *pstate, PlannedStmt *pstmt, const char *queryS
 	}
 }
 
+static bool
+isBabelfishDataType(const char *typeName)
+{
+	char *valid_types[] = {"smallint", "date", "nvarchar", "timestamp", "image", "smalldatetime", "money", "varchar", "bigint", "datetimeoffset", "xml", "ntext", "time", "sql_variant", "nchar", "smallmoney", "char", "datetime", "text", "sysname", "int", "tinyint", "numeric", "float", "varbinary", "uniqueidentifier", "real", "timestamp", "decimal", "binary", "bit", "datetime2"};
+
+    int num_valid_types = sizeof(valid_types) / sizeof(valid_types[0]);
+
+    for (int i = 0; i < num_valid_types; ++i) {
+        if (strncmp(typeName, valid_types[i], 32) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool
+pltsql_check_type_is_table_type_bbf(const char * typeName, Oid typid)
+{
+	HeapTuple tuple = NULL;
+	Form_pg_type typtup;
+	if (isBabelfishDataType(typeName)) {
+		tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typid));
+		typtup = (Form_pg_type) GETSTRUCT(tuple);
+	
+		if (HeapTupleIsValid(tuple) && typtup->typtype == TYPTYPE_COMPOSITE) {
+			ReleaseSysCache(tuple);
+			return true;
+		}
+	}
+	if (tuple != NULL)
+		ReleaseSysCache(tuple);
+		
+	return false;
+}
+
 /*
  * Setup default typmod for sys types/domains when typmod isn't specified
  * (that is, typmod = -1).

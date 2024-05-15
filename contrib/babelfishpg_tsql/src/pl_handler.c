@@ -4445,6 +4445,7 @@ _PG_init(void)
 	raw_parser_hook = babelfishpg_tsql_raw_parser;
 
 	check_or_set_default_typmod_hook = &pltsql_check_or_set_default_typmod;
+	check_type_is_table_type_bbf_hook = &pltsql_check_type_is_table_type_bbf;
 
 	prev_pre_parse_analyze_hook = pre_parse_analyze_hook;
 	pre_parse_analyze_hook = pltsql_pre_parse_analyze;
