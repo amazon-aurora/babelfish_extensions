@@ -876,7 +876,7 @@ select
   , cast(0 as sys.tinyint) as type
   , cast('HEAP' as sys.nvarchar(60)) as type_desc
   , cast(0 as sys.bit) as is_unique
-  , cast(1 as int) as data_space_id
+  , cast(coalesce(ps.scheme_id, 1) as int) as data_space_id
   , cast(0 as sys.bit) as ignore_dup_key
   , cast(0 as sys.bit) as is_primary_key
   , cast(0 as sys.bit) as is_unique_constraint
@@ -893,6 +893,10 @@ select
 from pg_class t
 inner join pg_namespace nsp on nsp.oid = t.relnamespace
 left join sys.babelfish_namespace_ext ext on (nsp.nspname = ext.nspname and ext.dbid = sys.db_id())
+left join sys.babelfish_partition_depend pd on
+  (ext.orig_name = pd.schema_name COLLATE sys.database_default
+   and t.relname = pd.table_name COLLATE sys.database_default and pd.dbid = sys.db_id())
+left join sys.babelfish_partition_scheme ps on (ps.partition_scheme_name = pd.partition_scheme_name and ps.dbid = sys.db_id())
 where (t.relkind = 'r' or t.relkind = 'p')
 and t.relispartition = false
 -- filter to get all the objects that belong to sys or babelfish schemas
@@ -2174,7 +2178,28 @@ WHERE
     has_schema_privilege(c.relnamespace, 'USAGE') AND
     has_table_privilege(c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AND
     (nsp.nspname = 'sys' OR ext.nspname is not null) AND
-    i.indislive;
+    i.indislive
+UNION ALL
+-- Create HEAP entries for each partitioned table
+SELECT
+  CAST(t.oid as int) as object_id,
+  CAST(0 AS INT) AS index_id,
+  CAST(a.ordinal_position AS INT) AS index_column_id,
+  CAST(a.attnum AS INT) AS column_id,
+  CAST(0 AS SYS.TINYINT) AS key_ordinal,
+  CAST(a.ordinal_position AS SYS.TINYINT) AS partition_ordinal,
+  CAST(0 AS SYS.BIT) AS is_descending_key,
+  CAST(0 AS SYS.BIT) AS is_included_column
+FROM 
+    pg_class t
+    INNER JOIN pg_partitioned_table ppt ON ppt.partrelid = t.oid
+    INNER JOIN pg_namespace nsp ON nsp.oid = t.relnamespace
+    INNER JOIN sys.babelfish_namespace_ext ext ON (nsp.nspname = ext.nspname AND ext.dbid = sys.db_id())
+    LEFT JOIN unnest(ppt.partattrs) WITH ORDINALITY AS a(attnum, ordinal_position) ON true
+WHERE
+    t.relkind = 'p'
+    AND has_schema_privilege(t.relnamespace, 'USAGE')
+    AND has_table_privilege(t.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER');
 GRANT SELECT ON sys.index_columns TO PUBLIC;
 
 -- internal function that returns relevant info needed
@@ -2548,16 +2573,63 @@ WHERE
   ps.dbid = sys.db_id();
 GRANT SELECT ON sys.partition_schemes TO PUBLIC;
 
+CREATE OR REPLACE VIEW sys.destination_data_spaces as
+SELECT
+  ps.scheme_id as partition_scheme_id,
+  cast(s.n as int) as destination_id,
+  cast(1 as int) as data_space_id -- primary filegroup
+FROM 
+  sys.babelfish_partition_scheme ps
+INNER JOIN 
+  sys.partition_functions pf ON pf.name = ps.partition_function_name
+CROSS JOIN 
+  generate_series(1, pf.fanout + cast(ps.next_used as int)) s(n)
+WHERE
+  ps.dbid = sys.db_id();
+GRANT SELECT ON sys.destination_data_spaces TO PUBLIC;
+
 CREATE OR REPLACE VIEW sys.data_spaces
 AS
+-- entry for [PRIMARY] filegroup
 SELECT 
-  CAST('PRIMARY' as SYSNAME) AS name,
+  CAST('PRIMARY' as sys.NVARCHAR(128)) AS name,
   CAST(1 as INT) AS data_space_id,
   CAST('FG' as sys.bpchar(2)) AS type,
-  CAST('ROWS_FILEGROUP' as NVARCHAR(60)) AS type_desc,
+  CAST('ROWS_FILEGROUP' as sys.NVARCHAR(60)) AS type_desc,
   CAST(1 as sys.BIT) AS is_default,
-  CAST(0 as sys.BIT) AS is_system;
+  CAST(0 as sys.BIT) AS is_system
+UNION ALL
+-- entries for Partition Schemes
+SELECT
+  name,
+  data_space_id,
+  type,
+  type_desc,
+  is_default,
+  is_system
+FROM sys.partition_schemes;
 GRANT SELECT ON sys.data_spaces TO PUBLIC;
+
+-- TODO: sys.partitions should show entry for non-partitioned tables/indexes also
+CREATE OR REPLACE VIEW sys.partitions AS
+SELECT
+  cast(pgi.inhrelid as bigint) as partition_id,
+  cast(t.oid as int) as object_id,
+  cast(0 as int) as index_id,
+  cast(row_number() over(partition by t.oid order by pg_catalog.pg_get_expr(t2.relpartbound, t2.oid) = 'DEFAULT') as int) as partition_number,
+  cast(0 as bigint) AS hobt_id,
+  cast(t2.reltuples as bigint) AS rows,
+  cast(0 as smallint) as filestream_filegroup_id,
+  cast(0 as sys.tinyint) as data_compression,
+  cast('NONE' as sys.nvarchar(60)) as data_compression_desc
+from pg_inherits pgi
+inner join pg_class t on t.oid = pgi.inhparent
+inner join pg_class t2 on t2.oid = pgi.inhrelid
+inner join sys.schemas sch on sch.schema_id = t.relnamespace
+where t.relkind = 'p'
+and has_schema_privilege(t.relnamespace, 'USAGE')
+and has_table_privilege(t.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER');
+GRANT SELECT ON sys.partitions TO PUBLIC;
 
 CREATE OR REPLACE VIEW sys.database_mirroring
 AS
@@ -3219,20 +3291,6 @@ FROM sys.events e
 WHERE e.is_trigger_event = 1;
 GRANT SELECT ON sys.trigger_events TO PUBLIC;
 
-CREATE OR REPLACE VIEW sys.partitions AS
-SELECT
- (to_char( i.object_id, 'FM9999999999' ) || to_char( i.index_id, 'FM9999999999' ) || '1')::bigint AS partition_id
- , i.object_id
- , i.index_id
- , 1::integer AS partition_number
- , 0::bigint AS hobt_id
- , c.reltuples::bigint AS "rows"
- , 0::smallint AS filestream_filegroup_id
- , 0::sys.tinyint AS data_compression
- , 'NONE'::sys.nvarchar(60) AS data_compression_desc
-FROM sys.indexes AS i
-INNER JOIN pg_catalog.pg_class AS c ON i.object_id = c."oid";
-GRANT SELECT ON sys.partitions TO PUBLIC;
 
 CREATE OR REPLACE VIEW sys.servers
 AS
