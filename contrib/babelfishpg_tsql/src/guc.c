@@ -1268,6 +1268,7 @@ int			pltsql_isolation_level_repeatable_read = ISOLATION_OFF;
 int 		pltsql_isolation_level_serializable = ISOLATION_OFF;
 int 		escape_hatch_identity_function = EH_STRICT;
 int 		escape_hatch_insert_bulk_options = EH_IGNORE;
+int 		escape_hatch_allow_create_user_for_sysadmin = EH_STRICT;
 
 void
 define_escape_hatch_variables(void)
@@ -1647,6 +1648,17 @@ define_escape_hatch_variables(void)
 							 NULL,
 							 &escape_hatch_insert_bulk_options,
 							 EH_IGNORE,
+							 escape_hatch_options,
+							 PGC_USERSET,
+							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
+							 NULL, NULL, NULL);
+
+	/* Allow user creation for sysadmin login */
+	DefineCustomEnumVariable("babelfishpg_tsql.escape_hatch_allow_create_user_for_sysadmin",
+							 gettext_noop("escape hatch for sysadmin login's user creation"),
+							 NULL,
+							 &escape_hatch_allow_create_user_for_sysadmin,
+							 EH_STRICT,
 							 escape_hatch_options,
 							 PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
