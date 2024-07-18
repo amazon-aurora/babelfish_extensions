@@ -2613,3 +2613,44 @@ throw_error_for_fixed_db_role(char *rolname, char *dbname)
 			errmsg("Cannot grant, deny or revoke permissions to or from special roles.")));
 	}
 }
+
+void
+update_ReassignOwnedStmt(Node *n, const char* old_role, const char* new_role)
+{
+	ReassignOwnedStmt *stmt = (ReassignOwnedStmt *) n;
+	RoleSpec   *old_rolespec;
+	RoleSpec   *new_rolespec;
+
+	if (!IsA(stmt, ReassignOwnedStmt))
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("query is not a ReassignOwnedStmt")));
+
+	old_rolespec = makeNode(RoleSpec);
+	new_rolespec = makeNode(RoleSpec);
+
+	old_rolespec->roletype = ROLESPEC_CSTRING;
+	old_rolespec->location = -1;
+	old_rolespec->rolename = pstrdup(old_role);
+
+	new_rolespec->roletype = ROLESPEC_CSTRING;
+	new_rolespec->location = -1;
+	new_rolespec->rolename = pstrdup(new_role);
+
+	stmt->roles = list_make1(old_rolespec);
+	stmt->newrole = new_rolespec;
+}
+
+void
+update_GrantRoleStmtByName(Node *n, const char *granted_role, const char *grantee_role)
+{
+	AccessPriv	*granted_rolespec = makeNode(AccessPriv);
+	RoleSpec	*grantee_rolespec = makeNode(RoleSpec);
+
+	granted_rolespec->priv_name = pstrdup(granted_role);
+	granted_rolespec->cols = NIL;
+
+	grantee_rolespec->roletype = ROLESPEC_CSTRING;
+	grantee_rolespec->location = -1;
+	grantee_rolespec->rolename = pstrdup(grantee_role);
+
+	update_GrantRoleStmt(n, list_make1(granted_rolespec), list_make1(grantee_rolespec));
+}

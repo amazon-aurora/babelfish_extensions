@@ -1921,7 +1921,6 @@ static void update_report(Rule *rule, Tuplestorestate *res_tupstore, TupleDesc r
 static void init_catalog_data(void);
 static void get_catalog_info(Rule *rule);
 static void create_guest_role_for_db(const char *dbname);
-static char *get_db_owner_role_name(const char *dbname);
 static void alter_guest_schema_for_db(const char *dbname);
 
 /* Helper function Rename BBF catalog update*/
@@ -3232,7 +3231,7 @@ create_guest_role_for_db(const char *dbname)
  * database from the catalog, it doesn't rely on the
  * migration mode GUC.
  */
-static char *
+char *
 get_db_owner_role_name(const char *dbname)
 {
 	Relation	bbf_authid_user_ext_rel;
