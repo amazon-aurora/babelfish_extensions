@@ -226,8 +226,7 @@ AS
     SELECT
         OBJECT_NAME(partition_id) AS PartitionName,
         partition_number,
-        index_id,
-        rows
+        index_id
     FROM
         sys.partitions,
         OBJECT_NAME(object_id) AS ParentName

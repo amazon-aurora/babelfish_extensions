@@ -262,6 +262,14 @@ ignore#!#BABEL-621-after-14_12-before-15-vu-prepare
 ignore#!#BABEL-621-after-14_12-before-15-vu-verify
 ignore#!#BABEL-621-after-14_12-before-15-vu-cleanup
 
+# These tests are meant for upgrade scenario prior to 16_4 release
+ignore#!#sys-data_spaces-before-16-4-vu-prepare
+ignore#!#sys-data_spaces-before-16-4-vu-verify
+ignore#!#sys-data_spaces-before-16-4-vu-cleanup
+ignore#!#sys-filegroups-before-16-4-vu-prepare
+ignore#!#sys-filegroups-before-16-4-vu-verify
+ignore#!#sys-filegroups-before-16-4-vu-cleanup
+
 # These tests are running in multidb mode in upgrade and singledb mode in JDBC
 ignore#!#BABEL-4279-vu-prepare
 ignore#!#BABEL-4279-vu-verify

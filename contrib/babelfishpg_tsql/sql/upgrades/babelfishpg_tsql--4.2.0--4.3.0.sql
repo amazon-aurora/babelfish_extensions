@@ -711,8 +711,8 @@ inner join pg_class ptbl on ptbl.oid = X.indrelid and ptbl.relispartition = fals
 inner join pg_namespace nsp on nsp.oid = I.relnamespace
 left join sys.babelfish_namespace_ext ext on (nsp.nspname = ext.nspname and ext.dbid = sys.db_id())
 left join sys.babelfish_partition_depend pd on
-  (ext.orig_name = pd.schema_name COLLATE sys.database_default
-   and ptbl.relname = pd.table_name COLLATE sys.database_default and pd.dbid = sys.db_id() and ptbl.relkind = 'p')
+  (ext.orig_name  = pd.schema_name COLLATE sys.database_default
+   and CAST(ptbl.relname AS sys.nvarchar(128)) = pd.table_name COLLATE sys.database_default and pd.dbid = sys.db_id() and ptbl.relkind = 'p')
 left join sys.babelfish_partition_scheme ps on (ps.partition_scheme_name = pd.partition_scheme_name and ps.dbid = sys.db_id())
 -- check if index is a unique constraint
 left join pg_constraint const on const.conindid = I.oid and const.contype = 'u'
@@ -749,7 +749,7 @@ inner join pg_namespace nsp on nsp.oid = t.relnamespace
 left join sys.babelfish_namespace_ext ext on (nsp.nspname = ext.nspname and ext.dbid = sys.db_id())
 left join sys.babelfish_partition_depend pd on
   (ext.orig_name = pd.schema_name COLLATE sys.database_default
-   and t.relname = pd.table_name COLLATE sys.database_default and pd.dbid = sys.db_id())
+   and CAST(t.relname AS sys.nvarchar(128)) = pd.table_name COLLATE sys.database_default and pd.dbid = sys.db_id())
 left join sys.babelfish_partition_scheme ps on (ps.partition_scheme_name = pd.partition_scheme_name and ps.dbid = sys.db_id())
 where (t.relkind = 'r' or t.relkind = 'p')
 and t.relispartition = false
@@ -1731,7 +1731,8 @@ INNER JOIN pg_index pidx on pidx.indexrelid = pgi.inhparent
 INNER JOIN pg_class ctbl on ctbl.oid = cidx.indrelid
 INNER JOIN index_id_map imap on imap.indexrelid = cidx.indexrelid
 INNER JOIN sys.schemas sch on sch.schema_id = ctbl.relnamespace
-WHERE ctbl.relkind = 'r'
+WHERE cidx.indislive
+AND ctbl.relkind = 'r'
 AND ctbl.relispartition
 AND has_schema_privilege(ctbl.relnamespace, 'USAGE');
 GRANT SELECT ON sys.partitions TO PUBLIC;

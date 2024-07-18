@@ -1000,21 +1000,21 @@ partition_vu_prepare_varchar_inc528f397ba573964de161e03035b8f08#!#partition_vu_p
 SELECT * FROM GetSysPartitionsMetadata
 GO
 ~~START~~
-varchar#!#int#!#int#!#bigint
-363863941f079adaa9aa733200e57c9f_partition_0_id_key#!#1#!#2#!#0
-363863941f079adaa9aa733200e57c9f_partition_0#!#1#!#0#!#0
-363863941f079adaa9aa733200e57c9f_partition_0_value_idx#!#1#!#3#!#0
-363863941f079adaa9aa733200e57c9f_partition_1_id_key#!#2#!#2#!#0
-363863941f079adaa9aa733200e57c9f_partition_1#!#2#!#0#!#0
-363863941f079adaa9aa733200e57c9f_partition_1_value_idx#!#2#!#3#!#0
-363863941f079adaa9aa733200e57c9f_partition_2_id_key#!#3#!#2#!#0
-363863941f079adaa9aa733200e57c9f_partition_2#!#3#!#0#!#0
-363863941f079adaa9aa733200e57c9f_partition_2_value_idx#!#3#!#3#!#0
-363863941f079adaa9aa733200e57c9f_partition_3_value_idx#!#4#!#3#!#0
-363863941f079adaa9aa733200e57c9f_partition_3#!#4#!#0#!#0
-363863941f079adaa9aa733200e57c9f_partition_3_id_key#!#4#!#2#!#0
-partition_vu_prepare_normal_inded6315af14d88f45711ba24e46851b8f#!#1#!#2#!#0
-partition_vu_prepare_normal_table#!#1#!#0#!#0
+varchar#!#int#!#int
+363863941f079adaa9aa733200e57c9f_partition_0_id_key#!#1#!#2
+363863941f079adaa9aa733200e57c9f_partition_0#!#1#!#0
+363863941f079adaa9aa733200e57c9f_partition_0_value_idx#!#1#!#3
+363863941f079adaa9aa733200e57c9f_partition_1_id_key#!#2#!#2
+363863941f079adaa9aa733200e57c9f_partition_1#!#2#!#0
+363863941f079adaa9aa733200e57c9f_partition_1_value_idx#!#2#!#3
+363863941f079adaa9aa733200e57c9f_partition_2_id_key#!#3#!#2
+363863941f079adaa9aa733200e57c9f_partition_2#!#3#!#0
+363863941f079adaa9aa733200e57c9f_partition_2_value_idx#!#3#!#3
+363863941f079adaa9aa733200e57c9f_partition_3_value_idx#!#4#!#3
+363863941f079adaa9aa733200e57c9f_partition_3#!#4#!#0
+363863941f079adaa9aa733200e57c9f_partition_3_id_key#!#4#!#2
+partition_vu_prepare_normal_inded6315af14d88f45711ba24e46851b8f#!#1#!#2
+partition_vu_prepare_normal_table#!#1#!#0
 ~~END~~
 
 
