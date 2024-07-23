@@ -2460,6 +2460,27 @@ public:
 			rewritten_query_fragment.emplace(std::make_pair(ctx->FOR()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(ctx->FOR()), "")));
 			rewritten_query_fragment.emplace(std::make_pair(ctx->full_object_name()->start->getStartIndex(), std::make_pair(::getFullText(ctx->full_object_name()), nextval_string)));
 		}
+
+		/* Re-write db_name.$PARTITION.func_name(arg) to sys.search_partition(func_name, arg, db_name). */
+		if (ctx->partition_function_call())
+		{
+			auto pfctx = ctx->partition_function_call();
+			Assert(pfctx);
+
+			rewritten_query_fragment.emplace(std::make_pair(pfctx->DOLLAR_PARTITION()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(pfctx->DOLLAR_PARTITION()),
+					"sys.search_partition")));
+			rewritten_query_fragment.emplace(std::make_pair(pfctx->DOT().back()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(pfctx->DOT().back()), "")));
+			rewritten_query_fragment.emplace(std::make_pair(pfctx->id().back()->start->getStartIndex(), std::make_pair(::getFullText(pfctx->id().back()), "")));
+			rewritten_query_fragment.emplace(std::make_pair(pfctx->LR_BRACKET()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(pfctx->LR_BRACKET()),
+						"('" +std::string(stripQuoteFromId(pfctx->func_name).c_str()) + "', ")));
+			
+			if (pfctx->db_name)
+			{
+				rewritten_query_fragment.emplace(std::make_pair(pfctx->RR_BRACKET()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(pfctx->RR_BRACKET()), ", '" + stripQuoteFromId(pfctx->db_name) + "')")));
+				rewritten_query_fragment.emplace(std::make_pair(pfctx->id().front()->start->getStartIndex(), std::make_pair(::getFullText(pfctx->id().front()), "")));
+				rewritten_query_fragment.emplace(std::make_pair(pfctx->DOT().front()->getSymbol()->getStartIndex(), std::make_pair(::getFullText(pfctx->DOT().front()), "")));
+			}
+		}
 		if (ctx->analytic_windowed_function())
 		{
 			auto actx = ctx->analytic_windowed_function();

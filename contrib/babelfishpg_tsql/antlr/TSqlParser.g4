@@ -3795,7 +3795,7 @@ function_call
     ;
 
 partition_function_call
-    : (db_name=id DOT)? DOLLAR_PARTITION DOT func_name=id LR_BRACKET function_arg_list RR_BRACKET
+    : (db_name=id DOT)? DOLLAR_PARTITION DOT func_name=id LR_BRACKET arg=expression RR_BRACKET
     ;
 
 freetext_function
