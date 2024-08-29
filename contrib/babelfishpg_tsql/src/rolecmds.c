@@ -77,6 +77,7 @@ static void validateNetBIOS(char *netbios);
 static void validateFQDN(char *fqdn);
 
 static Oid bbf_admin_oid = InvalidOid;
+static Oid securityadmin_oid = InvalidOid;
 
 void
 create_bbf_authid_login_ext(CreateRoleStmt *stmt)
@@ -144,6 +145,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("Z");
+	else if (strcmp(stmt->role, BABELFISH_SECURITYADMIN) == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
 	else
@@ -613,6 +616,16 @@ get_bbf_role_admin_oid(void)
 	if (!OidIsValid(bbf_admin_oid))
 		bbf_admin_oid = get_role_oid("bbf_role_admin", false);
 	return bbf_admin_oid;
+}
+
+
+/* Returns OID of securityadmin server role */
+Oid
+get_securityadmin_oid(void)
+{
+	if (!OidIsValid(securityadmin_oid))
+		securityadmin_oid = get_role_oid(BABELFISH_SECURITYADMIN, false);
+	return securityadmin_oid;
 }
 
 /*
@@ -1574,20 +1587,26 @@ bool
 is_alter_server_stmt(GrantRoleStmt *stmt)
 {
 	/*
-	 * is alter server role statement, if one and the only one granted role is
+	 * is alter server role statement, if the granted role is
 	 * server role
 	 */
+
+	bool is_sysadmin = 0;
 
 	if (list_length(stmt->granted_roles) == 1)
 	{
 		RoleSpec   *spec = (RoleSpec *) linitial(stmt->granted_roles);
+		int     	rolename_len = strlen(spec->rolename);
 
-		if (strcmp(spec->rolename, "sysadmin") == 0)	/* only supported server
-														 * role */
+		if (rolename_len == 8 && strncmp(spec->rolename, BABELFISH_SYSADMIN, 8) == 0)
+			is_sysadmin = true;
+
+		/* only supported server roles */
+		if (is_sysadmin || (rolename_len == 13 && strncmp(spec->rolename, BABELFISH_SECURITYADMIN, 13) == 0))
 			return true;
 	}
-	/* has one and only one grantee  */
-	if (list_length(stmt->grantee_roles) != 1)
+	/* if granted role is sysadmin and has one and only one grantee  */
+	if (is_sysadmin && list_length(stmt->grantee_roles) != 1)
 		return false;
 
 	return false;
@@ -1628,8 +1647,12 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("%s is not a login", grantee_name)));
 
-	/* only sysadmin role is assumed below */
-	if (!has_privs_of_role(GetSessionUserId(), sysadmin))
+	/* 
+	 * check if it has sysadmin privileges or
+	 * if server role is securityadmin and it has privileges of securityadmin
+	 */
+	if (!has_privs_of_role(GetSessionUserId(), sysadmin) && ((strcmp(granted_name, BABELFISH_SECURITYADMIN) != 0)
+										|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("Current login %s does not have permission to alter server role",
@@ -2429,4 +2452,22 @@ remove_createrole_from_logins(PG_FUNCTION_ARGS)
 	table_endscan(scan);
 	table_close(rel, AccessShareLock);
 	PG_RETURN_INT32(0);
+}
+
+PG_FUNCTION_INFO_V1(bbf_is_member_of_role_nosuper);
+Datum
+bbf_is_member_of_role_nosuper(PG_FUNCTION_ARGS)
+{
+	Oid	member, role;
+	bool	result;
+
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		PG_RETURN_NULL();
+
+	member = PG_GETARG_OID(0);
+	role = PG_GETARG_OID(1);
+
+	result = is_member_of_role_nosuper(member, role);
+
+	PG_RETURN_BOOL(result);
 }
