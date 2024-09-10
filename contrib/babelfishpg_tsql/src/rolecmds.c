@@ -78,6 +78,7 @@ static void validateFQDN(char *fqdn);
 
 static Oid bbf_admin_oid = InvalidOid;
 static Oid securityadmin_oid = InvalidOid;
+static Oid dbcreator_oid = InvalidOid;
 
 void
 create_bbf_authid_login_ext(CreateRoleStmt *stmt)
@@ -146,6 +147,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("Z");
 	else if (strcmp(stmt->role, BABELFISH_SECURITYADMIN) == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
+	else if (strcmp(stmt->role, BABELFISH_DBCREATOR) == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
@@ -626,6 +629,15 @@ get_securityadmin_oid(void)
 	if (!OidIsValid(securityadmin_oid))
 		securityadmin_oid = get_role_oid(BABELFISH_SECURITYADMIN, false);
 	return securityadmin_oid;
+}
+
+/* Returns OID of dbcreator server role */
+Oid
+get_dbcreator_oid(void)
+{
+	if (!OidIsValid(dbcreator_oid))
+		dbcreator_oid = get_role_oid(BABELFISH_DBCREATOR, false);
+	return dbcreator_oid;
 }
 
 /*
@@ -1602,7 +1614,8 @@ is_alter_server_stmt(GrantRoleStmt *stmt)
 			is_sysadmin = true;
 
 		/* only supported server roles */
-		if (is_sysadmin || (rolename_len == 13 && strncmp(spec->rolename, BABELFISH_SECURITYADMIN, 13) == 0))
+		if (is_sysadmin || (rolename_len == 13 && strncmp(spec->rolename, BABELFISH_SECURITYADMIN, 13) == 0)
+				|| (rolename_len == 9 && strncmp(spec->rolename, BABELFISH_DBCREATOR, 9) == 0))
 			return true;
 	}
 	/* if granted role is sysadmin and has one and only one grantee  */
@@ -1652,7 +1665,8 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 	 * if server role is securityadmin and it has privileges of securityadmin
 	 */
 	if (!has_privs_of_role(GetSessionUserId(), sysadmin) && ((strcmp(granted_name, BABELFISH_SECURITYADMIN) != 0)
-										|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())))
+		|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())) && ((strcmp(granted_name, BABELFISH_DBCREATOR) != 0)
+						|| !has_privs_of_role(GetSessionUserId(), get_dbcreator_oid())))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("Current login %s does not have permission to alter server role",

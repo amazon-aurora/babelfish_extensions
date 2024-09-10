@@ -1981,7 +1981,8 @@ is_server_role_supported (const char* serverrole, int position, core_yyscan_t yy
 					errmsg("Fixed server role '%s' is currently not supported in Babelfish", serverrole),
 										parser_errposition(position)));
 	}
-	else if (strcmp(serverrole, BABELFISH_SYSADMIN) != 0 && strcmp(serverrole, BABELFISH_SECURITYADMIN) != 0)
+	else if (strcmp(serverrole, BABELFISH_SYSADMIN) != 0 && strcmp(serverrole, BABELFISH_SECURITYADMIN) != 0
+							&& strcmp(serverrole, BABELFISH_DBCREATOR) != 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				errmsg("Only fixed server role is supported in ALTER SERVER ROLE statement"),

@@ -3472,7 +3472,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						if (!OidIsValid(role_oid) ||
 							(!is_member_of_role(GetSessionUserId(), get_sysadmin_oid()) && 
 							!is_member_of_role(GetSessionUserId(), securityadmin_oid)) ||
-							role_oid == get_bbf_role_admin_oid() || role_oid == securityadmin_oid)
+							role_oid == get_bbf_role_admin_oid() || role_oid == securityadmin_oid ||
+							role_oid == get_dbcreator_oid())
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3682,13 +3683,22 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
 					}
 
-					/* Otherwise, provide attribute for role priv */
-					else
+					/* Otherwise if secuirityadmin, provide attribute for role priv */
+					else if (strlen(rolspec->rolename) == 13 && strncmp(rolspec->rolename, BABELFISH_SECURITYADMIN, 13) == 0)
 					{
 						if (grant_role->is_grant)
 							appendStringInfo(&query, "ALTER ROLE dummy WITH createrole; ");
 						else
 							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole; ");
+					}
+
+					/* Otherwise if dbcreator, provide attribute for role priv */
+					else
+					{
+						if (grant_role->is_grant)
+							appendStringInfo(&query, "ALTER ROLE dummy WITH createdb; ");
+						else
+							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreatedb; ");
 					}
 					
 					/*
