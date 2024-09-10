@@ -40,7 +40,7 @@ public class TestQueryFile {
     static File diffFile;
     
     String inputFileName;
-    Connection connection_bbl;  // connection object for Babel instance
+    static Connection connection_bbl;  // connection object for Babel instance
     
     public static void createTestFilesListUtil(String directory, String testToRun) {
         File dir = new File(directory);
@@ -240,8 +240,15 @@ public class TestQueryFile {
     
     // close connections that are not null after every test
     @AfterEach
-    public void closeConnections() throws SQLException {
-        if (connection_bbl != null) connection_bbl.close();
+    public void closeConnections() throws SQLException, ClassNotFoundException, Throwable {
+        // if (connection_bbl != null) connection_bbl.close();
+        File outputFile = new File("outputFilesDirectoryPath" + "ins1.out");
+
+        // generate buffer reader associated with the file
+        FileWriter fw = new FileWriter(outputFile);
+        BufferedWriter bw = new BufferedWriter(fw);
+        batch_run.batch_run_sql(connection_bbl, bw, "inputFilesDirectoryPath" + "ins1.txt", logger);
+        bw.close();
     }
 
     // write summary log after all tests have been executed
@@ -386,7 +393,7 @@ public class TestQueryFile {
     @MethodSource("inputFileNames")
     public void TestQueryBatch(String inputFileName) throws SQLException, ClassNotFoundException, Throwable {
         if(inputFileName == null) return;
-
+        // System.out.println(connection_bbl);
         // if it is a command and not a fileName
         if (inputFileName.startsWith("cmd#!#")) {
             execCommand(inputFileName);
@@ -396,7 +403,8 @@ public class TestQueryFile {
             return;
         } else {
             selectDriver();
-            connection_bbl = DriverManager.getConnection(connectionString);
+            if (connection_bbl == null)
+                connection_bbl = DriverManager.getConnection(connectionString);
         }
 
         summaryLogger.info("RUNNING " + inputFileName);
