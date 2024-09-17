@@ -818,6 +818,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 				 errmsg("Cannot drop database \"%s\" because it is currently in use", dbname)));
 
 	/* Set current user to session user for dropping permissions */
+	prev_current_user_id = GetSessionUserId();
 	prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 	bbf_set_current_user("sysadmin");
