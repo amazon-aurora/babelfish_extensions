@@ -34,6 +34,7 @@ public class JDBCStatement {
     // function to write output of executed statement to a file
     void testStatementWithFile(String SQL, BufferedWriter bw, String strLine, Logger logger){
         try {
+            // System.out.println("THIS IS NOT: " + SQL);
             bw.write(strLine);
             bw.newLine();
 

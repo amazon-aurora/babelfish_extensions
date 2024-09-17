@@ -161,18 +161,28 @@ public class JDBCCrossDialect {
         return psqlConnection;
     }
 
-    void closeConnectionsUtil (HashMap<String, Connection> connectionMap, BufferedWriter bw, Logger logger) {
-        connectionMap.forEach(
-            (connectionAttribute, connection) -> {
-                if (connection != null) {
-                    try {
+    void closeConnectionsUtil(HashMap<String, Connection> connectionMap, BufferedWriter bw, Logger logger) {
+        boolean skipFirst = false;
+        Iterator<Map.Entry<String, Connection>> iterator = connectionMap.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map.Entry<String, Connection> entry = iterator.next();
+            Connection connection = entry.getValue();
+
+            if (skipFirst) {
+                try {
+                    // if (connection == TestQueryFile.connection_bbl)
+                    {
+                        // System.out.println("1" + connection);
                         connection.close();
-                    } catch (SQLException e) {
-                        handleSQLExceptionWithFile(e, bw, logger);
                     }
+                } catch (SQLException e) {
+                    handleSQLExceptionWithFile(e, bw, logger);
                 }
             }
-        );
+            else
+                skipFirst = true;
+        }
     }
 
     void closeConnections (BufferedWriter bw, Logger logger) {
@@ -190,6 +200,7 @@ public class JDBCCrossDialect {
             Connection connection = tsqlConnectionMap.get(newUser + newPassword + newDatabase + newPort);
             if (connection != null) {
                 try {
+                    // System.out.println("2");
                     connection.close();
                 } catch (SQLException e) {
                     handleSQLExceptionWithFile(e, bw, logger);
@@ -212,6 +223,7 @@ public class JDBCCrossDialect {
             Connection connection = psqlConnectionMap.get(newUser + newPassword + newPhysicalDatabase + searchPath + newPort);
             if (connection != null) {
                 try {
+                    // System.out.println("3");
                     connection.close();
                 } catch (SQLException e) {
                     handleSQLExceptionWithFile(e, bw, logger);

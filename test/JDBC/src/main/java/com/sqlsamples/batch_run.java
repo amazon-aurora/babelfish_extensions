@@ -15,6 +15,7 @@ public class batch_run {
     // method that iterates through an input file and writes output to corresponding .out file.
     static void batch_run_sql(Connection con_bbl, BufferedWriter bw, String testFilePath, Logger logger) {
 
+        // System.out.println(" THIS IS IT: " + con_bbl);
         boolean isSQLFile = testFilePath.contains(".sql");
         boolean isCrossDialectFile = false;
         boolean tsqlDialect = false;

@@ -269,13 +269,13 @@ public class TestQueryFile {
     @AfterEach
     public void closeConnections() throws SQLException, ClassNotFoundException, Throwable {
         // if (connection_bbl != null) connection_bbl.close();
-        File outputFile = new File("outputFilesDirectoryPath" + "ins1.out");
-
-        // generate buffer reader associated with the file
-        FileWriter fw = new FileWriter(outputFile);
-        BufferedWriter bw = new BufferedWriter(fw);
-        batch_run.batch_run_sql(connection_bbl, bw, "inputFilesDirectoryPath" + "ins1.txt", logger);
-        bw.close();
+        if (connection_bbl == null) return;
+        try{
+        // System.out.println(" hello " + connection_bbl );
+        connection_bbl.createStatement().execute("EXEC sys.sp_reset_connection");}
+        catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // write summary log after all tests have been executed
@@ -463,8 +463,11 @@ public class TestQueryFile {
         if (inputFileName.equals("temp_table_jdbc")) {
             JDBCTempTable.runTest(bw, logger);
             sla = defaultSLA*1000000L * 2; /* Increase SLA to avoid flakiness */
-        } else {
+        } else if (testFilePath != null) {
+            // System.out.println("---- " + testFilePath);
+            // System.out.println(fw + " 1 " + bw + " 2 " + connection_bbl + " 3 " + logger + " 4 " + testFilePath);
             batch_run.batch_run_sql(connection_bbl, bw, testFilePath, logger);
+            // System.out.println("---- 3" + testFilePath);
         }
         bw.close();
         if(sla == 0){
@@ -473,6 +476,8 @@ public class TestQueryFile {
         File expectedFile;
         File nonDefaultServerCollationExpectedFile;
         File dbCollationExpectedFile;
+
+        // System.out.println("---- 6" + inputFileName);
 
         if (isParallelQueryMode && checkParallelQueryExpected){
             expectedFile = new File(parallelQueryGeneratedFilesDirectoryPath + outputFileName + ".out");
@@ -489,7 +494,7 @@ public class TestQueryFile {
             nonDefaultServerCollationExpectedFile = new File(generatedFilesDirectoryPath + "non_default_server_collation/" + serverCollationName + "/" + outputFileName + ".out");
             dbCollationExpectedFile = new File(generatedFilesDirectoryPath + "db_collation/" + outputFileName + ".out");
         }
-
+        // System.out.println("---- 4" + inputFileName);
 
         File sqlExpectedFile = new File(sqlServerGeneratedFilesDirectoryPath + outputFileName + ".out");
 
@@ -499,6 +504,7 @@ public class TestQueryFile {
         else{
             timeout = true;
         }
+        // System.out.println("---- 2" + inputFileName);
 
         if (serverCollationName != "default" && nonDefaultServerCollationExpectedFile.exists()){    /* If server collation name is non-default then use it's corresponding expected file if exists */
             // get the diff
@@ -521,6 +527,7 @@ public class TestQueryFile {
         ArrayList<Long> tempSla = new ArrayList<>();
         tempSla.add(curr_exec_time/1000000L);
         tempSla.add(sla/1000000L);
+        // System.out.println("---- 1" + inputFileName);
         summaryMap.add(new AbstractMap.SimpleEntry<>(inputFileName, result && !timeout)); //add test name and result to map
         slaMap.add(new AbstractMap.SimpleEntry<>(inputFileName, tempSla)); //add execution time and SLA
         sla = 0L;
