@@ -100,7 +100,7 @@ bbf_set_current_user(const char *user_name)
 	Oid			userid;
 
 	userid = get_role_oid(user_name, false);
-	SetConfigOption("role", user_name, PGC_SUSET, PGC_S_DATABASE_USER);
+	SetConfigOption("role", user_name, PGC_SUSET, PGC_S_SESSION);
 	SetCurrentRoleId(userid, false);
 }
 
