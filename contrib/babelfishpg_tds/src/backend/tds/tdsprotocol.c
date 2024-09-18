@@ -123,7 +123,7 @@ ResetTDSConnection(void)
 {
 	const char *isolationOld;
 
-	Assert(TdsRequestCtrl->request == NULL);
+	Assert(resetTdsConnectionFlag || TdsRequestCtrl->request == NULL);
 	Assert(TdsRequestCtrl->requestContext != NULL);
 	TdsErrorContext->err_text = "Resetting the TDS connection";
 
@@ -162,7 +162,7 @@ ResetTDSConnection(void)
 	tvp_lookup_list = NIL;
 
 	/* send an environement change token */
-	if (resetTdsConnectionFlag)
+	if (!resetTdsConnectionFlag)
 		TdsSendEnvChange(TDS_ENVID_RESETCON, NULL, NULL);
 }
 
@@ -172,6 +172,11 @@ ResetTDSConnection(void)
 void SetResetTDSConnectionFlag()
 {
 	resetTdsConnectionFlag = true;	
+}
+
+bool GetResetTDSConnectionFlag()
+{
+	return resetTdsConnectionFlag;	
 }
 
 /*
@@ -702,6 +707,12 @@ TdsSocketBackend(void)
 
 						/* Ready to fetch the next request */
 						TdsRequestCtrl->phase = TDS_REQUEST_PHASE_FETCH;
+
+						if (resetTdsConnectionFlag)
+						{
+							ResetTDSConnection();
+							resetTdsConnectionFlag = false;
+						}
 
 						break;
 					}
