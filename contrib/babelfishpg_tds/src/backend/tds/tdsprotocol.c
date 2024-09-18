@@ -162,7 +162,8 @@ ResetTDSConnection(void)
 	tvp_lookup_list = NIL;
 
 	/* send an environement change token */
-	TdsSendEnvChange(TDS_ENVID_RESETCON, NULL, NULL);
+	if (resetTdsConnectionFlag)
+		TdsSendEnvChange(TDS_ENVID_RESETCON, NULL, NULL);
 }
 
 /*
