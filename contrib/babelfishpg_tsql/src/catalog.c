@@ -4848,6 +4848,7 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 	int dbid = get_db_id(old_db_name);
 	int tries;
 	Oid     	prev_current_user = InvalidOid;
+	const char     *user = get_user_for_database(old_db_name);
 
 	/*
 	 * Check that db_name is not "master", "tempdb", or "msdb",
@@ -4883,7 +4884,8 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 				errmsg("The database could not be exclusively locked to perform the operation.")));
 
 	/* Check permission on the given database. */
-	if (!has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)))
+	if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid())
+		&& !(user && has_privs_of_role(GetSessionUserId(), get_dbcreator_oid())))
 		ereport(ERROR,
 			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				errmsg("User does not have permission to rename the database \'%s\', the database does not exist, or the database is not in a state that allows access checks.",

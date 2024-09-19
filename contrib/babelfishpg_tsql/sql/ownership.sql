@@ -259,7 +259,7 @@ CREATE OR REPLACE PROCEDURE initialize_babelfish ( sa_name VARCHAR(128) )
 LANGUAGE plpgsql
 AS $$
 DECLARE
-	reserved_roles varchar[] := ARRAY['sysadmin', 'securityadmin', 'master_dbo', 'master_guest', 'master_db_owner', 'tempdb_dbo', 'tempdb_guest', 'tempdb_db_owner', 'msdb_dbo', 'msdb_guest', 'msdb_db_owner'];
+	reserved_roles varchar[] := ARRAY['sysadmin', 'securityadmin', 'dbcreator', 'master_dbo', 'master_guest', 'master_db_owner', 'tempdb_dbo', 'tempdb_guest', 'tempdb_db_owner', 'msdb_dbo', 'msdb_guest', 'msdb_db_owner'];
 	user_id  oid := -1;
 	db_name  name := NULL;
 	role_name varchar;
@@ -287,12 +287,15 @@ BEGIN
 
 	EXECUTE format('CREATE ROLE securityadmin CREATEROLE INHERIT PASSWORD NULL');
 	EXECUTE format('GRANT CONNECT ON DATABASE %s TO securityadmin WITH GRANT OPTION', CURRENT_DATABASE());
+	EXECUTE format('CREATE ROLE dbcreator CREATEDB INHERIT PASSWORD NULL');
+	EXECUTE format('GRANT CONNECT ON DATABASE %s TO dbcreator WITH GRANT OPTION', CURRENT_DATABASE());
 	EXECUTE format('CREATE ROLE bbf_role_admin CREATEDB CREATEROLE INHERIT PASSWORD NULL');
 	EXECUTE format('GRANT CREATE ON DATABASE %s TO bbf_role_admin WITH GRANT OPTION', CURRENT_DATABASE());
 	EXECUTE format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', sa_name);
 	EXECUTE format('CREATE ROLE sysadmin CREATEDB CREATEROLE INHERIT ROLE %I', sa_name);
 	EXECUTE format('GRANT sysadmin TO bbf_role_admin WITH ADMIN TRUE');
 	EXECUTE format('GRANT securityadmin TO bbf_role_admin WITH ADMIN TRUE');
+	EXECUTE format('GRANT dbcreator TO bbf_role_admin WITH ADMIN TRUE');
 	EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sys.babelfish_partition_function_seq TO sysadmin WITH GRANT OPTION');
 	EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sys.babelfish_partition_scheme_seq TO sysadmin WITH GRANT OPTION');
 	EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE sys.babelfish_db_seq TO sysadmin WITH GRANT OPTION');
@@ -303,6 +306,7 @@ BEGIN
 	CALL sys.babel_initialize_logins('sysadmin');
 	CALL sys.babel_initialize_logins('bbf_role_admin');
 	CALL sys.babel_initialize_logins('securityadmin');
+	CALL sys.babel_initialize_logins('dbcreator');
 	CALL sys.babel_create_builtin_dbs(sa_name);
 	CALL sys.initialize_babel_extras();
 	-- run analyze for all babelfish catalog
@@ -326,6 +330,8 @@ BEGIN
 	DROP ROLE bbf_role_admin;
 	DROP OWNED BY securityadmin;
 	DROP ROLE securityadmin;
+	DROP OWNED BY dbcreator;
+	DROP ROLE dbcreator;
 END
 $$;
 

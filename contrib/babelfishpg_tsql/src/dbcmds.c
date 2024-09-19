@@ -414,7 +414,6 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 {
 	int16		old_dbid;
 	char	   *old_dbname;
-	Oid			datdba;
 	Datum	   *new_record;
 	bool	   *new_record_nulls;
 	Relation	sysdatabase_rel;
@@ -482,7 +481,10 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 	PG_TRY();
 	{
 		SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-		if (!have_createdb_privilege())
+
+		/* Session user must be member of sysadmin or dbcreator fixed server role */
+		if (!have_createdb_privilege() && !is_member_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
+							!is_member_of_role(GetSessionUserId(), get_dbcreator_oid()))
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("permission denied to create database")));
@@ -492,10 +494,6 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 	}
 	PG_END_TRY();
-
-	/* dbowner is always sysadmin */
-	datdba = get_role_oid("sysadmin", false);
-	check_can_set_role(GetSessionUserId(), datdba);
 
 	/* pre check availablity of critical structures */
 	dbo_scm = get_dbo_schema_name(dbname);
@@ -717,7 +715,9 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 		const char *login = GetUserNameFromId(roleid, false);
 		bool		login_is_db_owner = 0 == strncmp(login, get_owner_of_db(dbname), NAMEDATALEN);
 
-		if (!(has_privs_of_role(roleid, get_role_oid("sysadmin", false)) || login_is_db_owner))
+		/* Check if login has required privilege to drop the database */
+		if (!(has_privs_of_role(roleid, get_sysadmin_oid()) 
+			|| has_privs_of_role(roleid, get_dbcreator_oid()) || login_is_db_owner))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
 						   dbname);
 
