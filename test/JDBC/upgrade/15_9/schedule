@@ -543,4 +543,5 @@ SELECT_INTO_TEST
 securityadmin_role
 cast-varchar-to-time
 BABEL-5119
+dbcreator_role
 

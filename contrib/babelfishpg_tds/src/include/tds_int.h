@@ -257,6 +257,7 @@ extern ProcessUtility_hook_type next_ProcessUtility;
 #define BABELFISH_SYSADMIN "sysadmin"
 #define BABELFISH_ROLE_ADMIN "bbf_role_admin"
 #define BABELFISH_SECURITYADMIN "securityadmin"
+#define BABELFISH_DBCREATOR "dbcreator"
 
 /* Functions in backend/tds/tdscomm.c */
 extern void TdsSetMessageType(uint8_t msgType);

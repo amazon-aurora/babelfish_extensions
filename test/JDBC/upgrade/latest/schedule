@@ -569,4 +569,5 @@ binary-datatype-operators
 securityadmin_role
 cast-varchar-to-time
 BABEL-5119
+dbcreator_role
 
