@@ -4848,7 +4848,7 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 	int dbid = get_db_id(old_db_name);
 	int tries;
 	Oid     	prev_current_user = InvalidOid;
-	const char     *user = get_user_for_database(old_db_name);
+	const char     *user;
 
 	/*
 	 * Check that db_name is not "master", "tempdb", or "msdb",
@@ -4882,6 +4882,8 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 		ereport(ERROR,
 			(errcode(ERRCODE_OBJECT_IN_USE),
 				errmsg("The database could not be exclusively locked to perform the operation.")));
+
+	user = get_user_for_database(old_db_name);
 
 	/* Check permission on the given database. */
 	if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid())
