@@ -2113,6 +2113,7 @@ TdsSetDbContext()
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_DATABASE),
 					errmsg("Cannot open database \"%s\" requested by the login. The login failed", dbname)));
+	SetConfigOption("role", user, PGC_SUSET, PGC_S_SESSION);
 
 	/*
 	 * loginInfo has a database name provided, so we execute a "USE

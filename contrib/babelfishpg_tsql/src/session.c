@@ -100,15 +100,6 @@ bbf_set_current_user(const char *user_name)
 	Oid			userid;
 
 	userid = get_role_oid(user_name, false);
-	PG_TRY();
-	{
-	SetConfigOption("role", user_name, PGC_SUSET, PGC_S_SESSION);
-	}
-	PG_CATCH();
-	{
-		userid = userid;
-	}
-	PG_END_TRY();
 	SetCurrentRoleId(userid, false);
 }
 

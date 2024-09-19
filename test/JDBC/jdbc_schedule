@@ -36,6 +36,9 @@ ignore#!#BABEL-3291
 ignore#!#BABEL-3292
 ignore#!#BABEL-3293
 ignore#!#BABEL-3592
+ignore#!#BABEL-4294-vu-prepare
+ignore#!#BABEL-4294-vu-verify
+ignore#!#BABEL-4294-vu-cleanup
 
 
 
