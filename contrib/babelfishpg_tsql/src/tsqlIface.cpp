@@ -200,6 +200,7 @@ static std::string getIDName(TerminalNode *dq, TerminalNode *sb, TerminalNode *i
 static ANTLR_result antlr_parse_query(const char *sourceText, bool useSSLParsing);
 std::string rewriteDoubleQuotedString(const std::string strDoubleQuoted);
 std::string escapeDoubleQuotes(const std::string strWithDoubleQuote);
+void processLocalVariables(std::string& expression_text, std::set<size_t>& keysToRemove);
 static bool in_execute_body_batch = false;	
 static bool in_execute_body_batch_parameter = false;	
 static const std::string fragment_SELECT_prefix = "SELECT "; // fragment prefix for expressions
@@ -702,7 +703,7 @@ void PLtsql_expr_query_mutator::run()
 			// This test has been in the code since day 1. 
 			// When making the test work, some test cases will start failing as they run into this condition 
 			// (test table_variable_xact_errors and two variants). Therefore, not touching the test for now.
-			if (offset - cursor < 0)
+			if (offset < cursor)
 				throw PGErrorWrapperException(ERROR, ERRCODE_INTERNAL_ERROR, "can't mutate an internal query. might be due to multiple mutations on the same position", 0, 0);
 			if (offset - cursor > 0) // if offset==cursor, no need to copy
 				rewritten_query += query.substr(cursor, offset - cursor); // copy substring of expr->query. ranged [cursor, offset)
@@ -6838,12 +6839,26 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 				}
 				else
 				{
-					/* "SET @a=expr, col=expr2" => "SET col=expr2 ... RETURNING expr" */
-					appendStringInfo(&ds, "%s", ::getFullText(elem->expression()).c_str());
+					/* "SET @a=expr, col=expr2, @b = @a+expr1" => "SET col=expr2 ... RETURNING expr, \"@a\"+expr1" */
+					std::string expression_text = ::getFullText(elem->expression()).c_str();
+					
+					std::set<size_t> keysToRemove; /* to keep track of local variables to remove to avoid multiple rewrites */
+
+					/* Rewriting and quoting local ids */
+					processLocalVariables(expression_text, keysToRemove);
+					
+					appendStringInfo(&ds, "%s", expression_text.c_str());
 
 					removeTokenStringFromQuery(stmt->sqlstmt, elem->LOCAL_ID(), uctx);
 					removeTokenStringFromQuery(stmt->sqlstmt, elem->EQUAL(0), uctx);
 					removeCtxStringFromQuery(stmt->sqlstmt, elem->expression(), uctx);
+
+					/* Removing the quoted local_ids from the context to avoid multiple mutation */
+					for (const auto &key : keysToRemove) 
+					{
+						local_id_positions.erase(key);
+					}
+					keysToRemove.clear();
 				}
 
 				// Conceptually we have to remove any nearest COMMA.
@@ -6864,6 +6879,12 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 				comma_carry_over = false;
 		}
 
+		/* Need to trim semicolon at the end if there's any as it was not handled before */
+		if (uctx->SEMI())
+		{
+			removeTokenStringFromQuery(stmt->sqlstmt, uctx->SEMI(), uctx);
+		}
+
 		pltsql_adddatum((PLtsql_datum *) target);
 
 		stmt->target = (PLtsql_variable *)target;
@@ -6874,6 +6895,30 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 		appendStringInfo(&ds2, "%s %s", stmt->sqlstmt->query, ds.data);
 		stmt->sqlstmt->query = pstrdup(ds2.data);
 	}
+}
+
+/* Function to process local variables and prepare the RETURNING clause */
+void processLocalVariables(std::string& expression_text, std::set<size_t>& keysToRemove)
+{
+    /* 
+	 * Iterate through the local_id_positions map to find and quote local IDs in the expression_text
+	 * to remove possibility of multiple rewrites in a single context
+	 */
+    for (auto &entry : local_id_positions)
+    {
+        const std::string& local_id = entry.second;
+        std::string quoted_local_id = "\"" + local_id + "\"";
+
+        /* Replace all occurrences of the local_id in the expression_text with the quoted version */
+        size_t pos = 0;
+        while ((pos = expression_text.find(local_id, pos)) != std::string::npos)
+        {
+            expression_text.replace(pos, local_id.length(), quoted_local_id);
+            pos += quoted_local_id.length(); /* Move the position past the quoted local_id */
+        }
+
+		keysToRemove.insert(entry.first);
+    }
 }
 
 void process_execsql_destination(TSqlParser::Dml_statementContext *ctx, PLtsql_stmt_execsql *stmt)
