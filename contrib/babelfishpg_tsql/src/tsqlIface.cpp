@@ -200,6 +200,7 @@ static std::string getIDName(TerminalNode *dq, TerminalNode *sb, TerminalNode *i
 static ANTLR_result antlr_parse_query(const char *sourceText, bool useSSLParsing);
 std::string rewriteDoubleQuotedString(const std::string strDoubleQuoted);
 std::string escapeDoubleQuotes(const std::string strWithDoubleQuote);
+void processLocalVariables(std::string& expression_text, std::set<size_t>& keysToRemove);
 static bool in_execute_body_batch = false;	
 static bool in_execute_body_batch_parameter = false;	
 static const std::string fragment_SELECT_prefix = "SELECT "; // fragment prefix for expressions
@@ -702,7 +703,7 @@ void PLtsql_expr_query_mutator::run()
 			// This test has been in the code since day 1. 
 			// When making the test work, some test cases will start failing as they run into this condition 
 			// (test table_variable_xact_errors and two variants). Therefore, not touching the test for now.
-			if (offset - cursor < 0)
+			if (offset < cursor)
 				throw PGErrorWrapperException(ERROR, ERRCODE_INTERNAL_ERROR, "can't mutate an internal query. might be due to multiple mutations on the same position", 0, 0);
 			if (offset - cursor > 0) // if offset==cursor, no need to copy
 				rewritten_query += query.substr(cursor, offset - cursor); // copy substring of expr->query. ranged [cursor, offset)
@@ -6717,6 +6718,7 @@ void process_execsql_destination_select(TSqlParser::Select_statement_standaloneC
 
 	Assert(qctx->select_list());
 	std::vector<TSqlParser::Select_list_elemContext *> select_elems = qctx->select_list()->select_list_elem();
+	bool contains_local_var_dependency = false;
 	for (size_t i=0; i<select_elems.size(); ++i)
 	{
 		TSqlParser::Select_list_elemContext *elem = select_elems[i];
@@ -6730,6 +6732,49 @@ void process_execsql_destination_select(TSqlParser::Select_statement_standaloneC
 				target = create_select_target_row("(select target)", select_elems.size(), getLineNo(elem));
 
 			add_assignment_target_field(target, elem->LOCAL_ID(), i);
+
+			/*
+			 * Check if the SELECT statement involves assigning a local variable and reusing it
+			 * in some other assignment operation simultaneously ONLY if FROM clause exists.
+			 * 
+			 * All Standalone SELECT statements are supported:
+			 * For example:
+			 * 1. SELECT @var1 += @var2;
+			 * 2. SELECT @var1 = @var2 + expr;
+			 * 3. SELECT @var1 = @var2 + @var3, etc.
+			 * 4. SELECT @var1 = expr
+			 *
+			 * Unsupported cases:
+			 * 1. Assigning a local variable with an expression that depends on another local variable:
+			 *    Example: SELECT @var1 = @var2 + expr, @var2 = expr FROM table_name
+			 *
+			 * 2. Assigning a local variable a value using assignment operators:
+			 *    Example:  SELECT @var1 += expr FROM table_name (can be any assignment operator like '+=', '-=', '/=', etc.)
+			 */
+			if (qctx->FROM())
+			{
+				if (elem->assignment_operator())
+				{
+					contains_local_var_dependency = true;
+				}
+				else
+				{
+					std::string expression_text = ::getFullText(elem->expression()).c_str();
+					std::string local_id_str = ::getFullText(elem->LOCAL_ID()).c_str();
+					for (const auto &entry : local_id_positions)
+					{
+						if (local_id_str.compare(entry.second) == 0)
+						{
+							contains_local_var_dependency = true;
+							break;
+						}
+					}
+				}
+			}
+
+			/* throw error in case of local variable dependency */
+			if (contains_local_var_dependency)
+				throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, "A SELECT statement that includes expressions dependent on local variables is currently not supported in Babelfish", getLineAndPos(elem));	
 
 			if (elem->EQUAL())
 			{
@@ -6838,12 +6883,50 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 				}
 				else
 				{
-					/* "SET @a=expr, col=expr2" => "SET col=expr2 ... RETURNING expr" */
-					appendStringInfo(&ds, "%s", ::getFullText(elem->expression()).c_str());
+					/*
+					* Check if the UPDATE statement involves updating a local variable and reusing it
+					* in some other update operation simultaneously.
+					*
+					* Unsupported cases:
+					* 1. Updating a local variable with an expression that depends on another local variable:
+					*    Example: @var1 = expr1, @var2 = @var1 + expr2
+					*
+					* 2. Updating a column value with an expression that depends on a local variable:
+					*    Example: col1 = @var1 * 2, @var1 = expr1
+					*
+					* In both cases, the local variable being assigned (@var2 in case 1, and @var1 in case 2)
+					* is present in the local_id_positions map, indicating that it is used in another expression
+					* simultaneously.
+					*/
+					std::string local_id_str = ::getFullText(elem->LOCAL_ID()).c_str();
+
+					for (const auto &entry : local_id_positions)
+					{
+						/* throw error in case of local variable dependency */
+						if (local_id_str.compare(entry.second) == 0)
+							throw PGErrorWrapperException(ERROR, ERRCODE_FEATURE_NOT_SUPPORTED, "UPDATE statement that includes expressions dependent on local variables is currently not supported in Babelfish", getLineAndPos(elem));
+					}
+
+					std::set<size_t> keysToRemove; /* to keep track of local variables to remove to avoid multiple rewrites */
+
+					/* "SET @a=expr, col=expr2, @b = @a+expr1" => "SET col=expr2 ... RETURNING expr, \"@a\"+expr1" */
+					std::string expression_text = ::getFullText(elem->expression()).c_str();
+
+					/* Rewriting and quoting local ids */
+					processLocalVariables(expression_text, keysToRemove);
+					
+					appendStringInfo(&ds, "%s", expression_text.c_str());
 
 					removeTokenStringFromQuery(stmt->sqlstmt, elem->LOCAL_ID(), uctx);
 					removeTokenStringFromQuery(stmt->sqlstmt, elem->EQUAL(0), uctx);
 					removeCtxStringFromQuery(stmt->sqlstmt, elem->expression(), uctx);
+
+					/* Removing the quoted local_ids from the context to avoid multiple mutation */
+					for (const auto &key : keysToRemove) 
+					{
+						local_id_positions.erase(key);
+					}
+					keysToRemove.clear();
 				}
 
 				// Conceptually we have to remove any nearest COMMA.
@@ -6864,6 +6947,12 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 				comma_carry_over = false;
 		}
 
+		/* Need to trim semicolon at the end if there's any as it was not handled before */
+		if (uctx->SEMI())
+		{
+			removeTokenStringFromQuery(stmt->sqlstmt, uctx->SEMI(), uctx);
+		}
+
 		pltsql_adddatum((PLtsql_datum *) target);
 
 		stmt->target = (PLtsql_variable *)target;
@@ -6874,6 +6963,30 @@ void process_execsql_destination_update(TSqlParser::Update_statementContext *uct
 		appendStringInfo(&ds2, "%s %s", stmt->sqlstmt->query, ds.data);
 		stmt->sqlstmt->query = pstrdup(ds2.data);
 	}
+}
+
+/* Function to process local variables and prepare the RETURNING clause */
+void processLocalVariables(std::string& expression_text, std::set<size_t>& keysToRemove)
+{
+    /* 
+	 * Iterate through the local_id_positions map to find and quote local IDs in the expression_text
+	 * to remove possibility of multiple rewrites in a single context
+	 */
+    for (auto &entry : local_id_positions)
+    {
+        const std::string& local_id = entry.second;
+        std::string quoted_local_id = "\"" + local_id + "\"";
+
+        /* Replace all occurrences of the local_id in the expression_text with the quoted version */
+        size_t pos = 0;
+        while ((pos = expression_text.find(local_id, pos)) != std::string::npos)
+        {
+            expression_text.replace(pos, local_id.length(), quoted_local_id);
+            pos += quoted_local_id.length(); /* Move the position past the quoted local_id */
+        }
+
+		keysToRemove.insert(entry.first);
+    }
 }
 
 void process_execsql_destination(TSqlParser::Dml_statementContext *ctx, PLtsql_stmt_execsql *stmt)
