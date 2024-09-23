@@ -136,6 +136,7 @@ jobs:
           path: |
             test/JDBC/Info/output-diff.diff
             test/JDBC/Info/replication-output-diff.diff
+            test/JDBC/output/partition-replication.out
 
       - name: Check and upload coredumps
         if: always() && (steps.jdbc.outcome == 'failure' || steps.replication.outcome == 'failure')
