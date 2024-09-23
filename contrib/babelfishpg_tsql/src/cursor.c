@@ -1828,3 +1828,60 @@ pltsql_get_last_stmt_handle(PG_FUNCTION_ARGS)
 {
 	return current_cursor_prepared_handle;
 }
+
+/*
+ * reset_cached_cursor()
+ *      Cleans up all the stale cursor states and resets the cursor handles.
+ *      This function should be called when a connection is cancelled or terminated.
+ */
+void
+reset_cached_cursor()
+{
+    HASH_SEQ_STATUS hash_seq;
+    CursorHashEnt *hentry;
+
+    /* Iterate through the CursorHashTable and clean up each cursor */
+    hash_seq_init(&hash_seq, CursorHashTable);
+    while ((hentry = (CursorHashEnt *) hash_seq_search(&hash_seq)) != NULL)
+    {
+        /* Clean up the cursor data */
+        if (hentry && hentry->tupdesc)
+        {
+            FreeTupleDesc(hentry->tupdesc);
+            hentry->tupdesc = NULL;
+        }
+
+        if (hentry && hentry->fetch_buffer)
+        {
+            tuplestore_end(hentry->fetch_buffer);
+            hentry->fetch_buffer = NULL;
+        }
+
+        if (hentry && hentry->textptr_only_bitmap)
+        {
+            pfree(hentry->textptr_only_bitmap);
+            hentry->textptr_only_bitmap = NULL;
+        }
+    }
+
+    /* Terminate the sequential scan and destroy hash tables */
+    // hash_seq_term(&hash_seq);
+    hash_destroy(CursorHashTable);
+    hash_destroy(CursorPreparedHandleHashTable);
+
+	CursorHashTable = NULL;
+	CursorPreparedHandleHashTable = NULL;
+
+    /* Delete CursorHashtabContext */
+    // MemoryContextReset(CursorHashtabContext);
+
+    /* Re-create the cursor-related data structures */
+    pltsql_create_cursor_htab();
+
+    /* Reset cursor handles */
+    current_cursor_handle = CURSOR_HANDLE_INVALID;
+    current_cursor_prepared_handle = CURSOR_PREPARED_HANDLE_START;
+
+    /* Reset sp_cursor_params */
+    reset_sp_cursor_params();
+}
