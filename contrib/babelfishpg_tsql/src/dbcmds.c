@@ -825,6 +825,8 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 
 	PG_TRY();
 	{
+		Oid			db_owner_oid;
+		const char *db_owner_role;
 		Oid			roleid = GetSessionUserId();
 		const char *login = GetUserNameFromId(roleid, false);
 		bool		login_is_db_owner = 0 == strncmp(login, get_owner_of_db(dbname), NAMEDATALEN);
@@ -855,7 +857,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 
 		dbo_role = get_dbo_role_name(dbname);
 		/* Get a list of all the database's users */
-		db_users_list = get_authid_user_ext_db_users(dbname);
+		db_users_list = get_authid_user_ext_db_users(dbname, dbo_role, db_owner_oid);
 
 		parsetree_list = gen_dropdb_subcmds(dbname, db_users_list);
 

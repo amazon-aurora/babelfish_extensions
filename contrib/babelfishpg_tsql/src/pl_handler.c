@@ -3069,7 +3069,15 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								*/
 							stmt->options = list_concat(stmt->options,
 														user_options);
-							create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
+
+							/*
+							 * If the role is created internally as part of ALTER ROLE
+							 * db_owner ADD MEMBER ... statement, we should not add this to
+							 * our babelfish catalog. These roles are meant to be internal
+							 * and not be visible to customer from Babelfish endpoint.
+							 */
+							if (strcmp(queryString, "(ALTER ROLE ADD )") != 0)
+								create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
 						}
 
 					}
@@ -3305,6 +3313,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 					else if (isuser || isrole)
 					{
+<<<<<<< HEAD
 						char		*db_name = get_cur_db_name();
 						bool 		is_member_of_db_owner = false;
 						bool 		is_member_of_db_accessadmin = false;
@@ -3328,6 +3337,20 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (!is_member_of_db_owner && isrole)
 							is_member_of_db_securityadmin = has_privs_of_role(GetUserId(), db_securityadmin);
+=======
+						const char *dbo_name;
+						const char *db_owner_name;
+						char	   *db_name;
+						char	   *user_name;
+						char	   *cur_user;
+						Oid     	prev_current_user;
+
+						db_name = get_cur_db_name();
+						dbo_name = get_dbo_role_name(db_name);
+						db_owner_name = get_db_owner_name(db_name);
+						user_name = stmt->role->rolename;
+						cur_user = GetUserNameFromId(GetUserId(), false);
+>>>>>>> 098f86aa7 (Fix ALTER/DROP USER and add more tests)
 
 						/*
 						 * Check if the current user has privileges.
@@ -3338,6 +3361,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (strcmp(defel->defname, "default_schema") == 0)
 							{
+<<<<<<< HEAD
 								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin) ||
 									user_oid == GetUserId())
 								{
@@ -3348,6 +3372,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								}
 								else
 								{
+=======
+								if (strcmp(cur_user, dbo_name) != 0 &&
+									strcmp(cur_user, user_name) != 0 &&
+									!has_privs_of_role(GetUserId(),get_role_oid(db_owner_name, false)))
+>>>>>>> 098f86aa7 (Fix ALTER/DROP USER and add more tests)
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change schema")));
@@ -3355,6 +3384,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							}
 							else if (strcmp(defel->defname, "rename") == 0)
 							{
+<<<<<<< HEAD
 								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin &&
 									!has_privs_of_role(user_oid, db_owner)) ||
 									(isrole && is_member_of_db_securityadmin && !has_privs_of_role(user_oid, db_owner)))
@@ -3367,6 +3397,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								}
 								else
 								{
+=======
+								if (strcmp(cur_user, dbo_name) != 0 &&
+									strcmp(cur_user, user_name) != 0 &&
+									!has_privs_of_role(GetUserId(),get_role_oid(db_owner_name, false)))
+>>>>>>> 098f86aa7 (Fix ALTER/DROP USER and add more tests)
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change user name")));
@@ -3380,6 +3415,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (strcmp(defel->defname, "rolemembers") == 0)
 							{
+<<<<<<< HEAD
 								if (is_member_of_db_owner)
 								{
 									/*
@@ -3388,6 +3424,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								}
 								else
 								{
+=======
+								if (strcmp(cur_user, dbo_name) != 0 &&
+									strcmp(cur_user, user_name) != 0 &&
+									!has_privs_of_role(GetUserId(),get_role_oid(db_owner_name, false)))
+>>>>>>> 098f86aa7 (Fix ALTER/DROP USER and add more tests)
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change login")));
