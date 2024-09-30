@@ -41,6 +41,5 @@ runs:
         babel_user=jdbc_user \
         babel_password=12345678 \
         testName="all---TestUDD.txt;TestChar.txt;TestSqlVariant.txt;TestVarChar.txt;TestAuthentication.txt;TestText.txt" \
-        queryFolder=./../../../input/InsertBulk/ \
         dotnet test
     shell: bash
