@@ -921,6 +921,9 @@ CREATE OR REPLACE PROCEDURE sys.sp_tables (
 AS $$
 BEGIN
 
+	-- Temporary variable to hold the current database name
+	DECLARE @current_db_name sys.sysname;
+
 	-- Handle special case: Enumerate all databases when name and owner are blank but qualifier is '%'
 	IF (@table_qualifier = '%' AND @table_owner = '' AND @table_name = '')
 	BEGIN
@@ -935,7 +938,9 @@ BEGIN
 		RETURN;
 	END;
 
-	IF (@table_qualifier != '' AND LOWER(@table_qualifier) != LOWER(sys.db_name()))
+	SELECT @current_db_name = sys.db_name();
+
+	IF (@table_qualifier != '' AND LOWER(@table_qualifier) != LOWER(@current_db_name))
 	BEGIN
 		THROW 33557097, N'The database name component of the object qualifier must be the name of the current database.', 1;
 	END
@@ -2348,17 +2353,13 @@ CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NUL
 $$
 BEGIN
 	-- Returns a list of the fixed database roles. 
-	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = 'db_owner'
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin')
 	BEGIN
-		SELECT CAST('db_owner' AS sys.SYSNAME) AS DbFixedRole, CAST('DB Owners' AS sys.nvarchar(70)) AS Description;
-	END
-	ELSE IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = 'db_securityadmin'
-	BEGIN
-		SELECT CAST('db_securityadmin' AS sys.SYSNAME) AS DbFixedRole, CAST('DB Security Administrators' AS sys.nvarchar(70)) AS Description;
-	END
-	ELSE IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = 'db_accessadmin'
-	BEGIN
-		SELECT CAST('db_accessadmin' AS sys.SYSNAME) AS DbFixedRole, CAST('DB Access Administrators' AS sys.nvarchar(70)) AS Description;
+		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
+			VALUES ('db_owner', 'DB Owners'),
+			('db_accessadmin', 'DB Access Administrators'),
+			('db_securityadmin', 'DB Security Adiministrators')) x(DbFixedRole, Description)
+			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
 	END
 	ELSE IF LOWER(RTRIM(@rolename)) IN (
 			'db_ddladmin', 'db_backupoperator', 'db_datareader',

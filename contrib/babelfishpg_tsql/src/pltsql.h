@@ -1799,6 +1799,8 @@ typedef struct PLtsql_protocol_plugin
 
 	void		(*set_reset_tds_connection_flag) ();
 
+	bool		(*get_reset_tds_connection_flag) ();
+
 	/* Session level GUCs */
 	bool		quoted_identifier;
 	bool		arithabort;
@@ -1978,6 +1980,17 @@ extern int	insert_bulk_rows_per_batch;
 extern int	insert_bulk_kilobytes_per_batch;
 extern bool insert_bulk_keep_nulls;
 extern bool insert_bulk_check_constraints;
+
+
+/* BBF SUBCOMMANDS QUERY STRING */
+#define CREATE_LOGICAL_DATABASE "(CREATE LOGICAL DATABASE )"
+#define CREATE_GUEST_SCHEMAS_DURING_UPGRADE "(CREATE GUEST SCHEMAS DURING UPGRADE )"
+#define CREATE_FIXED_DB_ROLES "(CREATE FIXED DATABASE ROLES )"
+
+#define IS_BBF_BUILT_IN_DB(dbname) \
+    (strncmp(dbname, "master", 6) == 0 || \
+     strncmp(dbname, "tempdb", 6) == 0 || \
+     strncmp(dbname, "msdb", 4) == 0)
 
 /**********************************************************************
  * Function declarations

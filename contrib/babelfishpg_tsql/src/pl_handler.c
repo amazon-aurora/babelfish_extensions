@@ -2616,7 +2616,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_CreateRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0 &&
+				    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 				{
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
 					List	   *login_options = NIL;
@@ -3227,10 +3228,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						Oid 		db_owner = get_role_oid(get_db_owner_name(db_name), false);
 						Oid 		db_accessadmin = get_role_oid(get_db_accessadmin_role_name(db_name), false);
 						Oid			db_securityadmin = get_role_oid(get_db_securityadmin_role_name(db_name), false);
-						Oid 		user_name = get_role_oid(stmt->role->rolename, false);
+						Oid 		user_oid = get_role_oid(stmt->role->rolename, false);
 
 						/* db principal being altered should be a user or role in the current active logical database */
-						if (!((isuser && is_user(user_name, true)) || (isrole && is_role(user_name, true))))
+						if ((isuser && is_database_principal(user_oid, true) != BBF_USER) ||
+						    (isrole && is_database_principal(user_oid, true) != BBF_ROLE))
 							ereport(ERROR,
 									(errcode(ERRCODE_CHECK_VIOLATION),
 										errmsg("Cannot alter the %s '%s', because it does not exist or you do not have permission.", isuser ? "user" : "role", stmt->role->rolename)));
@@ -3253,7 +3255,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							if (strcmp(defel->defname, "default_schema") == 0)
 							{
 								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin) ||
-									user_name == GetUserId())
+									user_oid == GetUserId())
 								{
 									/*
 									 * members of db_owner can alter default schema for any role or user
@@ -3270,7 +3272,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							else if (strcmp(defel->defname, "rename") == 0)
 							{
 								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin &&
-									!has_privs_of_role(user_name, db_owner)) ||
+									!has_privs_of_role(user_oid, db_owner)) ||
 									(isrole && is_member_of_db_securityadmin && !has_privs_of_role(user_name, db_owner)))
 								{
 									/*
@@ -3398,8 +3400,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									int			rolename_len = strlen(rolspec->rolename);
 
 									if (!OidIsValid(role_oid) ||                        /* Not found */
-									    (drop_user && !is_user(role_oid, true)) ||      /* Found but not a user in current logical db */
-									    (drop_role && !is_role(role_oid, true)))        /* Found but not a role in current logical db */
+									    (drop_user && is_database_principal(role_oid, true) != BBF_USER) ||      /* Found but not a user in current logical db */
+									    (drop_role && is_database_principal(role_oid, true) != BBF_ROLE))        /* Found but not a role in current logical db */
 									{
 										if (stmt->missing_ok)
 										{
@@ -3535,9 +3537,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (is_login(roleform->oid))
 							all_logins = true;
-						else if (is_user(roleform->oid, false))
+						else if (is_database_principal(roleform->oid, false) == BBF_USER)
 							all_users = true;
-						else if (is_role(roleform->oid, false))
+						else if (is_database_principal(roleform->oid, false) == BBF_ROLE)
 							all_roles = true;
 						else
 							other = true;
@@ -3617,12 +3619,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					GrantStmt  *stmt;
 					PlannedStmt *wrapper;
 					RoleSpec *rolspec = create_schema->authrole;
-					Oid       owner_oid = InvalidOid;
-					Oid       db_accessadmin = get_role_oid(get_db_accessadmin_role_name(get_cur_db_name()), true);
-					Oid       db_securityadmin = get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), true);
+					Oid       owner_oid;
 					bool      alter_owner = false;
 
-					if (strcmp(queryString, "(CREATE LOGICAL DATABASE )") == 0
+					if (strcmp(queryString, CREATE_LOGICAL_DATABASE) == 0
 						&& context == PROCESS_UTILITY_SUBCOMMAND)
 					{
 						if (pstmt->stmt_len == 19)
@@ -3630,19 +3630,26 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						else
 							orig_schema = "dbo";
 					}
-					else
+					else if (strcmp(queryString, CREATE_GUEST_SCHEMAS_DURING_UPGRADE) == 0)
 					{
-						owner_oid = rolspec ? get_rolespec_oid(rolspec, true) : InvalidOid;
-						if (OidIsValid(owner_oid) && OidIsValid(db_accessadmin) && !member_can_set_role(GetUserId(), owner_oid) &&
+						orig_schema = "guest";
+					}
+					else if (rolspec && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
+					{
+						Oid       db_accessadmin = get_role_oid(get_db_accessadmin_role_name(get_cur_db_name()), false);
+						Oid       db_securityadmin = get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), false);
+
+						owner_oid = get_rolespec_oid(rolspec, true);
+						/*
+						* db_accessadmin members can create schema with owner being any db principal
+						* If it does not have the pg permission then handle it here. We will set owner
+						* to current user and later alter schema owner using bbf_role_admin
+						*/
+						if (!member_can_set_role(GetUserId(), owner_oid) &&
 							has_privs_of_role(GetUserId(), db_accessadmin) &&
 							OidIsValid(db_securityadmin) && has_privs_of_role(GetUserId(), db_securityadmin) &&
-							(is_user(owner_oid, true) || is_role(owner_oid, true)))
+							(is_database_principal(owner_oid, true)))
 						{
-							/*
-							* db_accessadmin members can create schema for other users as owner
-							* but it does not actually have the required permission from PG
-							* perspective to do so, hence handle it this way.
-							*/
 							create_schema->authrole = NULL;
 							alter_owner = true;
 						}
@@ -3706,7 +3713,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 
 					/* Grant ALL schema privileges to the user.*/
-					if (rolspec && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+					if (rolspec && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0)
 					{
 						int i;
 						for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
@@ -3788,7 +3795,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 			}
 		case T_GrantRoleStmt:
-			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0 &&
+			    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
 				Oid 	save_userid;
@@ -4116,7 +4124,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				Assert(list_length(grant->objects) == 1);
 				if (grant->objtype == OBJECT_SCHEMA)
 						break;
-				else if (grant->objtype == OBJECT_TABLE && strcmp("(CREATE LOGICAL DATABASE )", queryString) != 0)
+				else if (grant->objtype == OBJECT_TABLE && strcmp(CREATE_LOGICAL_DATABASE, queryString) != 0)
 				{
 					/*
 					 * Ignore GRANT statements that are executed implicitly as a part of
@@ -6472,6 +6480,7 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 				/** Add alter table add identity node after Select Into statement */
 				altstmt = makeNode(AlterTableStmt);
 				altstmt->relation = into->rel;
+				altstmt->objtype = OBJECT_TABLE;
 				altstmt->cmds = NIL;
 
 				constraint = makeNode(Constraint);
@@ -6533,12 +6542,10 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 }
 
 void pltsql_bbfSelectIntoUtility(ParseState *pstate, PlannedStmt *pstmt, const char *queryString, QueryEnvironment *queryEnv,
-								 ParamListInfo params, QueryCompletion *qc)
+								 ParamListInfo params, QueryCompletion *qc, ObjectAddress *address)
 {
 
 	Node *parsetree = pstmt->utilityStmt;
-	ObjectAddress address;
-	ObjectAddress secondaryObject = InvalidObjectAddress;
 	List *stmts;
 	stmts = transformSelectIntoStmt((CreateTableAsStmt *)parsetree);
 	while (stmts != NIL)
@@ -6547,8 +6554,7 @@ void pltsql_bbfSelectIntoUtility(ParseState *pstate, PlannedStmt *pstmt, const c
 		stmts = list_delete_first(stmts);
 		if (IsA(stmt, CreateTableAsStmt))
 		{
-			address = ExecCreateTableAs(pstate, (CreateTableAsStmt *)parsetree, params, queryEnv, qc);
-			EventTriggerCollectSimpleCommand(address, secondaryObject, stmt);
+			*address = ExecCreateTableAs(pstate, (CreateTableAsStmt *)parsetree, params, queryEnv, qc);
 		}
 		else
 		{

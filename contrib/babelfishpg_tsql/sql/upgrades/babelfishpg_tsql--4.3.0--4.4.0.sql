@@ -37,6 +37,38 @@ LANGUAGE plpgsql;
  * So make sure that any SQL statement (DDL/DML) being added here can be executed multiple times without affecting
  * final behaviour.
  */
+DO $$
+DECLARE
+    exception_message text;
+BEGIN
+    -- Rename bbf_pivot for dependencies
+    ALTER FUNCTION sys.bbf_pivot() RENAME TO bbf_pivot_deprecated_in_4_4_0;
+
+EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+    exception_message = MESSAGE_TEXT;
+    RAISE WARNING '%', exception_message;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION sys.bbf_pivot(IN src_sql TEXT, IN cat_sql TEXT, IN agg_func TEXT)
+RETURNS setof record
+AS 'babelfishpg_tsql', 'bbf_pivot'
+LANGUAGE C STABLE;
+
+DO $$
+DECLARE
+    exception_message text;
+BEGIN
+    -- DROP bbf_pivot_deprecated_in_4_4_0
+    CALL sys.babelfish_drop_deprecated_object('function', 'sys', 'bbf_pivot_deprecated_in_4_4_0');
+
+EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+    exception_message = MESSAGE_TEXT;
+    RAISE WARNING '%', exception_message;
+END;
+$$;
 
 
 CREATE OR REPLACE PROCEDURE sys.babel_create_database_roles()
@@ -1515,118 +1547,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
-CREATE OR REPLACE PROCEDURE sys.sp_helpuser("@name_in_db" sys.SYSNAME = NULL) AS
-$$
-BEGIN
-	-- If security account is not specified, return info about all users
-	IF @name_in_db IS NULL
-	BEGIN
-		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN 'db_owner' 
-					WHEN Ext2.orig_username IS NULL THEN 'public'
-					ELSE Ext2.orig_username END 
-					AS SYS.SYSNAME) AS 'RoleName',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN Base4.rolname COLLATE database_default
-					ELSE LogExt.orig_loginname END
-					AS SYS.SYSNAME) AS 'LoginName',
-			   CAST(LogExt.default_database_name AS SYS.SYSNAME) AS 'DefDBName',
-			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
-			   CAST(Base1.oid AS INT) AS 'UserID',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
-					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
-					ELSE CAST(Base3.oid AS INT) END
-					AS SYS.VARBINARY(85)) AS 'SID'
-		FROM sys.babelfish_authid_user_ext AS Ext1
-		INNER JOIN pg_catalog.pg_roles AS Base1 ON Base1.rolname = Ext1.rolname
-		LEFT OUTER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base1.oid = Authmbr.member
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base2 ON Base2.oid = Authmbr.roleid
-		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext2 ON Base2.rolname = Ext2.rolname
-		LEFT OUTER JOIN sys.babelfish_authid_login_ext As LogExt ON LogExt.rolname = Ext1.login_name
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base3 ON Base3.rolname = LogExt.rolname
-		LEFT OUTER JOIN sys.babelfish_sysdatabases AS Bsdb ON Bsdb.name = DB_NAME()
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
-		WHERE Ext1.database_name = DB_NAME()
-		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username != 'db_owner'
-		ORDER BY UserName, RoleName;
-	END
-	-- If the security account is the db fixed role - db_owner
-    ELSE IF @name_in_db = 'db_owner'
-	BEGIN
-		-- TODO: Need to change after we can add/drop members to/from db_owner
-		SELECT CAST('db_owner' AS SYS.SYSNAME) AS 'Role_name',
-			   ROLE_ID('db_owner') AS 'Role_id',
-			   CAST('dbo' AS SYS.SYSNAME) AS 'Users_in_role',
-			   USER_ID('dbo') AS 'Userid';
-	END
-	-- If the security account is a db role
-	ELSE IF EXISTS (SELECT 1
-					FROM sys.babelfish_authid_user_ext
-					WHERE (orig_username = @name_in_db
-					OR pg_catalog.lower(orig_username) = pg_catalog.lower(@name_in_db))
-					AND database_name = DB_NAME()
-					AND type = 'R')
-	BEGIN
-		SELECT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'Role_name',
-			   CAST(Base1.oid AS INT) AS 'Role_id',
-			   CAST(Ext2.orig_username AS SYS.SYSNAME) AS 'Users_in_role',
-			   CAST(Base2.oid AS INT) AS 'Userid'
-		FROM sys.babelfish_authid_user_ext AS Ext2
-		INNER JOIN pg_catalog.pg_roles AS Base2 ON Base2.rolname = Ext2.rolname
-		INNER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base2.oid = Authmbr.member
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base1 ON Base1.oid = Authmbr.roleid
-		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext1 ON Base1.rolname = Ext1.rolname
-		WHERE Ext1.database_name = DB_NAME()
-		AND Ext2.database_name = DB_NAME()
-		AND Ext1.type = 'R'
-		AND Ext2.orig_username != 'db_owner'
-		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
-		ORDER BY Role_name, Users_in_role;
-	END
-	-- If the security account is a user
-	ELSE IF EXISTS (SELECT 1
-					FROM sys.babelfish_authid_user_ext
-					WHERE (orig_username = @name_in_db
-					OR pg_catalog.lower(orig_username) = pg_catalog.lower(@name_in_db))
-					AND database_name = DB_NAME()
-					AND type != 'R')
-	BEGIN
-		SELECT DISTINCT CAST(Ext1.orig_username AS SYS.SYSNAME) AS 'UserName',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN 'db_owner' 
-					WHEN Ext2.orig_username IS NULL THEN 'public' 
-					ELSE Ext2.orig_username END 
-					AS SYS.SYSNAME) AS 'RoleName',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN Base4.rolname COLLATE database_default
-					ELSE LogExt.orig_loginname END
-					AS SYS.SYSNAME) AS 'LoginName',
-			   CAST(LogExt.default_database_name AS SYS.SYSNAME) AS 'DefDBName',
-			   CAST(Ext1.default_schema_name AS SYS.SYSNAME) AS 'DefSchemaName',
-			   CAST(Base1.oid AS INT) AS 'UserID',
-			   CAST(CASE WHEN Ext1.orig_username = 'dbo' THEN CAST(Base4.oid AS INT)
-					WHEN Ext1.orig_username = 'guest' THEN CAST(0 AS INT)
-					ELSE CAST(Base3.oid AS INT) END
-					AS SYS.VARBINARY(85)) AS 'SID'
-		FROM sys.babelfish_authid_user_ext AS Ext1
-		INNER JOIN pg_catalog.pg_roles AS Base1 ON Base1.rolname = Ext1.rolname
-		LEFT OUTER JOIN pg_catalog.pg_auth_members AS Authmbr ON Base1.oid = Authmbr.member
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base2 ON Base2.oid = Authmbr.roleid
-		LEFT OUTER JOIN sys.babelfish_authid_user_ext AS Ext2 ON Base2.rolname = Ext2.rolname
-		LEFT OUTER JOIN sys.babelfish_authid_login_ext As LogExt ON LogExt.rolname = Ext1.login_name
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base3 ON Base3.rolname = LogExt.rolname
-		LEFT OUTER JOIN sys.babelfish_sysdatabases AS Bsdb ON Bsdb.name = DB_NAME()
-		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
-		WHERE Ext1.database_name = DB_NAME()
-		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username != 'db_owner'
-		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
-		ORDER BY UserName, RoleName;
-	END
-	-- If the security account is not valid
-	ELSE 
-		RAISERROR ( 'The name supplied (%s) is not a user, role, or aliased login.', 16, 1, @name_in_db);
-END;
-$$
-LANGUAGE 'pltsql';
 
 create or replace view sys.types As
 with RECURSIVE type_code_list as
@@ -1841,6 +1761,9 @@ CREATE OR REPLACE PROCEDURE sys.sp_tables (
 AS $$
 BEGIN
 
+	-- Temporary variable to hold the current database name
+	DECLARE @current_db_name sys.sysname;
+
 	-- Handle special case: Enumerate all databases when name and owner are blank but qualifier is '%'
 	IF (@table_qualifier = '%' AND @table_owner = '' AND @table_name = '')
 	BEGIN
@@ -1855,7 +1778,9 @@ BEGIN
 		RETURN;
 	END;
 
-	IF (@table_qualifier != '' AND LOWER(@table_qualifier) != LOWER(sys.db_name()))
+	SELECT @current_db_name = sys.db_name();
+
+	IF (@table_qualifier != '' AND LOWER(@table_qualifier) != LOWER(@current_db_name))
 	BEGIN
 		THROW 33557097, N'The database name component of the object qualifier must be the name of the current database.', 1;
 	END
@@ -1978,6 +1903,7 @@ CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NUL
 $$
 BEGIN
 	-- Returns a list of the fixed database roles. 
+<<<<<<< HEAD
 	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = 'db_owner'
 	BEGIN
 		SELECT CAST('db_owner' AS sys.SYSNAME) AS DbFixedRole, CAST('DB Owners' AS sys.nvarchar(70)) AS Description;
@@ -1993,6 +1919,18 @@ BEGIN
 	ELSE IF LOWER(RTRIM(@rolename)) IN (
 			'db_ddladmin', 'db_backupoperator', 'db_datareader',
 			'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+=======
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin')
+	BEGIN
+		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
+			VALUES ('db_owner', 'DB Owners'),
+			('db_accessadmin', 'DB Access Administrators')) x(DbFixedRole, Description)
+			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
+	END
+	ELSE IF LOWER(RTRIM(@rolename)) IN (
+			'db_securityadmin','db_ddladmin', 'db_backupoperator', 
+			'db_datareader', 'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+>>>>>>> BABEL-5136
 	BEGIN
 		-- Return an empty result set instead of raising an error
 		SELECT CAST(NULL AS sys.SYSNAME) AS DbFixedRole, CAST(NULL AS sys.nvarchar(70)) AS Description
