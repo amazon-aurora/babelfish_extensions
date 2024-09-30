@@ -63,10 +63,9 @@ sub init_tsql {
 		die "cannot initialize babelfish, master database is empty";
 	}
 
-	if (!defined($migration_mode) or ($migration_mode eq ""))
-	{
-		$migration_mode = "single-db";
-	}
+	
+	$migration_mode = "multi-db" if (!defined($migration_mode) or ($migration_mode eq ""));
+	print "$migration_mode";
 
 	$self->{_tsql_master_role} = $role;
 	$self->{_tsql_master_db} = $testdb;
