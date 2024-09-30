@@ -4976,7 +4976,8 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 			if (SINGLE_DB == get_migration_mode() &&
 				((strlen(role) == 3 && strncmp(role, "dbo", 3) == 0) ||
 				(strlen(role) == 8 && strncmp(role, "db_owner", 8) == 0) ||
-				(strlen(role) == 14 && strncmp(role, DB_ACCESSADMIN, 14) == 0)))
+				(strlen(role) == 14 && strncmp(role, DB_ACCESSADMIN, 14) == 0) ||
+				(strlen(role) == 16 && strncmp(role, DB_SECURITYADMIN, 16) == 0)))
 				continue;
 
 			old_role_name = get_physical_user_name(old_db_name, role, true);
