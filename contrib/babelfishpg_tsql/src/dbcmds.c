@@ -326,7 +326,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 		char	   *user_name = (char *) lfirst(elem);
 
 		if (strcmp(user_name, db_owner) != 0 && strcmp(user_name, dbo) != 0 &&
-			strcmp(user_name, db_accessadmin) != 0)
+			strcmp(user_name, db_accessadmin) != 0 && strcmp(user_name, db_securityadmin) != 0)
 		{
 			stmt = parsetree_nth_stmt(stmt_list, i++);
 			update_DropOwnedStmt(stmt, list_make1(user_name));
@@ -337,7 +337,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	}
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropOwnedStmt(stmt, list_make3(pstrdup(db_securityadmin), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
+	update_DropOwnedStmt(stmt, list_make4(pstrdup(db_securityadmin), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_securityadmin, NULL);

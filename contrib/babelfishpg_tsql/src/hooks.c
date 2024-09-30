@@ -176,6 +176,7 @@ static bool pltsql_bbfCustomProcessUtility(ParseState *pstate,
 									  ParamListInfo params, QueryCompletion *qc);
 extern void pltsql_bbfSelectIntoUtility(ParseState *pstate, PlannedStmt *pstmt, const char *queryString, 
 					QueryEnvironment *queryEnv, ParamListInfo params, QueryCompletion *qc, ObjectAddress *address);
+static void handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid *grantorId);
 
 /*****************************************
  * 			Executor Hooks
@@ -283,6 +284,7 @@ static pltsql_strpos_non_determinstic_hook_type prev_pltsql_strpos_non_determins
 static pltsql_replace_non_determinstic_hook_type prev_pltsql_replace_non_determinstic_hook = NULL;
 static pltsql_is_partitioned_table_reloptions_allowed_hook_type prev_pltsql_is_partitioned_table_reloptions_allowed_hook = NULL;
 static ExecFuncProc_AclCheck_hook_type prev_ExecFuncProc_AclCheck_hook = NULL;
+static bbf_execute_grantstmt_as_dbsecadmin_hook_type prev_bbf_execute_grantstmt_as_dbsecadmin_hook = NULL;
 
 /*****************************************
  * 			Install / Uninstall
@@ -495,6 +497,9 @@ InstallExtendedHooks(void)
 
 	prev_ExecFuncProc_AclCheck_hook  = ExecFuncProc_AclCheck_hook;
 	ExecFuncProc_AclCheck_hook = pltsql_ExecFuncProc_AclCheck;
+
+	prev_bbf_execute_grantstmt_as_dbsecadmin_hook = bbf_execute_grantstmt_as_dbsecadmin_hook;
+	bbf_execute_grantstmt_as_dbsecadmin_hook = handle_grantstmt_for_dbsecadmin;
 	
 	pltsql_get_object_identity_event_trigger_hook = pltsql_get_object_identity_event_trigger;
 }
@@ -565,6 +570,7 @@ UninstallExtendedHooks(void)
 	pltsql_replace_non_determinstic_hook = prev_pltsql_replace_non_determinstic_hook;
 	pltsql_is_partitioned_table_reloptions_allowed_hook = prev_pltsql_is_partitioned_table_reloptions_allowed_hook;	
 	ExecFuncProc_AclCheck_hook = prev_ExecFuncProc_AclCheck_hook;
+	bbf_execute_grantstmt_as_dbsecadmin_hook = prev_bbf_execute_grantstmt_as_dbsecadmin_hook;
 
 	bbf_InitializeParallelDSM_hook = NULL;
 	bbf_ParallelWorkerMain_hook = NULL;
@@ -2639,24 +2645,24 @@ pltsql_report_proc_not_found_error(List *names, List *fargs, List *given_argname
 	{
 		const char *arg_str = (max_nargs < 2) ? "argument" : "arguments";
 
+		if (!proc_call)
+		{
+			/* deconstruct the names list */
+			DeconstructQualifiedName(names, &schemaname, &funcname);
+
+			/* 
+			 * Check whether function is an special function or not, and 
+			 * report appropriate error if applicable 
+			 */
+			validate_special_function(schemaname, funcname, fargs, nargs, input_typeids, found);
+		}
+		
 		/*
 		 * Found the proc/func having the same number of arguments. possibly
 		 * data-type mistmatch.
 		 */
 		if (found)
 		{
-			if (!proc_call)
-			{
-				/* deconstruct the names list */
-				DeconstructQualifiedName(names, &schemaname, &funcname);
-
-				/* 
-				 * Check whether function is an special function or not, and 
-				 * report appropriate error if applicable 
-				 */
-				validate_special_function(schemaname, funcname, fargs, nargs, input_typeids);
-			}
-
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_FUNCTION),
 					 errmsg("The %s %s is found but cannot be used. Possibly due to datatype mismatch and implicit casting is not allowed.", obj_type, NameListToString(names))),
@@ -5529,4 +5535,78 @@ pltsql_get_object_identity_event_trigger(ObjectAddress* address)
         identity = getObjectIdentity(address,true); 
     }
     return identity;
+}
+
+static void
+handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid *grantorId)
+{
+	ObjectAddress	address;
+	Oid				classid = InvalidOid;
+	Oid				schema_oid = InvalidOid;
+
+	if (!IS_TDS_CLIENT() || sql_dialect != SQL_DIALECT_TSQL)
+		return;
+
+	switch(objType)
+	{
+		case OBJECT_TABLE:
+		case OBJECT_SEQUENCE:
+			classid = RelationRelationId;
+			break;
+		case OBJECT_DOMAIN:
+		case OBJECT_TYPE:
+			classid = TypeRelationId;
+			break;
+		case OBJECT_FUNCTION:
+		case OBJECT_PROCEDURE:
+		case OBJECT_ROUTINE:
+			classid = ProcedureRelationId;
+			break;
+		case OBJECT_SCHEMA:
+			classid = NamespaceRelationId;
+			break;
+		default:
+			break;
+	}
+
+	if (!OidIsValid(classid))
+		return;
+
+	if (classid == NamespaceRelationId)
+	{
+		schema_oid = objId;
+	}
+	else
+	{
+		ObjectAddressSet(address, classid, objId);
+		schema_oid = get_object_namespace(&address);
+	}
+
+	if (OidIsValid(schema_oid))
+	{
+		char *nspname = get_namespace_name(schema_oid);
+		/*
+		* Check if function's schema is from a different logical database and
+		* it is not a shared schema. If yes, then set userid to session user
+		* to allow cross database access.
+		*/
+		if (nspname == NULL ||
+			is_shared_schema(nspname) ||
+			!is_schema_from_db(schema_oid, get_cur_db_id()))
+		{
+			if (nspname)
+				pfree(nspname);
+			return;
+		}
+		else
+		{
+			if (is_member_of_role(GetUserId(),
+								  get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), false)))
+			{
+				*grantorId = ownerId;
+				return;
+			}
+		}
+	}
+	return;
 }

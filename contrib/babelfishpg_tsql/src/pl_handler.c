@@ -3273,7 +3273,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin &&
 									!has_privs_of_role(user_oid, db_owner)) ||
-									(isrole && is_member_of_db_securityadmin && !has_privs_of_role(user_name, db_owner)))
+									(isrole && is_member_of_db_securityadmin && !has_privs_of_role(user_oid, db_owner)))
 								{
 									/*
 									 * members of db_owner can rename any role or user
