@@ -1068,7 +1068,7 @@ get_authid_user_ext_db_users(const char *db_name, const char *dbo_name, Oid db_o
 	ScanKeyData key;
 	TableScanDesc scan;
 	List	   *db_users_list = NIL;
-	Oid			dbo_oid = get_role_oid(dbo_name, false);
+	Oid		dbo_oid = get_role_oid(dbo_name, false);
 
 	if (!db_name)
 		return NULL;
@@ -1088,7 +1088,7 @@ get_authid_user_ext_db_users(const char *db_name, const char *dbo_name, Oid db_o
 	{
 		char	   *user_name;
 		Form_authid_user_ext userform;
-		Oid			user_oid;
+		Oid	    user_oid;
 
 		userform = (Form_authid_user_ext) GETSTRUCT(tuple);
 		user_name = pstrdup(NameStr(userform->rolname));
