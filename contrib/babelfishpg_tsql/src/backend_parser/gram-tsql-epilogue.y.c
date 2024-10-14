@@ -1779,6 +1779,7 @@ TsqlForJSONMakeFuncCall(TSQL_ForClause *forclause)
 	bool		include_null_values = false;
 	bool		without_array_wrapper = false;
 	char	   *root_name = NULL;
+	bool		escape = false;
 
 	/* Resolve the JSON common directive list if provided */
 	if (forclause->commonDirectives != NIL)
@@ -1819,6 +1820,20 @@ TsqlForJSONMakeFuncCall(TSQL_ForClause *forclause)
 				 errmsg("ROOT option and WITHOUT_ARRAY_WRAPPER option cannot be used together in FOR JSON. Remove one of these options")));
 	}
 
+	/* check if the new value argument for json_modify is
+	 * a json_modify or json_query function call. If it is one of these two arguments it
+	 * sets the escape parameter to true
+	 */
+
+	// if(IsA(newValue, FuncCall))
+	// {
+	// 	FuncCall* fc_newval = (FuncCall*) newValue;
+	// 	if(is_json_modify(fc_newval->funcname) || is_json_query(fc_newval->funcname))
+	// 	{
+	// 		escape = true;
+	// 	}
+	// }
+
 	/*
 	 * Make function call to tsql_select_for_json_agg
 	 */
@@ -1828,6 +1843,7 @@ TsqlForJSONMakeFuncCall(TSQL_ForClause *forclause)
 						   makeBoolAConst(include_null_values, -1),
 						   makeBoolAConst(without_array_wrapper, -1),
 						   root_name ? makeStringConst(root_name, -1) : makeNullAConst(-1));
+	func_args = lappend(func_args, makeBoolAConst(escape, -1));
 	fc = makeFuncCall(func_name, func_args, COERCE_EXPLICIT_CALL, -1);
 
 	/*

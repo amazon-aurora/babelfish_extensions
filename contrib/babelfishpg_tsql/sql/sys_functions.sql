@@ -115,7 +115,8 @@ CREATE OR REPLACE FUNCTION sys.tsql_query_to_json_sfunc(
     mode INT,
     include_null_values BOOLEAN,
     without_array_wrapper BOOLEAN,
-    root_name TEXT
+    root_name TEXT,
+    escape BOOLEAN
 ) RETURNS INTERNAL
 AS 'babelfishpg_tsql', 'tsql_query_to_json_sfunc'
 LANGUAGE C STABLE;
@@ -132,7 +133,8 @@ CREATE OR REPLACE AGGREGATE sys.tsql_select_for_json_agg(
     mode INT,
     include_null_values BOOLEAN,
     without_array_wrapper BOOLEAN,
-    root_name TEXT)
+    root_name TEXT,
+    escape BOOLEAN)
 (
     STYPE = INTERNAL,
     SFUNC = tsql_query_to_json_sfunc,
