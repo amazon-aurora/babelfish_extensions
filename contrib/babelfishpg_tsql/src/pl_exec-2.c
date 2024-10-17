@@ -3770,11 +3770,6 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 			rolname = pstrdup(PUBLIC_ROLE_NAME);
 		role_oid = get_role_oid(rolname, true);
 
-		/* Special database roles should throw an error. */
-		if (strcmp(grantee_name, "db_owner") == 0)
-			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				errmsg("Cannot grant, deny or revoke permissions to or from special roles.")));
-
 		if (!is_public && !OidIsValid(role_oid))
 		{
 			/* sys or information_schema roles should throw an error. */
@@ -3792,6 +3787,11 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 			ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("Cannot grant, deny, or revoke permissions to sa, dbo, entity owner, information_schema, sys, or yourself.")));
+
+		/* Special database roles should throw an error. */
+		if (IS_FIXED_DB_PRINCIPAL(grantee_name))
+			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				errmsg("Cannot grant, deny or revoke permissions to or from special roles.")));
 
 		/*
 		 * If the login is not the db owner or the login is not the member of
