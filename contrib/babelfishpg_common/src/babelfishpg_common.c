@@ -169,6 +169,7 @@ get_common_utility_plugin(void)
 		common_utility_plugin_var.convertIntToSQLVariantByteA = &convertIntToSQLVariantByteA;
 		common_utility_plugin_var.tsql_varchar_input = &tsql_varchar_input;
 		common_utility_plugin_var.tsql_bpchar_input = &tsql_bpchar_input;
+		common_utility_plugin_var.is_tsql_sysname_datatype = &is_tsql_sysname_datatype;
 		common_utility_plugin_var.is_tsql_bpchar_datatype = &is_tsql_bpchar_datatype;
 		common_utility_plugin_var.is_tsql_nchar_datatype = &is_tsql_nchar_datatype;
 		common_utility_plugin_var.is_tsql_varchar_datatype = &is_tsql_varchar_datatype;
@@ -191,7 +192,9 @@ get_common_utility_plugin(void)
 		common_utility_plugin_var.is_tsql_rowversion_or_timestamp_datatype = &is_tsql_rowversion_or_timestamp_datatype;
 		common_utility_plugin_var.datetime_in_str = &datetime_in_str;
 		common_utility_plugin_var.datetime2sqlvariant = &datetime2sqlvariant;
-		common_utility_plugin_var.timestamp_datetimeoffset = &timestamp_datetimeoffset;
+		common_utility_plugin_var.timestamptz_datetimeoffset = &timestamptz_datetimeoffset;
+		common_utility_plugin_var.timestamptz_datetime2 = &timestamptz_datetime2;
+		common_utility_plugin_var.timestamptz_datetime = &timestamptz_datetime;
 		common_utility_plugin_var.datetimeoffset_timestamp = &datetimeoffset_timestamp;
 		common_utility_plugin_var.tinyint2sqlvariant = &tinyint2sqlvariant;
 		common_utility_plugin_var.translate_pg_type_to_tsql = &translate_pg_type_to_tsql;

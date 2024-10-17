@@ -4622,7 +4622,6 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 	CmdType		cmd = CMD_UNKNOWN;
 	bool		enable_txn_in_triggers = !pltsql_disable_txn_in_triggers;
 	StringInfoData query;
-	Oid			current_user_id = GetUserId();
 	bool		need_path_reset = false;
 	char	   *cur_dbname = get_cur_db_name();
 	bool		reset_session_properties = false;
@@ -4634,37 +4633,21 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 						  (estate->func->fn_is_trigger == PLTSQL_NOT_TRIGGER) &&
 						  (strcmp(estate->func->fn_signature, "inline_code_block") != 0);
 
-	if (stmt->original_query)
-		original_query_string = stmt->original_query;
+	original_query_string = stmt->original_query ? stmt->original_query : NULL;
 
 	if (stmt->is_cross_db)
 	{
-		char	   *login = GetUserNameFromId(GetSessionUserId(), false);
-		char	   *user = get_user_for_database(stmt->db_name);
-
 		if (stmt->insert_exec)
 		{
 			estate->db_name = stmt->db_name;
 		}
-
-		if (user)
-			SetCurrentRoleId(GetSessionUserId(), false);
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_DATABASE),
-					 errmsg("The server principal \"%s\" is not able to access "
-							"the database \"%s\" under the current security context",
-							login, stmt->db_name)));
 
 		/*
 		 * When there is cross db reference to sys or information_schema
 		 * schemas, Change the session property.
 		 */
 		if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
-		{
 			set_session_properties(stmt->db_name);
-			SetCurrentRoleId(GetSessionUserId(), false);
-		}
 	}
 	if (stmt->is_dml || stmt->is_ddl || stmt->is_create_view)
 	{
@@ -4684,17 +4667,14 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		{
 			int			ret = exec_stmt_insert_execute_select(estate, expr);
 
-			if (stmt->is_cross_db)
-			{
-				if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
-					set_session_properties(cur_dbname);
-
-				SetCurrentRoleId(current_user_id, false);
-			}
 			if (reset_session_properties)
 			{
 				set_session_properties(cur_dbname);
-				SetCurrentRoleId(current_user_id, false);
+			}
+			else if (stmt->is_cross_db)
+			{
+				if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
+					set_session_properties(cur_dbname);
 			}
 			return ret;
 		}
@@ -5089,8 +5069,10 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 				restore_session_properties();
 		}
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
+		original_query_string = NULL;
+
 		if (need_path_reset)
 			(void) set_config_option("search_path", old_search_path,
 									 PGC_USERSET, PGC_S_SESSION,
@@ -5098,33 +5080,16 @@ exec_stmt_execsql(PLtsql_execstate *estate,
 		if (reset_session_properties)
 		{
 			set_session_properties(cur_dbname);
-			SetCurrentRoleId(current_user_id, false);
 		}
-		if (stmt->is_cross_db)
+		else if (stmt->is_cross_db)
 		{
 			if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
 				set_session_properties(cur_dbname);
-			SetCurrentRoleId(current_user_id, false);
 		}
-		PG_RE_THROW();
+
+		pfree(cur_dbname);
 	}
 	PG_END_TRY();
-
-	if (need_path_reset)
-		(void) set_config_option("search_path", old_search_path,
-								 PGC_USERSET, PGC_S_SESSION,
-								 GUC_ACTION_SAVE, true, 0, false);
-	if (reset_session_properties)
-	{
-		set_session_properties(cur_dbname);
-		SetCurrentRoleId(current_user_id, false);
-	}
-	if (stmt->is_cross_db)
-	{
-		if (stmt->schema_name != NULL && (strcmp(stmt->schema_name, "sys") == 0 || strcmp(stmt->schema_name, "information_schema") == 0))
-			set_session_properties(cur_dbname);
-		SetCurrentRoleId(current_user_id, false);
-	}
 
 	return PLTSQL_RC_OK;
 }
@@ -10250,7 +10215,7 @@ reset_search_path(PLtsql_stmt_execsql *stmt, char **old_search_path, bool *reset
 	char	   *cur_dbname = get_cur_db_name();
 	char	   *new_search_path;
 	char	   *physical_schema;
-	const char *dbo_schema;
+	char	   *dbo_schema = NULL;
 
 	top_es_entry = exec_state_call_stack->next;
 
@@ -10314,7 +10279,10 @@ reset_search_path(PLtsql_stmt_execsql *stmt, char **old_search_path, bool *reset
 				(void) set_config_option("search_path", new_search_path,
 										 PGC_USERSET, PGC_S_SESSION,
 										 GUC_ACTION_SAVE, true, 0, false);
+										 
 				pfree(new_search_path);
+				pfree(dbo_schema);
+					
 				return true;
 			}
 			else if (top_es_entry->estate->db_name != NULL && stmt->is_ddl)
@@ -10366,6 +10334,8 @@ reset_search_path(PLtsql_stmt_execsql *stmt, char **old_search_path, bool *reset
 											 PGC_USERSET, PGC_S_SESSION,
 											 GUC_ACTION_SAVE, true, 0, false);
 					pfree(new_search_path);
+					pfree(dbo_schema);
+					
 					return true;
 				}
 			}
@@ -10397,10 +10367,13 @@ reset_search_path(PLtsql_stmt_execsql *stmt, char **old_search_path, bool *reset
 								 PGC_USERSET, PGC_S_SESSION,
 								 GUC_ACTION_SAVE, true, 0, false);
 		pfree(new_search_path);
+		pfree(dbo_schema);
+			
 		return true;
 	}
 	
 	pfree(cur_dbname);
+	
 	return false;
 }
 

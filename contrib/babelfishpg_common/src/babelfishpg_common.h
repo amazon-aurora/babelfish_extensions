@@ -41,6 +41,7 @@ typedef struct common_utility_plugin
 	bytea	   *(*convertIntToSQLVariantByteA) (int ret);
 	void	   *(*tsql_varchar_input) (const char *s, size_t len, int32 atttypmod);
 	void	   *(*tsql_bpchar_input) (const char *s, size_t len, int32 atttypmod);
+	bool		(*is_tsql_sysname_datatype) (Oid oid);
 	bool		(*is_tsql_bpchar_datatype) (Oid oid);
 	bool		(*is_tsql_nchar_datatype) (Oid oid);
 	bool		(*is_tsql_varchar_datatype) (Oid oid);
@@ -63,7 +64,9 @@ typedef struct common_utility_plugin
 	bool		(*is_tsql_rowversion_or_timestamp_datatype) (Oid oid);
 	Datum		(*datetime_in_str) (char *str, Node *escontext);
 	Datum		(*datetime2sqlvariant) (PG_FUNCTION_ARGS);
-	Datum		(*timestamp_datetimeoffset) (PG_FUNCTION_ARGS);
+	Datum		(*timestamptz_datetimeoffset) (PG_FUNCTION_ARGS);
+	Datum		(*timestamptz_datetime2) (PG_FUNCTION_ARGS);
+	Datum		(*timestamptz_datetime) (PG_FUNCTION_ARGS);
 	Datum		(*datetimeoffset_timestamp) (PG_FUNCTION_ARGS);
 	Datum		(*tinyint2sqlvariant) (PG_FUNCTION_ARGS);
 	Datum		(*translate_pg_type_to_tsql) (PG_FUNCTION_ARGS);

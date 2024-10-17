@@ -286,9 +286,7 @@ BEGIN
 	END IF;
 
 	EXECUTE format('CREATE ROLE securityadmin CREATEROLE INHERIT PASSWORD NULL');
-	EXECUTE format('GRANT CONNECT ON DATABASE %s TO securityadmin WITH GRANT OPTION', CURRENT_DATABASE());
 	EXECUTE format('CREATE ROLE dbcreator CREATEDB INHERIT PASSWORD NULL');
-	EXECUTE format('GRANT CONNECT ON DATABASE %s TO dbcreator WITH GRANT OPTION', CURRENT_DATABASE());
 	EXECUTE format('CREATE ROLE bbf_role_admin CREATEDB CREATEROLE INHERIT PASSWORD NULL');
 	EXECUTE format('GRANT CREATE ON DATABASE %s TO bbf_role_admin WITH GRANT OPTION', CURRENT_DATABASE());
 	EXECUTE format('GRANT %I to bbf_role_admin WITH ADMIN TRUE;', sa_name);
@@ -377,8 +375,8 @@ CAST(CASE WHEN Ext.type = 'R' THEN NULL ELSE Ext.credential_id END AS INT) AS cr
 CAST(CASE WHEN Ext.type = 'R' THEN 1 ELSE Ext.owning_principal_id END AS INT) AS owning_principal_id,
 CAST(CASE WHEN Ext.type = 'R' THEN 1 ELSE Ext.is_fixed_role END AS sys.BIT) AS is_fixed_role
 FROM pg_catalog.pg_roles AS Base INNER JOIN sys.babelfish_authid_login_ext AS Ext ON Base.rolname = Ext.rolname
-WHERE (bbf_is_member_of_role_nosuper(suser_id(), suser_id('sysadmin')) 
-  OR bbf_is_member_of_role_nosuper(suser_id(), suser_id('securityadmin'))
+WHERE (pg_has_role(suser_id(), 'sysadmin'::TEXT, 'MEMBER') 
+  OR pg_has_role(suser_id(), 'securityadmin'::TEXT, 'MEMBER')
   OR Ext.orig_loginname = suser_name()
   OR Ext.orig_loginname = (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = CURRENT_DATABASE()) COLLATE sys.database_default
   OR Ext.type = 'R')
@@ -515,10 +513,7 @@ CAST('SERVER ROLE' AS sys.nvarchar(128)) AS type,
 CAST ('GRANT OR DENY' as sys.nvarchar(128)) as usage
 FROM pg_catalog.pg_roles AS Base INNER JOIN sys.babelfish_authid_login_ext AS Ext ON Base.rolname = Ext.rolname
 WHERE Ext.type = 'R'
-AND Ext.orig_loginname = 'sysadmin'
-AND bbf_is_member_of_role_nosuper(sys.suser_id(), sys.suser_id('sysadmin'))
-OR Ext.orig_loginname = 'securityadmin'
-AND bbf_is_member_of_role_nosuper(sys.suser_id(), sys.suser_id('securityadmin'));
+AND bbf_is_member_of_role_nosuper(sys.suser_id(), Base.oid);
 
 GRANT SELECT ON sys.login_token TO PUBLIC;
 
