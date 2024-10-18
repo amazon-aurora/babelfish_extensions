@@ -553,6 +553,7 @@ replicate-before-15_8-or-16_4
 space
 binary-datatype-operators
 cast-varchar-to-time
+db_accessadmin
 xml_exist-before-16_5
 GRANT_SCHEMA-before-15_9-16_5
 BABEL-CASE_EXPR-before-16_5-or-15_9
