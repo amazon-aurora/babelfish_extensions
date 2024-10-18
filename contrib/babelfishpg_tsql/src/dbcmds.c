@@ -452,7 +452,6 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 {
 	int16       old_dbid;
 	char        *old_dbname;
-	Oid         datdba;
 	Datum       *new_record;
 	bool        *new_record_nulls;
 	Relation    sysdatabase_rel;
@@ -529,10 +528,6 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 	}
 	PG_END_TRY();
-
-	/* dbowner is always sysadmin */
-	datdba = get_role_oid("sysadmin", false);
-	check_can_set_role(GetSessionUserId(), datdba);
 
 	/* For simplicity, do not allow bbf db name clides with pg dbnames */
 	/* TODO: add another check in orignal createdb */

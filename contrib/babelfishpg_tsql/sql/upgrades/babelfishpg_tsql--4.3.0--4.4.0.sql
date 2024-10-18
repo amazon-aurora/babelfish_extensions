@@ -73,17 +73,22 @@ $$;
 DO
 LANGUAGE plpgsql
 $$
-DECLARE securityadmin TEXT;
+DECLARE
+    existing_server_roles TEXT;
 BEGIN
     IF EXISTS (
-               SELECT FROM pg_catalog.pg_roles
-               WHERE  rolname = 'securityadmin') 
+               SELECT STRING_AGG(rolname::text, ', ')
+               INTO existing_server_roles FROM pg_catalog.pg_roles
+               WHERE rolname IN ('securityadmin', 'dbcreator'); )
         THEN
-            RAISE EXCEPTION 'Role "securityadmin" already exists.';
+            RAISE EXCEPTION 'The following role(s) already exist(s): %', existing_server_roles;
     ELSE
         EXECUTE format('CREATE ROLE securityadmin CREATEROLE INHERIT PASSWORD NULL');
         EXECUTE format('GRANT securityadmin TO bbf_role_admin WITH ADMIN TRUE');
         CALL sys.babel_initialize_logins('securityadmin');
+        EXECUTE format('CREATE ROLE dbcreator CREATEDB INHERIT PASSWORD NULL');
+        EXECUTE format('GRANT dbcreator TO bbf_role_admin WITH ADMIN TRUE');
+        CALL sys.babel_initialize_logins('dbcreator');
     END IF;
 END;
 $$;
@@ -165,25 +170,6 @@ WHERE Ext.type = 'R'
 AND bbf_is_member_of_role_nosuper(sys.suser_id(), Base.oid);
 
 GRANT SELECT ON sys.login_token TO PUBLIC;
-
-DO
-LANGUAGE plpgsql
-$$
-DECLARE dbcreator TEXT;
-BEGIN
-    IF EXISTS (
-               SELECT FROM pg_catalog.pg_roles
-               WHERE  rolname = 'dbcreator') 
-        THEN
-            RAISE EXCEPTION 'Role "dbcreator" already exists.';
-    ELSE
-        EXECUTE format('CREATE ROLE dbcreator CREATEDB INHERIT PASSWORD NULL');
-        EXECUTE format('GRANT CONNECT ON DATABASE %s TO dbcreator WITH GRANT OPTION', CURRENT_DATABASE());
-        EXECUTE format('GRANT dbcreator TO bbf_role_admin WITH ADMIN TRUE');
-        CALL sys.babel_initialize_logins('dbcreator');
-    END IF;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION is_srvrolemember(role sys.SYSNAME, login sys.SYSNAME DEFAULT suser_name())
 RETURNS INTEGER AS

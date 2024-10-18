@@ -363,7 +363,7 @@ CREATE FUNCTION perm_denied_func1() RETURNS TABLE AS RETURN ( SELECT 1 AS Value)
 go
 
 -- DMLS on object permission denied
-Alter user dbcreator_l2 with DEFAULT_SCHEMA=dbcreator_scm1
+Alter user no_dbcreator_user1 with DEFAULT_SCHEMA=dbcreator_scm1
 go
 
 Alter role dbcreator_rol add member no_dbcreator_user1

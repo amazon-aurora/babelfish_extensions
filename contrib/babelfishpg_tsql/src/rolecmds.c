@@ -1062,7 +1062,8 @@ drop_all_logins(PG_FUNCTION_ARGS)
 		 * Remove SA from authid_login_ext now but do not add it to the list
 		 * because we don't want to remove the corresponding PG role.
 		 */
-		if (role_is_sa(get_role_oid(rolname, false)) || (strcmp(rolname, "sysadmin") == 0) || (strcmp(rolname, "bbf_role_admin") == 0))
+		if (role_is_sa(get_role_oid(rolname, false)) || (strcmp(rolname, "bbf_role_admin") == 0)
+									|| IS_BBF_FIXED_SERVER_ROLE(rolname))
 			CatalogTupleDelete(bbf_authid_login_ext_rel, &tuple->t_self);
 		else
 			rolname_list = lcons(rolname, rolname_list);
@@ -1696,8 +1697,7 @@ is_alter_server_stmt(GrantRoleStmt *stmt)
 		RoleSpec   *spec = (RoleSpec *) linitial(stmt->granted_roles);
 
 		/* only supported server roles */
-		if (IS_ROLENAME_SYSADMIN(spec->rolename) || IS_ROLENAME_SECURITYADMIN(spec->rolename)
-			|| IS_ROLENAME_DBCREATOR(spec->rolename))
+		if (IS_BBF_FIXED_SERVER_ROLE(spec->rolename))
 			return true;
 	}
 

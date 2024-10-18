@@ -177,6 +177,8 @@ static void bbf_ExecDropStmt(DropStmt *stmt);
 
 static int isolation_to_int(char *isolation_level);
 static void bbf_set_tran_isolation(char *new_isolation_level_str);
+static void gen_command_grant_revoke_priv_to_role(StringInfo query, const char *rolename,
+							bool is_grant, Oid login_oid);
 
 typedef struct {
 	int oid;
@@ -3601,8 +3603,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						int			role_oid = get_role_oid(role_name, true);
 
 						if (!OidIsValid(role_oid) || role_oid == get_bbf_role_admin_oid()
-							|| role_oid == securityadmin_oid || role_oid == get_sysadmin_oid()
-							|| role_oid == get_dbcreator_oid())
+							|| IS_BBF_FIXED_SERVER_ROLE(role_name))
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3805,51 +3806,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					grantee_oid = get_role_oid(spec->rolename, false);
 					initStringInfo(&query);
 					
-					/* If sysadmin, provide attribute for role and database priv */
-					if (IS_ROLENAME_SYSADMIN(rolspec->rolename))
-					{
-						if (grant_role->is_grant)
-							appendStringInfo(&query, "ALTER ROLE dummy WITH createrole createdb; ");
-						
-						/* If grantee role is member of securityadmin then only revoke createdb */
-						else if (has_privs_of_role(grantee_oid, get_securityadmin_oid()))
-							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreatedb; ");
-						
-						/* If grantee role is member of dbcreator then only revoke createrole */
-						else if (has_privs_of_role(grantee_oid, get_dbcreator_oid()))
-							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole; ");
-						else 
-							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
-					}
-
-					/* If securityadmin, provide attribute for role priv */
-					else if (IS_ROLENAME_SECURITYADMIN(rolspec->rolename))
-					{
-						if (grant_role->is_grant)
-							appendStringInfo(&query, "ALTER ROLE dummy WITH createrole; ");
-						
-						/* If grantee role is member of sysadmin then don't revoke createrole */
-						else if (!has_privs_of_role(grantee_oid, get_sysadmin_oid()))
-							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole; ");
-					}
-
-					/* Otherwise if dbcreator, provide attribute for role priv */
-					else if (IS_ROLENAME_DBCREATOR(rolspec->rolename))
-					{
-						if (grant_role->is_grant)
-							appendStringInfo(&query, "ALTER ROLE dummy WITH createdb; ");
-						
-						/* If grantee role is member of sysadmin then don't revoke createdb */
-						else if (!has_privs_of_role(grantee_oid, get_sysadmin_oid()))
-							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreatedb; ");
-					}
-					/* Otherwise, throw error */
-					else
-					{
-						ereport(ERROR,
-							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("\"%s\" is not a supported fixed server role.", rolspec->rolename)));
-					}
+					gen_command_grant_revoke_priv_to_role(&query, rolspec->rolename, grant_role->is_grant, grantee_oid);
 					
 					/*
 					 * Set to bbf_role_admin to grant the role
@@ -6857,4 +6814,79 @@ bbf_set_tran_isolation(char *new_isolation_level_str)
 		}
 	}
 	return ;
+}
+
+/* 
+ * Generate command to grant/revoke required 
+ * privileges to/from the login on the basis of
+ * that login's privilege.
+ */
+static void 
+gen_command_grant_revoke_priv_to_role(StringInfo query, const char *rolename,
+							bool is_grant, Oid login_oid)
+{
+	int createrole = 0, createdb = 0;
+
+	if (has_privs_of_role(login_oid, get_sysadmin_oid()))
+	{
+		createrole++;
+		createdb++;
+	}
+
+	/* If sysadmin, provide attribute for role and database priv */
+	if (IS_ROLENAME_SYSADMIN(rolename))
+	{
+		if (is_grant)
+			appendStringInfo(query, "ALTER ROLE dummy WITH createrole createdb; ");
+		else
+		{
+			if (has_privs_of_role(login_oid, get_securityadmin_oid()))
+				createrole++;
+			if (has_privs_of_role(login_oid, get_dbcreator_oid()))
+				createdb++;
+
+			if (has_privs_of_role(login_oid, get_sysadmin_oid()))
+			{
+				if (createrole == 1 && createdb == 1)
+					appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
+				
+				/* If grantee role is member of securityadmin also then only revoke createdb */
+				else if (createdb == 1)
+					appendStringInfo(query, "ALTER ROLE dummy WITH nocreatedb; ");
+				
+				/* If grantee role is member of dbcreator also then only revoke createrole */
+				else if (createrole == 1)
+					appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole; ");
+			}
+		}
+	}
+
+	/* If securityadmin, provide attribute for role priv */
+	else if (IS_ROLENAME_SECURITYADMIN(rolename))
+	{
+		if (is_grant)
+			appendStringInfo(query, "ALTER ROLE dummy WITH createrole; ");
+		
+		/* If grantee role is member of sysadmin then don't revoke createrole */
+		else if (has_privs_of_role(login_oid, get_securityadmin_oid()) && !createrole)
+			appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole; ");
+	}
+
+	/* Otherwise if dbcreator, provide attribute for role priv */
+	else if (IS_ROLENAME_DBCREATOR(rolename))
+	{
+		if (is_grant)
+			appendStringInfo(query, "ALTER ROLE dummy WITH createdb; ");
+		
+		/* If grantee role is member of sysadmin then don't revoke createdb */
+		else if (has_privs_of_role(login_oid, get_dbcreator_oid()) && !createdb)
+			appendStringInfo(query, "ALTER ROLE dummy WITH nocreatedb; ");
+	}
+	/* Otherwise, throw error */
+	else
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			errmsg("\"%s\" is not a supported fixed server role.", rolename)));
+	}
 }

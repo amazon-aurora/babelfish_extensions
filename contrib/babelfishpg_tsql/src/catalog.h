@@ -340,6 +340,11 @@ typedef FormData_bbf_function_ext *Form_bbf_function_ext;
 	(strlen(rolname) == 9 && \
 	strncmp(rolname, BABELFISH_DBCREATOR, 9) == 0)
 
+#define IS_BBF_FIXED_SERVER_ROLE(rolename) \
+	(IS_ROLENAME_SYSADMIN(rolename) || \
+	IS_ROLENAME_SECURITYADMIN(rolename) || \
+	IS_ROLENAME_DBCREATOR(rolename))
+
 extern int permissions[];
 
 extern Oid bbf_schema_perms_oid;
