@@ -70,6 +70,15 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+
+CREATE OR REPLACE PROCEDURE sys.create_db_roles_during_upgrade()
+LANGUAGE C
+AS 'babelfishpg_tsql', 'create_db_roles_during_upgrade';
+
+CALL sys.create_db_roles_during_upgrade();
+
+DROP PROCEDURE sys.create_db_roles_during_upgrade();
+
 DO
 LANGUAGE plpgsql
 $$
@@ -1252,7 +1261,9 @@ BEGIN
         END IF;
     ELSIF EXISTS (SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE orig_username = role COLLATE sys.database_default)
     THEN
-        IF EXISTS (SELECT name FROM sys.user_token WHERE name = role COLLATE sys.database_default)
+        IF (((SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE rolname = CURRENT_USER) = 'dbo' COLLATE sys.database_default) AND role COLLATE sys.database_default IN ('db_owner', 'db_accessadmin'))
+        THEN RETURN 1;
+        ELSIF EXISTS (SELECT name FROM sys.user_token WHERE name = role COLLATE sys.database_default)
         THEN RETURN 1; -- Return 1 if current session user is a member of role or windows group
         ELSIF (is_windows_grp)
         THEN RETURN NULL; -- Return NULL if session is not a windows auth session but argument is a windows group

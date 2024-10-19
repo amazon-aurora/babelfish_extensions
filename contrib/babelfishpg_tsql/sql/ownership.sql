@@ -259,9 +259,10 @@ CREATE OR REPLACE PROCEDURE initialize_babelfish ( sa_name VARCHAR(128) )
 LANGUAGE plpgsql
 AS $$
 DECLARE
-	reserved_roles varchar[] := ARRAY['sysadmin', 'securityadmin', 'master_dbo', 'master_guest', 'master_db_owner', 'master_db_accessadmin', 'master_db_securityadmin',
-                                                'tempdb_dbo', 'tempdb_guest', 'tempdb_db_owner',  'tempdb_db_accessadmin', 'tempdb_db_securityadmin',
-                                                'msdb_dbo', 'msdb_guest', 'msdb_db_owner', 'msdb_db_accessadmin', 'msdb_db_securityadmin'];
+	reserved_roles varchar[] := ARRAY['sysadmin', 'securityadmin',
+									'master_dbo', 'master_guest', 'master_db_owner', 'master_db_accessadmin', 'master_db_securityadmin',
+                                	'tempdb_dbo', 'tempdb_guest', 'tempdb_db_owner',  'tempdb_db_accessadmin', 'tempdb_db_securityadmin',
+                                	'msdb_dbo', 'msdb_guest', 'msdb_db_owner', 'msdb_db_accessadmin', 'msdb_db_securityadmin'];
 	user_id  oid := -1;
 	db_name  name := NULL;
 	role_name varchar;

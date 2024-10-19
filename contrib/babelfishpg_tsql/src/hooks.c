@@ -176,7 +176,7 @@ static bool pltsql_bbfCustomProcessUtility(ParseState *pstate,
 									  ParamListInfo params, QueryCompletion *qc);
 extern void pltsql_bbfSelectIntoUtility(ParseState *pstate, PlannedStmt *pstmt, const char *queryString, 
 					QueryEnvironment *queryEnv, ParamListInfo params, QueryCompletion *qc, ObjectAddress *address);
-static void handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid *grantorId);
+static void handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclMode privileges, Oid *grantorId, AclMode *grantOptions);
 
 /*****************************************
  * 			Executor Hooks
@@ -5541,7 +5541,7 @@ pltsql_get_object_identity_event_trigger(ObjectAddress* address)
 }
 
 static void
-handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid *grantorId)
+handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclMode privileges, Oid *grantorId, AclMode *grantOptions)
 {
 	ObjectAddress	address;
 	Oid				classid = InvalidOid;
@@ -5554,6 +5554,7 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid 
 	{
 		case OBJECT_TABLE:
 		case OBJECT_SEQUENCE:
+		case OBJECT_COLUMN:
 			classid = RelationRelationId;
 			break;
 		case OBJECT_DOMAIN:
@@ -5607,6 +5608,7 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, Oid 
 								  get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), false)))
 			{
 				*grantorId = ownerId;
+				*grantOptions = ACL_GRANT_OPTION_FOR(privileges);
 				return;
 			}
 		}
