@@ -1991,6 +1991,8 @@ extern bool insert_bulk_check_constraints;
 #define DBO "dbo"
 #define DB_OWNER "db_owner"
 #define DB_ACCESSADMIN "db_accessadmin"
+#define DB_DATAREADER "db_datareader"
+#define DB_DATAWRITER "db_datawriter"
 
 #define IS_BBF_BUILT_IN_DB(dbname) \
     (strncmp(dbname, "master", 6) == 0 || \
@@ -2000,7 +2002,9 @@ extern bool insert_bulk_check_constraints;
 #define IS_FIXED_DB_PRINCIPAL(rolname) \
     (strncmp(rolname, DBO, 3) == 0 || \
      strncmp(rolname, DB_OWNER, 8) == 0 || \
-     strncmp(rolname, DB_ACCESSADMIN, 14) == 0)
+     strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
+	 strncmp(rolname, DB_DATAREADER, 13) == 0 || \
+	 strncmp(rolname, DB_DATAWRITER, 13) == 0)
 
 /**********************************************************************
  * Function declarations
@@ -2084,6 +2088,7 @@ extern char *get_original_query_string(void);
 extern AclMode string_to_privilege(const char *privname);
 extern const char *privilege_to_string(AclMode privilege);
 extern Oid get_owner_of_schema(const char *schema);
+extern void exec_database_roles_subcmds(const char *physical_schema, char *schema_owner);
 
 /*
  * Functions for namespace handling in pl_funcs.c

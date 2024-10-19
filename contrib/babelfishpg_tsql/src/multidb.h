@@ -18,9 +18,11 @@ extern List* rewrite_plain_name(List *name); /* Value Strings */
 
 /* helper functions */
 extern char *get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error);
+extern char *get_physical_user_name_by_mode(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error,  MigrationMode mode);
 extern char *get_physical_schema_name(char *db_name, const char *schema_name);
 extern char *get_physical_schema_name_by_mode(char *db_name, const char *schema_name, MigrationMode mode);
 extern char *get_dbo_schema_name(const char *dbname);
+extern char *get_dbo_schema_name_by_mode(const char *dbname, MigrationMode mode);
 extern char *get_dbo_role_name(const char *dbname);
 extern char *get_dbo_role_name_by_mode(const char *dbname, MigrationMode mode);
 extern char *get_db_owner_name(const char *dbname);
@@ -30,6 +32,10 @@ extern char *get_db_accessadmin_role_name(const char *dbname);
 extern Oid  get_db_accessadmin_oid(const char *dbname, bool missing_ok);
 extern char *get_guest_role_name(const char *dbname);
 extern char *get_guest_schema_name(const char *dbname);
+extern char *get_db_datareader_name(const char *dbname);
+extern char *get_db_datawriter_name(const char *dbname);
+extern char *get_db_datareader_name_by_mode(const char *dbname, MigrationMode mode);
+extern char *get_db_datawriter_name_by_mode(const char *dbname, MigrationMode mode);
 extern bool is_shared_schema(const char *name);
 extern void truncate_tsql_identifier(char *ident);
 extern bool physical_schema_name_exists(char *phys_schema_name);

@@ -1270,7 +1270,7 @@ get_physical_schema_name(char *db_name, const char *schema_name)
  * Map the logical user name to its physical name in the database.
  */
 char *
-get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error)
+get_physical_user_name_by_mode(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error, MigrationMode mode)
 {
 	char	   *new_user_name;
 	char	   *result;
@@ -1303,7 +1303,7 @@ get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, b
 	 * db_owner in single-db mode were unprefixed These are two exceptions to
 	 * the naming convention
 	 */
-	if (SINGLE_DB == get_migration_mode())
+	if (SINGLE_DB == mode)
 	{
 		/* check that db_name is not "master", "tempdb", or "msdb" */
 		if (!IS_BBF_BUILT_IN_DB(db_name))
@@ -1341,13 +1341,19 @@ get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, b
 }
 
 char *
-get_dbo_schema_name(const char *dbname)
+get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error)
+{
+	return get_physical_user_name_by_mode(db_name, user_name, suppress_db_error, suppress_role_error, get_migration_mode());
+}
+
+char *
+get_dbo_schema_name_by_mode(const char *dbname, MigrationMode mode)
 {
 	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
 
 	Assert(dbname != NULL);
 
-	if (SINGLE_DB == get_migration_mode() && !IS_BBF_BUILT_IN_DB(dbname))
+	if (SINGLE_DB == mode && !IS_BBF_BUILT_IN_DB(dbname))
 	{	
 		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "dbo");
 	}
@@ -1357,6 +1363,12 @@ get_dbo_schema_name(const char *dbname)
 		truncate_identifier(name, strlen(name), false);
 	}
 	return name;
+}
+
+char *
+get_dbo_schema_name(const char *dbname)
+{
+	return get_dbo_schema_name_by_mode(dbname, get_migration_mode());
 }
 
 char *
@@ -1407,6 +1419,57 @@ char *
 get_db_owner_name(const char *dbname)
 {
 	return get_db_owner_name_by_mode(dbname, get_migration_mode());
+}
+
+char *
+get_db_datareader_name_by_mode(const char *dbname, MigrationMode mode)
+{
+	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
+	Assert(dbname != NULL);
+
+	if (SINGLE_DB == mode && 0 != strcmp(dbname, "master")
+	                    && 0 != strcmp(dbname, "tempdb") && 0 != strcmp(dbname, "msdb"))
+	{
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "db_datareader");
+	}
+	else
+	{
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s_db_datareader", dbname);
+		truncate_identifier(name, strlen(name), false);
+	}
+	return name;
+}
+
+char *
+get_db_datareader_name(const char *dbname)
+{
+	return get_db_datareader_name_by_mode(dbname, get_migration_mode());
+}
+
+char *
+get_db_datawriter_name_by_mode(const char *dbname, MigrationMode mode)
+{
+	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
+
+	Assert(dbname != NULL);
+
+	if (SINGLE_DB == mode && 0 != strcmp(dbname, "master")
+	                    && 0 != strcmp(dbname, "tempdb") && 0 != strcmp(dbname, "msdb"))
+	{
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "db_datawriter");
+	}
+	else
+	{
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s_db_datawriter", dbname);
+		truncate_identifier(name, strlen(name), false);
+	}
+	return name;
+}
+
+char *
+get_db_datawriter_name(const char *dbname)
+{
+	return get_db_datawriter_name_by_mode(dbname, get_migration_mode());
 }
 
 Oid
