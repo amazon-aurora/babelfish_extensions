@@ -2560,7 +2560,7 @@ exec_database_roles_subcmds(const char *schema, char *schema_owner)
 
 		/* do this step */
 		ProcessUtility(wrapper,
-					"(ALTER DEFAULT PRIVILEGES )",
+					ALTER_DEFAULT_PRIVILEGES,
 					false,
 					PROCESS_UTILITY_SUBCOMMAND,
 					NULL,

@@ -1986,6 +1986,7 @@ extern bool insert_bulk_check_constraints;
 #define CREATE_LOGICAL_DATABASE "(CREATE LOGICAL DATABASE )"
 #define CREATE_GUEST_SCHEMAS_DURING_UPGRADE "(CREATE GUEST SCHEMAS DURING UPGRADE )"
 #define CREATE_FIXED_DB_ROLES "(CREATE FIXED DATABASE ROLES )"
+#define ALTER_DEFAULT_PRIVILEGES "(ALTER DEFAULT PRIVILEGES )"
 
 /* FIXED DB PRINCIPALS */
 #define DBO "dbo"
@@ -2000,9 +2001,9 @@ extern bool insert_bulk_check_constraints;
      strncmp(dbname, "msdb", 4) == 0)
 
 #define IS_FIXED_DB_PRINCIPAL(rolname) \
-    (strncmp(rolname, DBO, 3) == 0 || \
-     strncmp(rolname, DB_OWNER, 8) == 0 || \
-     strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
+	(strncmp(rolname, DBO, 3) == 0 || \
+	 strncmp(rolname, DB_OWNER, 8) == 0 || \
+	 strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
 	 strncmp(rolname, DB_DATAREADER, 13) == 0 || \
 	 strncmp(rolname, DB_DATAWRITER, 13) == 0)
 

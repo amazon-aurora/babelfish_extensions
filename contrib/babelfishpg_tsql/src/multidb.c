@@ -1347,13 +1347,13 @@ get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, b
 }
 
 char *
-get_dbo_schema_name_by_mode(const char *dbname, MigrationMode mode)
+get_dbo_schema_name(const char *dbname)
 {
 	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
 
 	Assert(dbname != NULL);
 
-	if (SINGLE_DB == mode && !IS_BBF_BUILT_IN_DB(dbname))
+	if (SINGLE_DB == get_migration_mode() && !IS_BBF_BUILT_IN_DB(dbname))
 	{	
 		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "dbo");
 	}
@@ -1363,12 +1363,6 @@ get_dbo_schema_name_by_mode(const char *dbname, MigrationMode mode)
 		truncate_identifier(name, strlen(name), false);
 	}
 	return name;
-}
-
-char *
-get_dbo_schema_name(const char *dbname)
-{
-	return get_dbo_schema_name_by_mode(dbname, get_migration_mode());
 }
 
 char *
@@ -1422,12 +1416,12 @@ get_db_owner_name(const char *dbname)
 }
 
 char *
-get_db_datareader_name_by_mode(const char *dbname, MigrationMode mode)
+get_db_datareader_name(const char *dbname)
 {
 	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
 	Assert(dbname != NULL);
 
-	if (SINGLE_DB == mode && 0 != strcmp(dbname, "master")
+	if (SINGLE_DB == get_migration_mode() && 0 != strcmp(dbname, "master")
 	                    && 0 != strcmp(dbname, "tempdb") && 0 != strcmp(dbname, "msdb"))
 	{
 		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "db_datareader");
@@ -1441,19 +1435,13 @@ get_db_datareader_name_by_mode(const char *dbname, MigrationMode mode)
 }
 
 char *
-get_db_datareader_name(const char *dbname)
-{
-	return get_db_datareader_name_by_mode(dbname, get_migration_mode());
-}
-
-char *
-get_db_datawriter_name_by_mode(const char *dbname, MigrationMode mode)
+get_db_datawriter_name(const char *dbname)
 {
 	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
 
 	Assert(dbname != NULL);
 
-	if (SINGLE_DB == mode && 0 != strcmp(dbname, "master")
+	if (SINGLE_DB == get_migration_mode() && 0 != strcmp(dbname, "master")
 	                    && 0 != strcmp(dbname, "tempdb") && 0 != strcmp(dbname, "msdb"))
 	{
 		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", "db_datawriter");
@@ -1464,12 +1452,6 @@ get_db_datawriter_name_by_mode(const char *dbname, MigrationMode mode)
 		truncate_identifier(name, strlen(name), false);
 	}
 	return name;
-}
-
-char *
-get_db_datawriter_name(const char *dbname)
-{
-	return get_db_datawriter_name_by_mode(dbname, get_migration_mode());
 }
 
 Oid

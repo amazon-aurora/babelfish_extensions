@@ -1405,12 +1405,11 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	const char		*db_datareader;
 	const char 		*db_datawriter;
 	int16			dbid = get_db_id(dbname);
-	MigrationMode baseline_mode = is_user_database_singledb(dbname) ? SINGLE_DB : MULTI_DB;
 
 	db_owner = get_db_owner_name(dbname);
 	db_accessadmin = get_db_accessadmin_role_name(dbname);
-	db_datareader = get_db_datareader_name_by_mode(dbname, baseline_mode);
-	db_datawriter = get_db_datawriter_name_by_mode(dbname, baseline_mode);
+	db_datareader = get_db_datareader_name(dbname);
+	db_datawriter = get_db_datawriter_name(dbname);
 
 
 	if (OidIsValid(get_role_oid(db_accessadmin, true)))
