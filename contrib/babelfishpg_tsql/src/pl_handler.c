@@ -2421,11 +2421,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					Oid					oldoid;
 					Acl					*proacl;
 					bool				isSameProc;
-					ObjectAddress 		address;
+					ObjectAddress 		address, tbltyp, originalFunc;
 					CreateFunctionStmt	*cfs;
 					ListCell 			*option;
 					int 				origname_location = -1;
 					bool 				with_recompile = false;
+					Node                *tbltypStmt = NULL;
 					ListCell            *parameter;
 
 					cfs = makeNode(CreateFunctionStmt);
@@ -2483,6 +2484,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								pfree(defel);
 								stmt->objtype = OBJECT_FUNCTION;
 							}
+							else if (strcmp(defel->defname, "tbltypStmt") == 0)
+							{
+								 tbltypStmt = defel->arg;
+							}
 						}
 
 						/* make a CreateFunctionStmt to pass into CreateFunction() */
@@ -2501,6 +2506,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						}
 
 						pltsql_proc_get_oid_proname_proacl(stmt, pstate, &oldoid, &proacl, &isSameProc, cfs->is_procedure);
+						originalFunc.objectId = oldoid;
+						originalFunc.classId = ProcedureRelationId;
+						originalFunc.objectSubId = 0;
 						if(get_bbf_function_tuple_from_proctuple(SearchSysCache1(PROCOID, ObjectIdGetDatum(oldoid))) == NULL)
 						{
 							/* Detect PSQL functions and throw error */
@@ -2514,13 +2522,76 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * Postgres does not allow us to create functions with different return types
 							 * so we need to delete and recreate them 
 							 */
-							RemoveFunctionById(oldoid);
+							performDeletion(&originalFunc, DROP_RESTRICT, 0);
 							isSameProc = false;
 							CommandCounterIncrement();
 						}
 						else if (!isSameProc) /* i.e. different signature */
 						{
-							RemoveFunctionById(oldoid);
+							performDeletion(&originalFunc, DROP_RESTRICT, 0);
+						}
+
+						if(tbltypStmt)
+						{
+							PlannedStmt *wrapper;
+							RangeVar* rv = ((CreateStmt*) tbltypStmt)->relation;
+
+							if(rv->schemaname != NULL)
+							{
+								List* cfs_rettype_names = cfs->returnType->names;
+								ListCell* x;
+								int i = 1;
+								int len = list_length(cfs->parameters);
+								char *physical_schema_name = get_physical_schema_name(get_cur_db_name(), rv->schemaname);
+
+								rv->schemaname = physical_schema_name;
+								cfs_rettype_names = list_delete_first(cfs_rettype_names);
+								cfs_rettype_names = lcons(makeString(physical_schema_name), cfs_rettype_names);
+
+
+								foreach(x, cfs->parameters)
+								{
+									if(i == len)
+									{
+										FunctionParameter *fp = (FunctionParameter *) lfirst(x);
+										TypeName *t = fp->argType;
+										t->names =  list_delete_first(t->names);
+										t->names = lcons(makeString(physical_schema_name), t->names);
+									}
+									i++;
+								}
+							}
+
+							/*
+							 * Process create stmt
+							 */
+							wrapper = makeNode(PlannedStmt);
+							wrapper->commandType = CMD_UTILITY;
+							wrapper->canSetTag = false;
+							wrapper->utilityStmt = tbltypStmt;
+							wrapper->stmt_location = pstmt->stmt_location;
+							wrapper->stmt_len = pstmt->stmt_len;
+
+							ProcessUtility(wrapper,
+										queryString,
+										false,
+										PROCESS_UTILITY_SUBCOMMAND,
+										params,
+										NULL,
+										None_Receiver,
+										NULL);
+
+							/* Need CCI between commands */
+							CommandCounterIncrement();
+
+							/*
+							 * Update dependency on oldoid
+							 */
+							tbltyp.classId = TypeRelationId;
+							tbltyp.objectId = typenameTypeId(pstate,
+															cfs->returnType);
+							tbltyp.objectSubId = 0;
+							recordDependencyOn(&tbltyp, &originalFunc, DEPENDENCY_INTERNAL);
 						}
 
 						/* if this is the same procedure, it will update the existing one */
@@ -2914,7 +2985,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (islogin)
 					{
-						if (!has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false)))
+						/*
+						 * Check if the current login has privileges to create
+						 * login.
+						 */
+						if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
+								!has_privs_of_role(GetSessionUserId(), get_securityadmin_oid()))
 							ereport(ERROR,
 									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 									 errmsg("Current login %s does not have permission to create new login",
@@ -2948,6 +3024,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									 errmsg("User does not have permission to perform this action.")));
 						}
 
+						pfree(db_owner_name);
 					}
 
 					/*
@@ -3131,8 +3208,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						char	   *temp_login_name = NULL;
 						Oid 		save_userid;
 						int 		save_sec_context;
+						Oid 		securityadm_oid;
+						Oid 		role_oid;
 
-						datdba = get_role_oid("sysadmin", false);
+						datdba = get_sysadmin_oid();
+						securityadm_oid = get_securityadmin_oid();
+						role_oid = get_role_oid(stmt->role->rolename, true);
 
 						/*
 						 * Check if the current login has privileges to alter
@@ -3144,7 +3225,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (strcmp(defel->defname, "password") == 0)
 							{
-								if (get_role_oid(stmt->role->rolename, true) != GetSessionUserId() && !is_member_of_role(GetSessionUserId(), datdba))
+								if (role_oid != GetSessionUserId() && (!is_member_of_role(GetSessionUserId(), datdba)
+											&& (!is_member_of_role(GetSessionUserId(), securityadm_oid) || is_member_of_role(role_oid, datdba))))
 									ereport(ERROR,(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Cannot alter the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
@@ -3179,13 +3261,20 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							stmt->role->rolename = temp_login_name;
 						}
 
-						if (!has_privs_of_role(GetSessionUserId(), datdba) && !has_password)
-							ereport(ERROR,(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-								errmsg("Cannot alter the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
+						role_oid = get_role_oid(stmt->role->rolename, true);
 
-						if (get_role_oid(stmt->role->rolename, true) == InvalidOid)
+						/*
+						 * Check if login is valid and the current login
+						 * has privileges to alter login.
+						 */
+						if (role_oid == InvalidOid)
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
+
+						if (!has_privs_of_role(GetSessionUserId(), datdba) && !has_password &&
+							(!has_privs_of_role(GetSessionUserId(), securityadm_oid) || is_member_of_role(role_oid, datdba)))
+							ereport(ERROR,(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+								errmsg("Cannot alter the login '%s', because it does not exist or you do not have permission.", stmt->role->rolename)));
 
 						/*
 						 * We have performed all the permissions checks.
@@ -3341,6 +3430,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						set_session_properties(db_name);
 						pfree(db_name);
+						pfree(dbo_name);
 
 						return;
 					}
@@ -3364,6 +3454,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					char	   *db_name;
 					Oid 		save_userid;
 					int 		save_sec_context;
+					Oid     	securityadmin_oid;
+
+					securityadmin_oid = get_securityadmin_oid();
 
 					/* Check if roles are users that need role name mapping */
 					if (stmt->roles != NIL)
@@ -3465,6 +3558,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														 errmsg("Cannot disable access to the guest user in master or tempdb.")));
 
 											alter_user_can_connect(false, rolspec->rolename, db_name);
+
+											pfree(db_owner_name);
+											
 											return;
 										}
 										else
@@ -3475,6 +3571,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									}
 
 									pfree(rolspec->rolename);
+									pfree(db_owner_name);
+
 									rolspec->rolename = user_name;
 								}
 							}
@@ -3544,7 +3642,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						else
 							other = true;
 
-						if (drop_login && is_login(roleform->oid) && !has_privs_of_role(GetSessionUserId(), get_role_oid("sysadmin", false))){
+						/*
+						 * Check if the current login has privileges to drop
+						 * login.
+						 */
+						if (drop_login && is_login(roleform->oid) && !has_privs_of_role(GetSessionUserId(), get_sysadmin_oid())
+						                                           && !has_privs_of_role(GetSessionUserId(), securityadmin_oid)){
 							ereport(ERROR,
 									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 									errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
@@ -3564,9 +3667,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					{
 						int			role_oid = get_role_oid(role_name, true);
 
-						if (!OidIsValid(role_oid) ||
-							!is_member_of_role(GetSessionUserId(), get_sysadmin_oid()) ||
-							role_oid == get_bbf_role_admin_oid())
+						if (!OidIsValid(role_oid) || role_oid == get_bbf_role_admin_oid()
+							|| role_oid == securityadmin_oid || role_oid == get_sysadmin_oid())
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3719,7 +3821,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
 						{
 							/* Execute the GRANT SCHEMA subcommands. */
-							exec_grantschema_subcmds(create_schema->schemaname, rolspec->rolename, true, false, permissions[i]);
+							exec_grantschema_subcmds(create_schema->schemaname, rolspec->rolename, true, false, permissions[i], true);
 						}
 					}
 					return;
@@ -3806,13 +3908,46 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				{
 					StringInfoData query;
 					RoleSpec   *spec;
+					RoleSpec   *rolspec;
+					Oid	   grantee_oid;
+
 					check_alter_server_stmt(grant_role);
 					spec = (RoleSpec *) linitial(grant_role->grantee_roles);
+					rolspec = (RoleSpec *) linitial(grant_role->granted_roles);
+					grantee_oid = get_role_oid(spec->rolename, false);
 					initStringInfo(&query);
-					if (grant_role->is_grant)
-						appendStringInfo(&query, "ALTER ROLE dummy WITH createrole createdb; ");
+					
+					/* If sysadmin, provide attribute for role and database priv */
+					if (IS_ROLENAME_SYSADMIN(rolspec->rolename))
+					{
+						if (grant_role->is_grant)
+							appendStringInfo(&query, "ALTER ROLE dummy WITH createrole createdb; ");
+						
+						/* If grantee role is member of securityadmin then only revoke createdb */
+						else if (has_privs_of_role(grantee_oid, get_securityadmin_oid()))
+							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreatedb; ");
+						else 
+							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
+					}
+
+					/* If securityadmin, provide attribute for role priv */
+					else if (IS_ROLENAME_SECURITYADMIN(rolspec->rolename))
+					{
+						if (grant_role->is_grant)
+							appendStringInfo(&query, "ALTER ROLE dummy WITH createrole; ");
+						
+						/* If grantee role is member of sysadmin then don't revoke createrole */
+						else if (!has_privs_of_role(grantee_oid, get_sysadmin_oid()))
+							appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole; ");
+					}
+
+					/* Otherwise, throw error */
 					else
-						appendStringInfo(&query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
+					{
+						ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("\"%s\" is not a supported fixed server role.", rolspec->rolename)));
+					}
 					
 					/*
 					 * Set to bbf_role_admin to grant the role
@@ -3829,7 +3964,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						else
 							standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 													queryEnv, dest, qc);
-						exec_alter_role_cmd(query.data, spec);
+						if (query.len)
+							exec_alter_role_cmd(query.data, spec);
 
 					}
 					PG_FINALLY();

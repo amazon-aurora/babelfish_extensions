@@ -1705,12 +1705,11 @@ create_xp_qv_in_master_dbo_internal(PG_FUNCTION_ARGS)
 	char	   *tempq = "CREATE OR REPLACE PROCEDURE %s.xp_qv(IN SYS.NVARCHAR(256), IN SYS.NVARCHAR(256))"
 	"AS \'babelfishpg_tsql\', \'xp_qv_internal\' LANGUAGE C";
 
-	const char *dbo_scm = get_dbo_schema_name("master");
-
-	if (dbo_scm == NULL)
-		elog(ERROR, "Failed to retrieve dbo schema name");
+	char	   *dbo_scm = get_dbo_schema_name("master");
 
 	query = psprintf(tempq, dbo_scm);
+
+	pfree(dbo_scm);
 
 	PG_TRY();
 	{
@@ -1795,13 +1794,12 @@ create_xp_instance_regread_in_master_dbo_internal(PG_FUNCTION_ARGS)
 	char	   *tempq2 = "CREATE OR REPLACE PROCEDURE %s.xp_instance_regread(IN p1 sys.nvarchar(512), IN p2 sys.sysname, IN p3 sys.nvarchar(512), INOUT out_param sys.nvarchar(512))"
 	"AS \'babelfishpg_tsql\', \'xp_instance_regread_internal\' LANGUAGE C";
 
-	const char *dbo_scm = get_dbo_schema_name("master");
-
-	if (dbo_scm == NULL)
-		elog(ERROR, "Failed to retrieve dbo schema name");
+	char	   *dbo_scm = get_dbo_schema_name("master");
 
 	query = psprintf(tempq, dbo_scm);
 	query2 = psprintf(tempq2, dbo_scm);
+
+	pfree(dbo_scm);
 
 	PG_TRY();
 	{
@@ -2137,8 +2135,9 @@ sp_addrole(PG_FUNCTION_ARGS)
 							errmsg("'%s' is not a valid name because it contains invalid characters.", rolname)));
 
 		/* Map the logical role name to its physical name in the database. */
-		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false);
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false, true);
 		role_oid = get_role_oid(physical_role_name, true);
+		pfree(physical_role_name);
 
 		/* Check if the user, group or role already exists */
 		if (role_oid)
@@ -2280,8 +2279,9 @@ sp_droprole(PG_FUNCTION_ARGS)
 							errmsg("Name cannot be NULL.")));
 
 		/* Map the logical role name to its physical name in the database. */
-		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false);
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false, true);
 		role_oid = get_role_oid(physical_role_name, true);
+		pfree(physical_role_name);
 
 		/* Check if the role does not exists */
 		if (role_oid == InvalidOid || is_database_principal(role_oid, true) != BBF_ROLE)
@@ -2430,7 +2430,7 @@ sp_addrolemember(PG_FUNCTION_ARGS)
 					 errmsg("Cannot make a role a member of itself.")));
 
 		/* Map the logical member name to its physical name in the database. */
-		physical_member_name = get_physical_user_name(get_cur_db_name(), lowercase_membername, false);
+		physical_member_name = get_physical_user_name(get_cur_db_name(), lowercase_membername, false, true);
 		member_oid = get_role_oid(physical_member_name, true);
 
 		/*
@@ -2443,7 +2443,7 @@ sp_addrolemember(PG_FUNCTION_ARGS)
 					 errmsg("User or role '%s' does not exist in this database.", membername)));
 
 		/* Map the logical role name to its physical name in the database. */
-		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false);
+		physical_role_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false, true);
 		role_oid = get_role_oid(physical_role_name, true);
 
 		/* Check if the role does not exists and given role name is an role */
@@ -2502,6 +2502,8 @@ sp_addrolemember(PG_FUNCTION_ARGS)
 	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
 					  GUC_CONTEXT_CONFIG,
 					  PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	pfree(physical_member_name);
+	pfree(physical_role_name);
 	PG_RETURN_VOID();
 }
 
@@ -2595,7 +2597,7 @@ sp_droprolemember(PG_FUNCTION_ARGS)
 							errmsg("Name cannot be NULL.")));
 
 		/* Map the logical role name to its physical name in the database. */
-		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false);
+		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_rolname, false, true);
 		role_oid = get_role_oid(physical_name, true);
 
 		/* Throw an error id the given role name doesn't exist or isn't a role */
@@ -2605,7 +2607,8 @@ sp_droprolemember(PG_FUNCTION_ARGS)
 					 errmsg("Cannot alter the role '%s', because it does not exist or you do not have permission.", rolname)));
 
 		/* Map the logical member name to its physical name in the database. */
-		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_membername, false);
+		pfree(physical_name);
+		physical_name = get_physical_user_name(get_cur_db_name(), lowercase_membername, false, true);
 		role_oid = get_role_oid(physical_name, true);
 
 		/*
@@ -2661,6 +2664,7 @@ sp_droprolemember(PG_FUNCTION_ARGS)
 	set_config_option("babelfishpg_tsql.sql_dialect", saved_dialect,
 					  GUC_CONTEXT_CONFIG,
 					  PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
+	pfree(physical_name);
 	PG_RETURN_VOID();
 }
 
@@ -2993,6 +2997,8 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 	char	   *locallogin = PG_ARGISNULL(2) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(2));
 	char	   *username = PG_ARGISNULL(3) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(3));
 	char	   *password = PG_ARGISNULL(4) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(4));
+	Oid 		save_userid;
+	int 		save_sec_context;
 
 	StringInfoData query;
 
@@ -3018,6 +3024,16 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 				 errmsg("Only @locallogin = NULL is supported. Configuring remote server access specific to local login is not yet supported")));
 
 	initStringInfo(&query);
+
+	/*
+	 * check privileges for login
+	 * allow if has privileges of sysadmin or securityadmin.
+	 */
+	if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
+				!has_privs_of_role(GetSessionUserId(), get_securityadmin_oid()))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("User does not have permission to perform this action.")));
 
 	/*
 	 * We prepare the following query to create a user mapping. This will be
@@ -3054,8 +3070,22 @@ sp_addlinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 
 		appendStringInfoString(&query, ")");
 	}
+	/*
+	* We have performed all the permissions checks.
+	* Set current user to bbf_role_admin for mapping permissions.
+	*/
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
-	exec_utility_cmd_helper(query.data);
+	PG_TRY();
+	{
+		exec_utility_cmd_helper(query.data);
+	}
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
 
 	if (servername)
 		pfree(servername);
@@ -3079,6 +3109,8 @@ sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 {
 	char	   *servername = PG_ARGISNULL(0) ? NULL : lowerstr(text_to_cstring(PG_GETARG_VARCHAR_PP(0)));
 	char	   *locallogin = PG_ARGISNULL(1) ? NULL : text_to_cstring(PG_GETARG_VARCHAR_PP(1));
+	Oid 		save_userid;
+	int 		save_sec_context;
 
 	StringInfoData query;
 
@@ -3099,39 +3131,67 @@ sp_droplinkedsrvlogin_internal(PG_FUNCTION_ARGS)
 
 	remove_trailing_spaces(servername);
 
+	/*
+	 * check privileges for login
+	 * allow if has privileges of sysadmin or securityadmin.
+	 */
+	if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
+				!has_privs_of_role(GetSessionUserId(), get_securityadmin_oid()))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					errmsg("User does not have permission to perform this action.")));
+
 	/* Check if servername is valid */
 	get_foreign_server_oid(servername, false);
 
 	initStringInfo(&query);
 
 	/*
-	 * We prepare the following queries to drop a linked server login. This will
-	 * be executed using ProcessUtility():
-	 *
-	 * DROP USER MAPPING IF EXISTS FOR CURRENT_USER SERVER @SERVERNAME
-	 * DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER @SERVERNAME
-	 *
-	 * Linked logins were first implemented as PG USER MAPPINGs for the CURRENT_USER which
-	 * was not entirely correct because T-SQL linked logins are not user or login specific.
-	 * To address this we now create user mapping for the PG PUBLIC role internally.
-	 *
-	 * To ensure sp_droplinkedsrvlogin works in accordance with both the older and newer
-	 * implementation of linked logins, we try to drop USER MAPPINGs for both the CURRENT_USER
-	 * and PUBLIC PG roles.
-	 */
-	appendStringInfo(&query, "DROP USER MAPPING IF EXISTS FOR CURRENT_USER SERVER \"%s\"", servername);
-	exec_utility_cmd_helper(query.data);
+	* We have performed all the permissions checks.
+	* Set current user to bbf_role_admin for mapping permissions.
+	*/
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
-	resetStringInfo(&query);
+	PG_TRY();
+	{
+		/*
+		* We prepare the following queries to drop a linked server login. This will
+		* be executed using ProcessUtility():
+		*
+		* DROP USER MAPPING IF EXISTS FOR CURRENT_USER SERVER @SERVERNAME
+		* DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER @SERVERNAME
+		*
+		* Linked logins were first implemented as PG USER MAPPINGs for the CURRENT_USER which
+		* was not entirely correct because T-SQL linked logins are not user or login specific.
+		* To address this we now create user mapping for the PG PUBLIC role internally.
+		*
+		* To ensure sp_droplinkedsrvlogin works in accordance with both the older and newer
+		* implementation of linked logins, we try to drop USER MAPPINGs for both the CURRENT_USER
+		* and PUBLIC PG roles.
+		*/
+		appendStringInfo(&query, "DROP USER MAPPING IF EXISTS FOR CURRENT_USER SERVER \"%s\"", servername);
+		exec_utility_cmd_helper(query.data);
 
-	appendStringInfo(&query, "DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER \"%s\"", servername);
-	exec_utility_cmd_helper(query.data);
+		resetStringInfo(&query);
+
+		appendStringInfo(&query, "DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER \"%s\"", servername);
+		exec_utility_cmd_helper(query.data);
+	}
+
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
 
 	if (locallogin)
 		pfree(locallogin);
 
 	if (servername)
 		pfree(servername);
+
+	pfree(query.data);
 
 	return (Datum) 0;
 }
@@ -3358,7 +3418,7 @@ sp_babelfish_volatility(PG_FUNCTION_ARGS)
 		if (!strcmp(logical_schema_name, ""))
 		{
 			const char *user = get_user_for_database(db_name);
-			const char *guest_role_name = get_guest_role_name(db_name);
+			char	   *guest_role_name = get_guest_role_name(db_name);
 
 			if (!user)
 				ereport(ERROR,
@@ -3376,6 +3436,8 @@ sp_babelfish_volatility(PG_FUNCTION_ARGS)
 				physical_schema_name = get_physical_schema_name(db_name, logical_schema_name);
 				pfree(logical_schema_name);
 			}
+			
+			pfree(guest_role_name);
 		}
 		else
 		{

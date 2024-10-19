@@ -543,7 +543,10 @@ space
 replace
 binary-datatype-operators
 SELECT_INTO_TEST
+securityadmin_role
 cast-varchar-to-time
 xml_exist-before-16_5
 BABEL-5119
 db_accessadmin
+BABEL-CASE_EXPR
+

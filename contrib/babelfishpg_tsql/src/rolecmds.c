@@ -77,6 +77,7 @@ static void validateNetBIOS(char *netbios);
 static void validateFQDN(char *fqdn);
 
 static Oid bbf_admin_oid = InvalidOid;
+static Oid securityadmin_oid = InvalidOid;
 
 void
 create_bbf_authid_login_ext(CreateRoleStmt *stmt)
@@ -146,6 +147,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("Z");
+	else if (strcmp(stmt->role, BABELFISH_SECURITYADMIN) == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
 	else
@@ -518,13 +521,16 @@ grant_guests_to_login(const char *login)
 												 &is_null);
 
 		const char *db_name = TextDatumGetCString(db_name_datum);
-		const char *guest_name = NULL;
+		char	   *guest_name = NULL;
 
 		if (guest_role_exists_for_db(db_name))
 			guest_name = get_guest_role_name(db_name);
 
 		if (guest_name)
+		{
 			guests = lappend(guests, make_accesspriv_node(guest_name));
+			pfree(guest_name);
+		}
 
 		tuple = heap_getnext(scan, ForwardScanDirection);
 	}
@@ -587,7 +593,7 @@ grant_revoke_dbo_to_login(const char* login, const char* db_name, bool is_grant)
 	Node	   *stmt;
 	PlannedStmt *wrapper;
 
-	const char *dbo_role_name = get_dbo_role_name(db_name);
+	char 	   *dbo_role_name = get_dbo_role_name(db_name);
 
 	/*
 	 * If login i.e old_owner/new_owner is master user 
@@ -647,6 +653,7 @@ grant_revoke_dbo_to_login(const char* login, const char* db_name, bool is_grant)
 	CommandCounterIncrement();
 
 	pfree(query.data);
+	pfree(dbo_role_name);
 }
 
 static List *
@@ -679,6 +686,16 @@ get_bbf_role_admin_oid(void)
 	if (!OidIsValid(bbf_admin_oid))
 		bbf_admin_oid = get_role_oid("bbf_role_admin", false);
 	return bbf_admin_oid;
+}
+
+
+/* Returns OID of securityadmin server role */
+Oid
+get_securityadmin_oid(void)
+{
+	if (!OidIsValid(securityadmin_oid))
+		securityadmin_oid = get_role_oid(BABELFISH_SECURITYADMIN, false);
+	return securityadmin_oid;
 }
 
 /*
@@ -825,7 +842,7 @@ user_id(PG_FUNCTION_ARGS)
 	if (!db_name)
 		PG_RETURN_NULL();
 
-        user_name = get_physical_user_name(db_name, user_input, false);
+        user_name = get_physical_user_name(db_name, user_input, false, true);
 
         if (!user_name)
             PG_RETURN_NULL();
@@ -842,6 +859,7 @@ user_id(PG_FUNCTION_ARGS)
     }
 
     auth_tuple = SearchSysCache1(AUTHNAME, CStringGetDatum(user_name));
+    pfree(user_name);
 
     if (!HeapTupleIsValid(auth_tuple))
 	    PG_RETURN_NULL();
@@ -1319,10 +1337,10 @@ add_existing_users_to_catalog(PG_FUNCTION_ARGS)
 	while (HeapTupleIsValid(tuple))
 	{
 		Datum		db_name_datum;
-		const char *db_name;
-		const char *dbo_role;
-		const char *db_owner_role;
-		const char *guest;
+		const char	*db_name;
+		char 		*dbo_role;
+		char 		*db_owner_role;
+		char 		*guest;
 
 		db_name_datum = heap_getattr(tuple,
 									 Anum_sysdatabases_name,
@@ -1339,9 +1357,13 @@ add_existing_users_to_catalog(PG_FUNCTION_ARGS)
 		{
 			dbo_list = lappend(dbo_list, make_rolespec_node(dbo_role));
 			add_to_bbf_authid_user_ext(dbo_role, "dbo", db_name, "dbo", NULL, false, true, false);
+			pfree(dbo_role);
 		}
 		if (db_owner_role)
+		{
 			add_to_bbf_authid_user_ext(db_owner_role, "db_owner", db_name, NULL, NULL, true, true, false);
+			pfree(db_owner_role);
+		}
 		if (guest)
 		{
 			/*
@@ -1352,6 +1374,8 @@ add_existing_users_to_catalog(PG_FUNCTION_ARGS)
 				add_to_bbf_authid_user_ext(guest, "guest", db_name, NULL, NULL, false, true, false);
 			else
 				add_to_bbf_authid_user_ext(guest, "guest", db_name, NULL, NULL, false, false, false);
+				
+			pfree(guest);
 		}
 
 		tuple = heap_getnext(scan, ForwardScanDirection);
@@ -1519,7 +1543,7 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 	/* update user name */
 	if (new_user_name)
 	{
-		physical_name = get_physical_user_name(get_cur_db_name(), new_user_name, false);
+		physical_name = get_physical_user_name(get_cur_db_name(), new_user_name, false, true);
 		namestrcpy(&physical_name_namedata, physical_name);
 
 		new_record_user_ext[USER_EXT_ROLNAME] = NameGetDatum(&physical_name_namedata);
@@ -1612,6 +1636,7 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 					   NULL);
 
 		pfree(query.data);
+		pfree(physical_name);
 	}
 }
 
@@ -1650,7 +1675,7 @@ bool
 is_alter_server_stmt(GrantRoleStmt *stmt)
 {
 	/*
-	 * is alter server role statement, if one and the only one granted role is
+	 * is alter server role statement, if the granted role is
 	 * server role
 	 */
 
@@ -1658,13 +1683,10 @@ is_alter_server_stmt(GrantRoleStmt *stmt)
 	{
 		RoleSpec   *spec = (RoleSpec *) linitial(stmt->granted_roles);
 
-		if (strcmp(spec->rolename, "sysadmin") == 0)	/* only supported server
-														 * role */
+		/* only supported server roles */
+		if (IS_ROLENAME_SYSADMIN(spec->rolename) || IS_ROLENAME_SECURITYADMIN(spec->rolename))
 			return true;
 	}
-	/* has one and only one grantee  */
-	if (list_length(stmt->grantee_roles) != 1)
-		return false;
 
 	return false;
 }
@@ -1704,8 +1726,12 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("%s is not a login", grantee_name)));
 
-	/* only sysadmin role is assumed below */
-	if (!has_privs_of_role(GetSessionUserId(), sysadmin))
+	/* 
+	 * check if it has sysadmin privileges or
+	 * if server role is securityadmin and it has privileges of securityadmin
+	 */
+	if (!has_privs_of_role(GetSessionUserId(), sysadmin) && ((strcmp(granted_name, BABELFISH_SECURITYADMIN) != 0)
+										|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("Current login %s does not have permission to alter server role",
@@ -1882,9 +1908,10 @@ role_id(PG_FUNCTION_ARGS)
 	if (!get_cur_db_name())
 		PG_RETURN_NULL();
 
-	role_name = get_physical_user_name(get_cur_db_name(), user_input, false);
+	role_name = get_physical_user_name(get_cur_db_name(), user_input, false, true);
 
 	result = get_role_oid(role_name, true);
+	pfree(role_name);
 
 	if (result == InvalidOid)
 		PG_RETURN_NULL();
@@ -1904,14 +1931,14 @@ is_rolemember(PG_FUNCTION_ARGS)
 	Oid			cur_user_oid = GetUserId();
 	Oid			db_owner_oid;
 	Oid			dbo_role_oid;
-	char	   *role;
-	char	   *dc_role;
-	char	   *dc_principal = NULL;
-	char	   *physical_role_name;
-	char	   *physical_principal_name;
-	char	   *cur_db_name;
-	const char *db_owner_name;
-	const char *dbo_role_name;
+	char			*role;
+	char			*dc_role;
+	char			*dc_principal = NULL;
+	char			*physical_role_name;
+	char			*physical_principal_name;
+	char			*cur_db_name;
+	char			*db_owner_name;
+	char			*dbo_role_name;
 	int			idx;
 
 	if (PG_ARGISNULL(0))
@@ -1923,8 +1950,9 @@ is_rolemember(PG_FUNCTION_ARGS)
 	while (idx > 0 && isspace((unsigned char) role[idx - 1]))
 		role[--idx] = '\0';
 	dc_role = downcase_identifier(role, strlen(role), false, false);
-	physical_role_name = get_physical_user_name(get_cur_db_name(), dc_role, false);
+	physical_role_name = get_physical_user_name(get_cur_db_name(), dc_role, false, true);
 	role_oid = get_role_oid(physical_role_name, true);
+	pfree(physical_role_name);
 
 	/* If principal name is NULL, take current user instead */
 	if (PG_ARGISNULL(1))
@@ -1938,8 +1966,9 @@ is_rolemember(PG_FUNCTION_ARGS)
 		while (idx > 0 && isspace((unsigned char) principal[idx - 1]))
 			principal[--idx] = '\0';
 		dc_principal = downcase_identifier(principal, strlen(principal), false, false);
-		physical_principal_name = get_physical_user_name(get_cur_db_name(), dc_principal, false);
+		physical_principal_name = get_physical_user_name(get_cur_db_name(), dc_principal, false, true);
 		principal_oid = get_role_oid(physical_principal_name, true);
+		pfree(physical_principal_name);
 	}
 
 	/* Return 1 if given role is PUBLIC */
@@ -1976,6 +2005,10 @@ is_rolemember(PG_FUNCTION_ARGS)
 	dbo_role_name = get_dbo_role_name(cur_db_name);
 	db_owner_oid = get_role_oid(db_owner_name, false);
 	dbo_role_oid = get_role_oid(dbo_role_name, false);
+	
+	pfree(db_owner_name);
+	pfree(dbo_role_name);
+
 	if ((principal_oid == db_owner_oid) || (principal_oid == dbo_role_oid))
 		PG_RETURN_INT32(0);
 	else if (is_member_of_role_nosuper(principal_oid, role_oid))
@@ -2538,4 +2571,22 @@ remove_createrole_from_logins(PG_FUNCTION_ARGS)
 	table_endscan(scan);
 	table_close(rel, AccessShareLock);
 	PG_RETURN_INT32(0);
+}
+
+PG_FUNCTION_INFO_V1(bbf_is_member_of_role_nosuper);
+Datum
+bbf_is_member_of_role_nosuper(PG_FUNCTION_ARGS)
+{
+	Oid	member, role;
+	bool	result;
+
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		PG_RETURN_NULL();
+
+	member = PG_GETARG_OID(0);
+	role = PG_GETARG_OID(1);
+
+	result = is_member_of_role_nosuper(member, role);
+
+	PG_RETURN_BOOL(result);
 }

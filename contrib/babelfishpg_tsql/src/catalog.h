@@ -164,6 +164,7 @@ extern List *update_babelfish_namespace_ext_nsp_name(int16 db_id, char *new_db_n
 extern List *update_babelfish_authid_user_ext_db_name(const char *old_db_name, const char *new_db_name);
 extern void rename_tsql_db(char *old_db_name, char *new_db_name);
 extern Oid get_login_for_user(Oid user_id, const char *physical_schema_name);
+extern bool user_exists_for_db(const char *db_name, const char *user_name);
 
 /* MUST comply with babelfish_authid_user_ext table */
 typedef struct FormData_authid_user_ext
@@ -314,6 +315,8 @@ typedef FormData_bbf_function_ext *Form_bbf_function_ext;
 #define Anum_bbf_schema_perms_grantor 8
 
 #define PUBLIC_ROLE_NAME "public"
+#define BABELFISH_SECURITYADMIN "securityadmin"
+#define BABELFISH_SYSADMIN "sysadmin"
 #define DB_ACCESSADMIN "db_accessadmin"
 #define DB_SECURITYADMIN "db_securityadmin"
 #define PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA "ALL"
@@ -324,6 +327,16 @@ typedef FormData_bbf_function_ext *Form_bbf_function_ext;
 #define OBJ_PROCEDURE "p"
 #define OBJ_FUNCTION "f"
 #define NUMBER_OF_PERMISSIONS 6
+
+/* check if rolename is sysadmin */
+#define IS_ROLENAME_SYSADMIN(rolname) \
+	(strlen(rolname) == 8 && \
+	strncmp(rolname, BABELFISH_SYSADMIN, 8) == 0)
+
+/* check if rolename is securityadmin */
+#define IS_ROLENAME_SECURITYADMIN(rolname) \
+	(strlen(rolname) == 13 && \
+	strncmp(rolname, BABELFISH_SECURITYADMIN, 13) == 0)
 
 extern int permissions[];
 

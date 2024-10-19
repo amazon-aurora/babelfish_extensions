@@ -22,6 +22,7 @@
 
 #include "catalog.h"
 #include "dbcmds.h"
+#include "rolecmds.h"
 #include "pl_explain.h"
 #include "pltsql.h"
 #include "rolecmds.h"
@@ -3015,11 +3016,12 @@ exec_stmt_grantdb(PLtsql_execstate *estate, PLtsql_stmt_grantdb *stmt)
 
 	/*
 	 * If the login is not the db owner or the login is not the member of
-	 * sysadmin, then it doesn't have the permission to GRANT/REVOKE.
+	 * sysadmin or securityadmin, then it doesn't have the permission to GRANT/REVOKE.
 	 */
 	login_is_db_owner = 0 == strncmp(login, get_owner_of_db(dbname), NAMEDATALEN);
 	datdba = get_role_oid("sysadmin", false);
-	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner)
+	if (!is_member_of_role(GetSessionUserId(), datdba) && !login_is_db_owner
+					&& !is_member_of_role(GetSessionUserId(), get_securityadmin_oid()))
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("Grantor does not have GRANT permission.")));
@@ -3212,31 +3214,29 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 	struct	dbcc_checkident dbcc_stmt = stmt->dbcc_stmt_data.dbcc_checkident;
 	Relation	rel;
 	TupleDesc	tupdesc;
-	char	*db_name = NULL;
-	char	*max_identity_value_str = NULL;
-	char	*query = NULL;
-	char	*attname;
-	char	*token;
+	char		*db_name = NULL;
+	char		*max_identity_value_str = NULL;
+	char		*query = NULL;
+	char		*attname;
+	char		*token;
 	const char	*schema_name;
-	const char	*nsp_name;
+	char		*nsp_name;
 	const char	*user;
-	const char	*guest_role_name;
-	const char	*dbo_role_name;
 	const char	*login;
-	int64	max_identity_value = 0;
-	int64	cur_identity_value = 0;
-	int	attnum;
-	int	rc = 0;
-	int64	reseed_value = 0;
-	Oid	nsp_oid;
-	Oid 	table_oid;
-	Oid	seqid = InvalidOid;
-	Oid	current_user_id = GetUserId();
-	volatile bool cur_value_is_null = true;
-	bool	login_is_db_owner;
+	int64		max_identity_value = 0;
+	int64		cur_identity_value = 0;
+	int		attnum;
+	int		rc = 0;
+	int64		reseed_value = 0;
+	Oid		nsp_oid;
+	Oid		table_oid;
+	Oid		seqid = InvalidOid;
+	Oid		current_user_id = GetUserId();
+	volatile bool	cur_value_is_null = true;
+	bool		login_is_db_owner;
 	StringInfoData msg;
-	bool	is_float_value;
-	bool    is_cross_db = false;
+	bool		is_float_value;
+	bool		is_cross_db = false;
 
 
 	if(dbcc_stmt.new_reseed_value)
@@ -3310,8 +3310,8 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 		 * If schema_name is not provided, find default schema for current user
 		 * and get physical schema name
 		 */
-		guest_role_name = get_guest_role_name(db_name);
-		dbo_role_name = get_dbo_role_name(db_name);
+		char		*guest_role_name = get_guest_role_name(db_name);
+		char		*dbo_role_name = get_dbo_role_name(db_name);
 		
 		/* user will never be null here as cross-db calls are already handled */
 		Assert(user != NULL);
@@ -3329,6 +3329,9 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 		{
 			nsp_name = get_physical_schema_name(db_name, schema_name);
 		}
+
+		pfree(guest_role_name);
+		pfree(dbo_role_name);
 	}
 	pfree(db_name);
 
@@ -3384,6 +3387,8 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 			errmsg("'%s.%s' does not contain an identity column.",
 				nsp_name, dbcc_stmt.table_name)));
 	}
+	
+	pfree(nsp_name);
 
 	PG_TRY();
 	{
@@ -3760,7 +3765,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		Oid	role_oid;
 		bool	is_public = 0 == strcmp(grantee_name, PUBLIC_ROLE_NAME);
 		if (!is_public)
-			rolname	= get_physical_user_name(dbname, grantee_name, false);
+			rolname	= get_physical_user_name(dbname, grantee_name, false, true);
 		else
 			rolname = pstrdup(PUBLIC_ROLE_NAME);
 		role_oid = get_role_oid(rolname, true);
@@ -3803,7 +3808,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
 		{
 			if (stmt->privileges & permissions[i])
-				exec_grantschema_subcmds(schema_name, rolname, stmt->is_grant, stmt->with_grant_option, permissions[i]);
+				exec_grantschema_subcmds(schema_name, rolname, stmt->is_grant, stmt->with_grant_option, permissions[i], false);
 		}
 
 		if (stmt->is_grant)
