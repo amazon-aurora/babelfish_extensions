@@ -4,6 +4,7 @@ GO
 varchar#!#nvarchar
 db_owner#!#DB Owners
 db_accessadmin#!#DB Access Administrators
+db_securityadmin#!#DB Security Adiministrators
 ~~END~~
 
 
@@ -19,7 +20,7 @@ SELECT dbo.test_sp_helpdbfixedrole_func()
 GO
 ~~START~~
 int
-2
+3
 ~~END~~
 
 
@@ -27,15 +28,15 @@ SELECT * FROM test_sp_helpdbfixedrole_view
 GO
 ~~START~~
 int
-2
+3
 ~~END~~
 
 
 EXEC test_sp_helpdbfixedrole_proc 'DB_securityadmin'
 GO
-~~START~~
-varchar#!#nvarchar
-~~END~~
+~~ERROR (Code: 50000)~~
+
+~~ERROR (Message: 'DB_securityadmin' is not a known fixed role.)~~
 
 
 EXEC test_sp_helpdbfixedrole_proc 'error'

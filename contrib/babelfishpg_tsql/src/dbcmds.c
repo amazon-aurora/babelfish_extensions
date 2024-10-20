@@ -1296,20 +1296,33 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 	int            i = 0;
 	char           *db_owner;
 	char           *db_accessadmin;
+	char		   *db_securityadmin;
 
 	db_owner = get_db_owner_name(dbname);
 	db_accessadmin = get_db_accessadmin_role_name(dbname);
+	db_securityadmin = get_db_securityadmin_role_name(dbname);
 
 	if (OidIsValid(get_role_oid(db_accessadmin, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_accessadmin)));
 
+	if (OidIsValid(get_role_oid(db_securityadmin, true)))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_securityadmin)));
+
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_accessadmin, NULL);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_CreateRoleStmt(stmt, db_securityadmin, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_securityadmin, NULL);
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
@@ -1396,6 +1409,9 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 							PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
 
 		initStringInfo(&query);
+
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
