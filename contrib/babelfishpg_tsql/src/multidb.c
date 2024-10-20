@@ -1270,7 +1270,7 @@ get_physical_schema_name(char *db_name, const char *schema_name)
  * Map the logical user name to its physical name in the database.
  */
 char *
-get_physical_user_name_by_mode(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error, MigrationMode mode)
+get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error)
 {
 	char	   *new_user_name;
 	char	   *result;
@@ -1303,7 +1303,7 @@ get_physical_user_name_by_mode(char *db_name, char *user_name, bool suppress_db_
 	 * db_owner in single-db mode were unprefixed These are two exceptions to
 	 * the naming convention
 	 */
-	if (SINGLE_DB == mode)
+	if (SINGLE_DB == get_migration_mode())
 	{
 		/* check that db_name is not "master", "tempdb", or "msdb" */
 		if (!IS_BBF_BUILT_IN_DB(db_name))
@@ -1338,12 +1338,6 @@ get_physical_user_name_by_mode(char *db_name, char *user_name, bool suppress_db_
 	pfree(new_user_name);
 
 	return result;
-}
-
-char *
-get_physical_user_name(char *db_name, char *user_name, bool suppress_db_error, bool suppress_role_error)
-{
-	return get_physical_user_name_by_mode(db_name, user_name, suppress_db_error, suppress_role_error, get_migration_mode());
 }
 
 char *

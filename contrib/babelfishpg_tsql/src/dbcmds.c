@@ -288,6 +288,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	initStringInfo(&query);
 	appendStringInfo(&query, "DROP SCHEMA dummy CASCADE; ");
 	appendStringInfo(&query, "DROP SCHEMA dummy CASCADE; ");
+
 	/* First drop guest user and custom users if they exist */
 	foreach(elem, db_users)
 	{
@@ -305,11 +306,12 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy CASCADE; ");
 
 	/* Then drop db_accessadmin, db_owner and dbo in that order */
+	appendStringInfo(&query, "DROP ROLE dummy; ");
+	appendStringInfo(&query, "DROP ROLE dummy; ");
+
 	appendStringInfo(&query, "REVOKE CREATE ON DATABASE dummy FROM dummy; ");
 	appendStringInfo(&query, "DROP ROLE dummy; ");
 	appendStringInfo(&query, "REVOKE CREATE, CONNECT, TEMPORARY ON DATABASE dummy FROM dummy; ");
-	appendStringInfo(&query, "DROP ROLE dummy; ");
-	appendStringInfo(&query, "DROP ROLE dummy; ");
 	appendStringInfo(&query, "DROP ROLE dummy; ");
 	appendStringInfo(&query, "DROP ROLE dummy; ");
 
@@ -347,6 +349,11 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	update_DropOwnedStmt(stmt, list_make3(pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
+	update_DropRoleStmt(stmt, db_datareader);
+	stmt = parsetree_nth_stmt(stmt_list, i++);
+	update_DropRoleStmt(stmt, db_datawriter);
+
+	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_accessadmin, NULL);
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, db_accessadmin);
@@ -358,11 +365,6 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	update_DropRoleStmt(stmt, db_owner);
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, dbo);
-
-	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropRoleStmt(stmt, db_datareader);
-	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropRoleStmt(stmt, db_datawriter);
 
 	return stmt_list;
 }
@@ -1436,16 +1438,16 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	}
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
-	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);
-
-	stmt = parsetree_nth_stmt(parsetree_list, i++);
-	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_accessadmin, NULL);
-
-	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_datareader, NULL, NULL);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_datawriter, NULL, NULL);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_accessadmin, NULL);
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
@@ -1537,10 +1539,10 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 
 		initStringInfo(&query);
 
+		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
+		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
-		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
-		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
 
 		parsetree_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
