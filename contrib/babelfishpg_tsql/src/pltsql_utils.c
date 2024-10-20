@@ -30,6 +30,7 @@
 
 #include "multidb.h"
 #include "session.h"
+#include "rolecmds.h"
 
 common_utility_plugin *common_utility_plugin_ptr = NULL;
 
@@ -2510,11 +2511,15 @@ exec_database_roles_subcmds(const char *schema, char *schema_owner)
 	ListCell	*parsetree_item;
 	Node		*stmts;
 	int		i=0;
+	Oid save_userid;
+	int save_sec_context;
 
 	db_datareader = get_db_datareader_name(dbname);
 	db_datawriter = get_db_datawriter_name(dbname);
 	dbo_role = get_dbo_role_name(dbname);
 	db_owner = get_db_owner_name(dbname);
+
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
 	/* If schema owner is not the dbo/db_owner role. */
 	if (schema_owner && strcmp(schema_owner, dbo_role) != 0 && strcmp(schema_owner, db_owner) != 0)
@@ -2544,33 +2549,42 @@ exec_database_roles_subcmds(const char *schema, char *schema_owner)
 	stmts = parsetree_nth_stmt(stmt_list, i++);
 	update_AlterDefaultPrivilegesStmt(stmts, schema, schema_owner, dbo_role, db_datawriter, NULL);
 
-	/* Run all subcommands */
-	foreach(parsetree_item, stmt_list)
+	PG_TRY();
 	{
-		Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
-		PlannedStmt *wrapper;
+		SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+		/* Run all subcommands */
+		foreach(parsetree_item, stmt_list)
+		{
+			Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
 
-		/* need to make a wrapper PlannedStmt */
-		wrapper = makeNode(PlannedStmt);
-		wrapper->commandType = CMD_UTILITY;
-		wrapper->canSetTag = false;
-		wrapper->utilityStmt = stmt;
-		wrapper->stmt_location = 0;
-		wrapper->stmt_len = 0;
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 0;
 
-		/* do this step */
-		ProcessUtility(wrapper,
-					ALTER_DEFAULT_PRIVILEGES,
-					false,
-					PROCESS_UTILITY_SUBCOMMAND,
-					NULL,
-					NULL,
-					None_Receiver,
-					NULL);
+			/* do this step */
+			ProcessUtility(wrapper,
+						ALTER_DEFAULT_PRIVILEGES,
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
+		}
+		CommandCounterIncrement();
 	}
-	CommandCounterIncrement();
-	pfree(db_datareader);
-	pfree(db_datawriter);
-	pfree(dbo_role);
-	pfree(db_owner);
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+		pfree(db_datareader);
+		pfree(db_datawriter);
+		pfree(dbo_role);
+		pfree(db_owner);
+	}
+	PG_END_TRY();
 }
