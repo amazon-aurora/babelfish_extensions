@@ -69,36 +69,16 @@ static char *get_role_name(RoleSpec *role);
 char	   *get_rolespec_name_internal(const RoleSpec *role, bool missing_ok);
 
 static Oid bbf_admin_oid = InvalidOid;
-static Oid securityadmin_oid = InvalidOid;
-static Oid dbcreator_oid = InvalidOid;
 
 /* Returns OID of bbf_role_admin server role */
 static Oid
 get_bbf_role_admin_oid(void)
 {
 	if (!OidIsValid(bbf_admin_oid))
-		bbf_admin_oid = get_role_oid(BABELFISH_BBF_ROLE_ADMIN, false);
+		bbf_admin_oid = get_role_oid(BABELFISH_ROLE_ADMIN, false);
 	return bbf_admin_oid;
 }
 
-
-/* Returns OID of securityadmin server role */
-static Oid
-get_securityadmin_oid(void)
-{
-	if (!OidIsValid(securityadmin_oid))
-		securityadmin_oid = get_role_oid(BABELFISH_SECURITYADMIN, false);
-	return securityadmin_oid;
-}
-
-/* Returns OID of dbcreator server role */
-static Oid
-get_dbcreator_oid(void)
-{
-	if (!OidIsValid(dbcreator_oid))
-		dbcreator_oid = get_role_oid(BABELFISH_DBCREATOR, false);
-	return dbcreator_oid;
-}
 
 /*
  * GetUTF8CodePoint - extract the next Unicode code point from 1..4
