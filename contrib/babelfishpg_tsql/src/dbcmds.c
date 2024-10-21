@@ -495,6 +495,7 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 	const char  *old_createrole_self_grant;
 	ListCell    *option;
 	const char  *database_collation_name = NULL;
+	Oid         datdba;
 
 	/* Check options */
 	foreach(option, options)
@@ -598,6 +599,7 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 	old_dbname = get_cur_db_name();
 	set_cur_db(dbid, dbname);	/* temporarily set current dbid as the new id */
 	dbo_role = get_dbo_role_name(dbname);
+	datdba = get_role_oid("sysadmin", false);
 
 	PG_TRY();
 	{
