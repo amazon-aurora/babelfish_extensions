@@ -548,5 +548,6 @@ cast-varchar-to-time
 xml_exist-before-16_5
 BABEL-5119
 db_accessadmin
+db_securityadmin
 BABEL-CASE_EXPR
 

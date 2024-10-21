@@ -1451,6 +1451,21 @@ get_db_accessadmin_role_name(const char *dbname)
 	return name;
 }
 
+char *
+get_db_securityadmin_role_name(const char *dbname)
+{
+	char	   *name = palloc0(MAX_BBF_NAMEDATALEND);
+
+	if (get_migration_mode() == SINGLE_DB && strcmp(dbname, "master") != 0
+	    && strcmp(dbname, "tempdb") != 0 && strcmp(dbname, "msdb") != 0)
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s", DB_SECURITYADMIN);
+	else
+		snprintf(name, MAX_BBF_NAMEDATALEND, "%s_%s", dbname, DB_SECURITYADMIN);
+
+	truncate_identifier(name, strlen(name), false);
+	return name;
+}
+
 Oid
 get_db_accessadmin_oid(const char *dbname, bool missing_ok)
 {
