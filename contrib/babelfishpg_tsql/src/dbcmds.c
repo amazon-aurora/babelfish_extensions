@@ -303,7 +303,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 			expected_stmts += 2;
 		}
 	}
-	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy, dummy, dummy CASCADE; ");
+	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy CASCADE; ");
 
 	/* Then drop db_accessadmin, db_owner and dbo in that order */
 	appendStringInfo(&query, "DROP ROLE dummy; ");
@@ -346,7 +346,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	}
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropOwnedStmt(stmt, list_make5(pstrdup(db_datareader), pstrdup(db_datawriter), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
+	update_DropOwnedStmt(stmt, list_make3(pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, db_datareader);
