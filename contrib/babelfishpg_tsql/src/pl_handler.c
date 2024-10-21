@@ -34,6 +34,7 @@
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/schemacmds.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
@@ -2688,7 +2689,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 			}
 		case T_CreateRoleStmt:
 			{
-				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+				if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0 &&
+				    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 				{
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
 					List	   *login_options = NIL;
@@ -3002,15 +3004,24 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 					else if (isuser || isrole)
 					{
-						char *db_owner_name;
+						char *current_db_name = get_cur_db_name();
 
-						db_owner_name = get_db_owner_name(get_cur_db_name());
-						if (!has_privs_of_role(GetUserId(),get_role_oid(db_owner_name, false)))
+						if (has_privs_of_role(GetUserId(), get_db_owner_oid(current_db_name, false)) ||
+						    (isuser && has_privs_of_role(GetUserId(), get_db_accessadmin_oid(current_db_name, false))))
+						{
+							/*
+							 * members of db_owner can create roles and users
+							 * members of db_accessadmin can only create users
+							 */
+						}
+						else
+						{
 							ereport(ERROR,
 									(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 									 errmsg("User does not have permission to perform this action.")));
+						}
 
-						pfree(db_owner_name);
+						pfree(current_db_name);
 					}
 
 					/*
@@ -3294,16 +3305,26 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					}
 					else if (isuser || isrole)
 					{
-						char	   *dbo_name;
-						char	   *db_name;
-						char	   *user_name;
-						char	   *cur_user;
-						Oid     	prev_current_user;
+						char		*db_name = get_cur_db_name();
+						bool 		is_member_of_db_owner = false;
+						bool 		is_member_of_db_accessadmin = false;
+						int 		save_sec_context;
+						Oid 		save_userid;
+						Oid 		db_owner = get_db_owner_oid(db_name, false);
+						Oid 		db_accessadmin = get_db_accessadmin_oid(db_name, false);
+						Oid 		user_oid = get_role_oid(stmt->role->rolename, false);
 
-						db_name = get_cur_db_name();
-						dbo_name = get_dbo_role_name(db_name);
-						user_name = stmt->role->rolename;
-						cur_user = GetUserNameFromId(GetUserId(), false);
+						/* db principal being altered should be a user or role in the current active logical database */
+						if ((isuser && get_db_principal_kind(user_oid, db_name) != BBF_USER) ||
+						    (isrole && get_db_principal_kind(user_oid, db_name) != BBF_ROLE))
+							ereport(ERROR,
+									(errcode(ERRCODE_CHECK_VIOLATION),
+										errmsg("Cannot alter the %s '%s', because it does not exist or you do not have permission.", isuser ? "user" : "role", stmt->role->rolename)));
+
+						is_member_of_db_owner = has_privs_of_role(GetUserId(), db_owner);
+						/* check membership in db_accessadmin if alter user and not already a member of db_owner */
+						if (!is_member_of_db_owner && isuser)
+							is_member_of_db_accessadmin = has_privs_of_role(GetUserId(), db_accessadmin);
 
 						/*
 						 * Check if the current user has privileges.
@@ -3314,19 +3335,37 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (strcmp(defel->defname, "default_schema") == 0)
 							{
-								if (strcmp(cur_user, dbo_name) != 0 &&
-									strcmp(cur_user, user_name) != 0)
+								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin) ||
+									user_oid == GetUserId())
+								{
+									/*
+									 * members of db_owner can alter default schema for any role or user
+									 * members of db_accessadmin can alter default schema for any user
+									 */
+								}
+								else
+								{
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change schema")));
+								}
 							}
 							else if (strcmp(defel->defname, "rename") == 0)
 							{
-								if (strcmp(cur_user, dbo_name) != 0 &&
-									strcmp(cur_user, user_name) != 0)
+								if (is_member_of_db_owner || (isuser && is_member_of_db_accessadmin &&
+									!has_privs_of_role(user_oid, db_owner)))
+								{
+									/*
+									 * members of db_owner can rename any role or user
+									 * members of db_accessadmin can rename users who are not members of db_owner
+									 */
+								}
+								else
+								{
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change user name")));
+								}
 							}
 						}
 
@@ -3336,23 +3375,30 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (strcmp(defel->defname, "rolemembers") == 0)
 							{
-								if (strcmp(cur_user, dbo_name) != 0 &&
-									strcmp(cur_user, user_name) != 0)
+								if (is_member_of_db_owner)
+								{
+									/*
+									 * Only members of db_owner can alter login for a user
+									 */
+								}
+								else
+								{
 									ereport(ERROR,
 											(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 											 errmsg("Current user does not have privileges to change login")));
+								}
 							}
 						}
 
+						GetUserIdAndSecContext(&save_userid, &save_sec_context);
 						/*
 						 * We have performed all the permissions checks.
 						 * Set current user to bbf_role_admin for alter permissions.
 						 */
-						prev_current_user = GetUserId();
-						SetCurrentRoleId(get_bbf_role_admin_oid(), true);
-
 						PG_TRY();
 						{
+							SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
 							if (prev_ProcessUtility)
 								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 													params, queryEnv, dest,
@@ -3368,14 +3414,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						}
 						PG_FINALLY();
 						{
-							SetCurrentRoleId(prev_current_user, true);
+							SetUserIdAndSecContext(save_userid, save_sec_context);
 						}
 						PG_END_TRY();
 
 						set_session_properties(db_name);
-						pfree(cur_user);
 						pfree(db_name);
-						pfree(dbo_name);
 
 						return;
 					}
@@ -3425,42 +3469,45 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 							if (db_name != NULL && strcmp(db_name, "") != 0)
 							{
+								Oid		db_owner = get_db_owner_oid(db_name, false);
+								Oid		db_accessadmin = get_db_accessadmin_oid(db_name, false);
+
 								foreach(item, stmt->roles)
 								{
 									RoleSpec	*rolspec = lfirst(item);
-									char		*user_name;
+									char		*user_name = get_physical_user_name(db_name, rolspec->rolename, false, true);
 									const char	*db_principal_type = drop_user ? "user" : "role";
-									char		*db_owner_name;
-									int		role_oid;
-									int		rolename_len;
-									bool		is_tsql_db_principal = false;
-									bool		is_psql_db_principal = false;
-									Oid		dbowner;
+									int		role_oid = get_role_oid(user_name, true);
 
-									user_name = get_physical_user_name(db_name, rolspec->rolename, false, true);
-									db_owner_name = get_db_owner_name(db_name);
-									dbowner = get_role_oid(db_owner_name, false);
-									role_oid = get_role_oid(user_name, true);
-									rolename_len = strlen(rolspec->rolename);
-									is_tsql_db_principal = OidIsValid(role_oid) &&
-														   ((drop_user && is_user(role_oid)) ||
-															(drop_role && is_role(role_oid)));
-									is_psql_db_principal = OidIsValid(role_oid) && !is_tsql_db_principal;
+									if (!OidIsValid(role_oid) ||                        /* Not found */
+									    (drop_user && get_db_principal_kind(role_oid, db_name) != BBF_USER) ||      /* Found but not a user in current logical db */
+									    (drop_role && get_db_principal_kind(role_oid, db_name) != BBF_ROLE))        /* Found but not a role in current logical db */
+									{
+										if (stmt->missing_ok)
+										{
+											stmt->roles = foreach_delete_current(stmt->roles, item);
+											continue;
+										}
+										else
+											ereport(ERROR,
+												(errcode(ERRCODE_CHECK_VIOLATION),
+												 errmsg("Cannot drop the %s '%s', because it does not exist or you do not have permission.", db_principal_type, rolspec->rolename)));
+									}
 
 									/* If user is dbo or role is db_owner, restrict dropping */
-									if ((drop_user && rolename_len == 3 && strncmp(rolspec->rolename, "dbo", 3) == 0) ||
-										(drop_role && rolename_len == 8 && strncmp(rolspec->rolename, "db_owner", 8) == 0))
+									if (IS_FIXED_DB_PRINCIPAL(rolspec->rolename))
 										ereport(ERROR,
 												(errcode(ERRCODE_CHECK_VIOLATION),
 												 errmsg("Cannot drop the %s '%s'.", db_principal_type, rolspec->rolename)));
 
-									/* 
-									 * Check for current_user's privileges 
-									 * must be database owner to drop user/role
-									 */
-									if ((!stmt->missing_ok && !is_tsql_db_principal) ||
-										!is_member_of_role(GetUserId(), dbowner) ||
-										(is_tsql_db_principal && !is_member_of_role(dbowner, role_oid)) || is_psql_db_principal)
+									if (has_privs_of_role(GetUserId(), db_owner) || (drop_user && has_privs_of_role(GetUserId(), db_accessadmin)))
+									{
+										/* 
+										 * db_owner can drop any user or role in database
+										 * db_accessadmin can drop users in a database
+										 */
+									}
+									else
 										ereport(ERROR,
 												(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 												 errmsg("Cannot drop the %s '%s', because it does not exist or you do not have permission.", db_principal_type, rolspec->rolename)));
@@ -3493,8 +3540,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 														 errmsg("Cannot disable access to the guest user in master or tempdb.")));
 
 											alter_user_can_connect(false, rolspec->rolename, db_name);
-
-											pfree(db_owner_name);
 											
 											return;
 										}
@@ -3506,7 +3551,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									}
 
 									pfree(rolspec->rolename);
-									pfree(db_owner_name);
 
 									rolspec->rolename = user_name;
 								}
@@ -3570,9 +3614,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (is_login(roleform->oid))
 							all_logins = true;
-						else if (is_user(roleform->oid))
+						else if (get_db_principal_kind(roleform->oid, get_current_pltsql_db_name()) == BBF_USER)
 							all_users = true;
-						else if (is_role(roleform->oid))
+						else if (get_db_principal_kind(roleform->oid, get_current_pltsql_db_name()) == BBF_ROLE)
 							all_roles = true;
 						else
 							other = true;
@@ -3603,7 +3647,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						int			role_oid = get_role_oid(role_name, true);
 
 						if (!OidIsValid(role_oid) || role_oid == get_bbf_role_admin_oid()
-							|| IS_BBF_FIXED_SERVER_ROLE(role_name))
+										|| IS_BBF_FIXED_SERVER_ROLE(role_name))
 							ereport(ERROR, (errcode(ERRCODE_DUPLICATE_OBJECT),
 											errmsg("Cannot drop the login '%s', because it does not exist or you do not have permission.", role_name)));
 
@@ -3656,14 +3700,39 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					GrantStmt  *stmt;
 					PlannedStmt *wrapper;
 					RoleSpec *rolspec = create_schema->authrole;
+					Oid       owner_oid;
+					bool      alter_owner = false;
 
-					if (strcmp(queryString, "(CREATE LOGICAL DATABASE )") == 0
+					if (strcmp(queryString, CREATE_LOGICAL_DATABASE) == 0
 						&& context == PROCESS_UTILITY_SUBCOMMAND)
 					{
 						if (pstmt->stmt_len == 19)
 							orig_schema = "guest";
 						else
 							orig_schema = "dbo";
+					}
+					else if (strcmp(queryString, CREATE_GUEST_SCHEMAS_DURING_UPGRADE) == 0)
+					{
+						orig_schema = "guest";
+					}
+					else if (rolspec && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
+					{
+						const char *db_name = get_current_pltsql_db_name();
+						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
+
+						owner_oid = get_rolespec_oid(rolspec, true);
+						/*
+						* db_accessadmin members can create schema with owner being any db principal
+						* If it does not have the pg permission then handle it here. We will set owner
+						* to current user and later alter schema owner using bbf_role_admin
+						*/
+						if (!member_can_set_role(GetUserId(), owner_oid) &&
+							has_privs_of_role(GetUserId(), db_accessadmin) &&
+							(get_db_principal_kind(owner_oid, db_name)))
+						{
+							create_schema->authrole = NULL;
+							alter_owner = true;
+						}
 					}
 
 					if (prev_ProcessUtility)
@@ -3704,8 +3773,27 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								   NULL);
 
 					CommandCounterIncrement();
+
+					if (alter_owner)
+					{
+						Oid save_userid;
+						int save_sec_context;
+
+						GetUserIdAndSecContext(&save_userid, &save_sec_context);
+						PG_TRY();
+						{
+							SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+							AlterSchemaOwner_oid(get_namespace_oid(create_schema->schemaname, false), owner_oid);
+						}
+						PG_FINALLY();
+						{
+							SetUserIdAndSecContext(save_userid, save_sec_context);
+						}
+						PG_END_TRY();
+					}
+
 					/* Grant ALL schema privileges to the user.*/
-					if (rolspec && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+					if (rolspec && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0)
 					{
 						int i;
 						for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
@@ -3787,7 +3875,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 			}
 		case T_GrantRoleStmt:
-			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, "(CREATE LOGICAL DATABASE )") != 0)
+			if (sql_dialect == SQL_DIALECT_TSQL && strcmp(queryString, CREATE_LOGICAL_DATABASE) != 0 &&
+			    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 			{
 				GrantRoleStmt *grant_role = (GrantRoleStmt *) parsetree;
 				Oid 	save_userid;
@@ -4119,7 +4208,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				Assert(list_length(grant->objects) == 1);
 				if (grant->objtype == OBJECT_SCHEMA)
 						break;
-				else if (grant->objtype == OBJECT_TABLE && strcmp("(CREATE LOGICAL DATABASE )", queryString) != 0)
+				else if (grant->objtype == OBJECT_TABLE && strcmp(CREATE_LOGICAL_DATABASE, queryString) != 0)
 				{
 					/*
 					 * Ignore GRANT statements that are executed implicitly as a part of

@@ -1250,7 +1250,7 @@ handle_grant_role(GrantRoleStmt *grant_stmt)
 	if (get_bbf_role_admin_oid() == GetUserId())
 		return true;
 
-	/* Restrict roles to added as a member of bbf_role_admin, securityadmin or dbcreator */
+	/* Restrict roles to added as a member of BBF default server roles */
 	foreach(item, grant_stmt->granted_roles)
 	{
 		AccessPriv *priv = (AccessPriv *) lfirst(item);
