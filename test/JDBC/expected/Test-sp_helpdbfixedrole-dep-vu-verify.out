@@ -34,9 +34,10 @@ int
 
 EXEC test_sp_helpdbfixedrole_proc 'DB_securityadmin'
 GO
-~~ERROR (Code: 50000)~~
-
-~~ERROR (Message: 'DB_securityadmin' is not a known fixed role.)~~
+~~START~~
+varchar#!#nvarchar
+db_securityadmin#!#DB Security Adiministrators
+~~END~~
 
 
 EXEC test_sp_helpdbfixedrole_proc 'error'
