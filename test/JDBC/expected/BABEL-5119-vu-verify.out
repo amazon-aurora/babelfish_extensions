@@ -759,6 +759,7 @@ GO
 ~~START~~
 nvarchar#!#varchar
 db_accessadmin#!#=C
+db_ddladmin#!#=C
 dbo#!#=CTc
 ~~END~~
 

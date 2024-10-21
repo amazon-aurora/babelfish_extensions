@@ -264,7 +264,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	List	   *stmt_list;
 	ListCell   *elem;
 	Node	   *stmt;
-	int         expected_stmts = 8;
+	int         expected_stmts = 10;
 	int         i = 0;
 	const char *dbo;
 	const char *db_owner;
