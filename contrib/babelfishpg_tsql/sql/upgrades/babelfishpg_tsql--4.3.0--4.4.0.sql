@@ -70,6 +70,15 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+
+CREATE OR REPLACE PROCEDURE sys.create_db_roles_during_upgrade()
+LANGUAGE C
+AS 'babelfishpg_tsql', 'create_db_roles_during_upgrade';
+
+CALL sys.create_db_roles_during_upgrade();
+
+DROP PROCEDURE sys.create_db_roles_during_upgrade();
+
 DO
 LANGUAGE plpgsql
 $$
@@ -78,8 +87,8 @@ DECLARE
 BEGIN
     IF EXISTS (
                SELECT STRING_AGG(rolname::text, ', ')
-               INTO existing_server_roles FROM pg_catalog.pg_roles
-               WHERE rolname IN ('securityadmin', 'dbcreator'); )
+               AS existing_server_roles FROM pg_catalog.pg_roles
+               WHERE rolname IN ('securityadmin', 'dbcreator'))
         THEN
             RAISE EXCEPTION 'The following role(s) already exist(s): %', existing_server_roles;
     ELSE
@@ -89,10 +98,6 @@ BEGIN
         EXECUTE format('CREATE ROLE dbcreator CREATEDB INHERIT PASSWORD NULL');
         EXECUTE format('GRANT dbcreator TO bbf_role_admin WITH ADMIN TRUE');
         CALL sys.babel_initialize_logins('dbcreator');
-    ELSE
-        EXECUTE format('CREATE ROLE securityadmin CREATEROLE INHERIT PASSWORD NULL');
-        EXECUTE format('GRANT securityadmin TO bbf_role_admin WITH ADMIN TRUE');
-        CALL sys.babel_initialize_logins('securityadmin');
     END IF;
 END;
 $$;
