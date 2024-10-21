@@ -1418,6 +1418,8 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 
 		parsetree_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
