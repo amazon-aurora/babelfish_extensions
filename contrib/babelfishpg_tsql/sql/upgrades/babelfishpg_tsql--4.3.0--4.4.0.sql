@@ -1261,7 +1261,7 @@ BEGIN
         END IF;
     ELSIF EXISTS (SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE orig_username = role COLLATE sys.database_default)
     THEN
-        IF (((SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE rolname = CURRENT_USER) = 'dbo' COLLATE sys.database_default) AND role COLLATE sys.database_default IN ('db_owner', 'db_accessadmin'))
+        IF (((SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE rolname = CURRENT_USER) = 'dbo' COLLATE sys.database_default) AND role COLLATE sys.database_default IN ('db_owner', 'db_accessadmin', 'db_ddladmin'))
         THEN RETURN 1;
         ELSIF EXISTS (SELECT name FROM sys.user_token WHERE name = role COLLATE sys.database_default)
         THEN RETURN 1; -- Return 1 if current session user is a member of role or windows group
@@ -4257,7 +4257,7 @@ ON Base.rolname = Ext.rolname
 LEFT OUTER JOIN pg_catalog.pg_roles Base2
 ON Ext.login_name = Base2.rolname
 WHERE Ext.database_name = DB_NAME()
-  AND (Ext.orig_username IN ('dbo', 'db_owner', 'db_accessadmin', 'guest') -- system users should always be visible
+  AND (Ext.orig_username IN ('dbo', 'db_owner', 'db_accessadmin', 'db_ddladmin', 'guest') -- system users should always be visible
   OR pg_has_role(Ext.rolname, 'MEMBER')) -- Current user should be able to see users it has permission of
 UNION ALL
 SELECT
@@ -4290,11 +4290,12 @@ CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NUL
 $$
 BEGIN
 	-- Returns a list of the fixed database roles. 
-	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin')
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin', 'db_ddladmin')
 	BEGIN
 		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
 			VALUES ('db_owner', 'DB Owners'),
-			('db_accessadmin', 'DB Access Administrators')) x(DbFixedRole, Description)
+			('db_accessadmin', 'DB Access Administrators')
+			('db_ddladmin', 'DB DDL Administrators')) x(DbFixedRole, Description)
 			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
 	END
 	ELSE IF LOWER(RTRIM(@rolename)) IN (
@@ -4345,7 +4346,7 @@ BEGIN
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
 		AND Ext1.orig_username != 'db_owner'
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_ddladmin')
 		ORDER BY UserName, RoleName;
 	END
 	-- If the security account is the db fixed role - db_owner
@@ -4378,7 +4379,7 @@ BEGIN
 		AND Ext2.database_name = DB_NAME()
 		AND Ext1.type = 'R'
 		AND Ext2.orig_username != 'db_owner'
-		AND Ext2.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext2.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_ddladmin')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY Role_name, Users_in_role;
 	END
@@ -4417,7 +4418,7 @@ BEGIN
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
 		AND Ext1.orig_username != 'db_owner'
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_ddladmin')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY UserName, RoleName;
 	END
