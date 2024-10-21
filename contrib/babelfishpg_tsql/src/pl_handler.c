@@ -3717,6 +3717,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					{
 						const char *db_name = get_current_pltsql_db_name();
 						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
+						Oid        db_ddladmin = get_db_ddladmin_oid(db_name, false);
 
 						owner_oid = get_rolespec_oid(rolspec, true);
 						/*
@@ -3725,7 +3726,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						* to current user and later alter schema owner using bbf_role_admin
 						*/
 						if (!member_can_set_role(GetUserId(), owner_oid) &&
-							has_privs_of_role(GetUserId(), db_accessadmin) &&
+							(has_privs_of_role(GetUserId(), db_accessadmin) || has_privs_of_role(GetUserId(), db_ddladmin)) &&
 							(get_db_principal_kind(owner_oid, db_name)))
 						{
 							create_schema->authrole = NULL;
