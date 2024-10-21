@@ -1991,6 +1991,7 @@ extern bool insert_bulk_check_constraints;
 #define DBO "dbo"
 #define DB_OWNER "db_owner"
 #define DB_ACCESSADMIN "db_accessadmin"
+#define DB_DDLADMIN "db_ddladmin"
 
 #define IS_BBF_BUILT_IN_DB(dbname) \
     (strncmp(dbname, "master", 6) == 0 || \
@@ -2000,7 +2001,9 @@ extern bool insert_bulk_check_constraints;
 #define IS_FIXED_DB_PRINCIPAL(rolname) \
     (strncmp(rolname, DBO, 3) == 0 || \
      strncmp(rolname, DB_OWNER, 8) == 0 || \
-     strncmp(rolname, DB_ACCESSADMIN, 14) == 0)
+     strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
+     strncmp(rolname, DB_DDLADMIN, 11) == 0)
+
 
 /**********************************************************************
  * Function declarations
