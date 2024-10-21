@@ -14,6 +14,11 @@ go
 ~~ERROR (Message: role "master_db_datawriter" already exists)~~
 
 
+create table t1(a int);
+go
+create proc p1 as select 1;
+go
+
 -- grants not allowed on these special roles
 grant select on schema::dbo to db_datareader; -- Error, no grant on special roles
 go
@@ -57,7 +62,7 @@ go
 ~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
 
 
-grant execute on object::t1 to db_datareader; -- Error, no grant on special roles
+grant execute on object::p1 to db_datareader; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 
@@ -78,7 +83,21 @@ go
 ~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
 
 
-revoke execute on object::t1 to db_datareader; -- Error, no grant on special roles
+revoke execute on object::p1 to db_datareader; -- Error, no grant on special roles
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
+
+
+grant all on object::t1 to db_datareader; -- Error, no grant on special roles
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
+
+
+revoke all on object::t1 to db_datareader; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 
@@ -98,6 +117,11 @@ go
 
 ~~ERROR (Message: Cannot drop the role 'db_datawriter'.)~~
 
+
+drop table t1;
+go
+drop proc p1;
+go
 
 -- create login, user and add members
 create database db_roles_db1;

@@ -230,9 +230,9 @@ add_fixed_user_roles_to_bbf_authid_user_ext(const char *dbname)
 	const char     *dbo;
 	const char     *db_owner;
 	const char     *db_accessadmin;
+	const char     *db_datareader;
+	const char     *db_datawriter;
 	const char     *guest;
-	const char	*db_datareader;
-	const char	*db_datawriter;
 
 	dbo = get_dbo_role_name(dbname);
 	db_owner = get_db_owner_name(dbname);
@@ -303,7 +303,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 			expected_stmts += 2;
 		}
 	}
-	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy CASCADE; ");
+	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy, dummy, dummy CASCADE; ");
 
 	/* Then drop db_accessadmin, db_owner and dbo in that order */
 	appendStringInfo(&query, "DROP ROLE dummy; ");
@@ -346,7 +346,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	}
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropOwnedStmt(stmt, list_make3(pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
+	update_DropOwnedStmt(stmt, list_make5(pstrdup(db_datareader), pstrdup(db_datawriter), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, db_datareader);
@@ -1404,8 +1404,8 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	int            i = 0;
 	char           *db_owner;
 	char           *db_accessadmin;
-	const char		*db_datareader;
-	const char 		*db_datawriter;
+	char           *db_datareader;
+	char           *db_datawriter;
 	int16			dbid = get_db_id(dbname);
 
 	db_owner = get_db_owner_name(dbname);
@@ -1498,6 +1498,8 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 		pfree(db_owner);
 		pfree(db_accessadmin);
+		pfree(db_datareader);
+		pfree(db_datawriter);
 	}
 	PG_END_TRY();
 }

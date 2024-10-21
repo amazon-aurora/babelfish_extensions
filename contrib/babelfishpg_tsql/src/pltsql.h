@@ -1987,6 +1987,7 @@ extern bool insert_bulk_check_constraints;
 #define CREATE_GUEST_SCHEMAS_DURING_UPGRADE "(CREATE GUEST SCHEMAS DURING UPGRADE )"
 #define CREATE_FIXED_DB_ROLES "(CREATE FIXED DATABASE ROLES )"
 #define ALTER_DEFAULT_PRIVILEGES "(ALTER DEFAULT PRIVILEGES )"
+#define INTERNAL_GRANT_STATEMENT "(GRANT STATEMENT )"
 
 /* FIXED DB PRINCIPALS */
 #define DBO "dbo"
@@ -2202,6 +2203,7 @@ extern void update_ViewStmt(Node *n, const char *view_schema);
 extern void update_AlterDefaultPrivilegesStmt(Node *n, const char *schema, const char *role1, const char *role2, const char *grantee, const char *priv);
 extern AccessPriv *make_accesspriv_node(const char *priv_name);
 extern RoleSpec   *make_rolespec_node(const char *rolename);
+extern void throw_error_if_fixed_db_role(char *rolname, char *rol1, char *rol2, char *rol3);
 extern void pltsql_check_or_set_default_typmod(TypeName *typeName, int32 *typmod, bool is_cast);
 extern bool TryLockLogicalDatabaseForSession(int16 dbid, LOCKMODE lockmode);
 extern void UnlockLogicalDatabaseForSession(int16 dbid, LOCKMODE lockmode, bool force);

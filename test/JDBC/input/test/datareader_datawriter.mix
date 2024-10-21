@@ -7,6 +7,11 @@ go
 create role db_datawriter; -- Error, this role already exists
 go
 
+create table t1(a int);
+go
+create proc p1 as select 1;
+go
+
 -- grants not allowed on these special roles
 grant select on schema::dbo to db_datareader; -- Error, no grant on special roles
 go
@@ -26,7 +31,7 @@ go
 grant insert on object::t1 to db_datawriter; -- Error, no grant on special roles
 go
 
-grant execute on object::t1 to db_datareader; -- Error, no grant on special roles
+grant execute on object::p1 to db_datareader; -- Error, no grant on special roles
 go
 
 revoke select on object::t1 to db_datareader; -- Error, no grant on special roles
@@ -35,13 +40,24 @@ go
 revoke insert on object::t1 to db_datawriter; -- Error, no grant on special roles
 go
 
-revoke execute on object::t1 to db_datareader; -- Error, no grant on special roles
+revoke execute on object::p1 to db_datareader; -- Error, no grant on special roles
+go
+
+grant all on object::t1 to db_datareader; -- Error, no grant on special roles
+go
+
+revoke all on object::t1 to db_datareader; -- Error, no grant on special roles
 go
 
 drop role db_datareader; -- Error, should not be dropped
 go
 
 drop role db_datawriter; -- Error, should not be dropped
+go
+
+drop table t1;
+go
+drop proc p1;
 go
 
 -- create login, user and add members
