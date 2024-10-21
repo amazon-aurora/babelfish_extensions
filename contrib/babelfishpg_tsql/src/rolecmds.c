@@ -78,6 +78,7 @@ static void validateFQDN(char *fqdn);
 
 static Oid bbf_admin_oid = InvalidOid;
 static Oid securityadmin_oid = InvalidOid;
+static Oid dbcreator_oid = InvalidOid;
 
 void
 create_bbf_authid_login_ext(CreateRoleStmt *stmt)
@@ -148,6 +149,8 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 	else if (strcmp(stmt->role, "bbf_role_admin") == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("Z");
 	else if (strcmp(stmt->role, BABELFISH_SECURITYADMIN) == 0)
+		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
+	else if (strcmp(stmt->role, BABELFISH_DBCREATOR) == 0)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("R");
 	else if (from_windows)
 		new_record_login_ext[LOGIN_EXT_TYPE] = CStringGetTextDatum("U");
@@ -698,6 +701,15 @@ get_securityadmin_oid(void)
 	return securityadmin_oid;
 }
 
+/* Returns OID of dbcreator server role */
+Oid
+get_dbcreator_oid(void)
+{
+	if (!OidIsValid(dbcreator_oid))
+		dbcreator_oid = get_role_oid(BABELFISH_DBCREATOR, false);
+	return dbcreator_oid;
+}
+
 /*
  * Returns OID of SA of the current database.
  * We assume that SA is the DBA of the babelfish DB.
@@ -1050,7 +1062,8 @@ drop_all_logins(PG_FUNCTION_ARGS)
 		 * Remove SA from authid_login_ext now but do not add it to the list
 		 * because we don't want to remove the corresponding PG role.
 		 */
-		if (role_is_sa(get_role_oid(rolname, false)) || (strcmp(rolname, "sysadmin") == 0) || (strcmp(rolname, "bbf_role_admin") == 0))
+		if (role_is_sa(get_role_oid(rolname, false)) || (strcmp(rolname, "bbf_role_admin") == 0)
+									|| IS_BBF_FIXED_SERVER_ROLE(rolname))
 			CatalogTupleDelete(bbf_authid_login_ext_rel, &tuple->t_self);
 		else
 			rolname_list = lcons(rolname, rolname_list);
@@ -1684,7 +1697,7 @@ is_alter_server_stmt(GrantRoleStmt *stmt)
 		RoleSpec   *spec = (RoleSpec *) linitial(stmt->granted_roles);
 
 		/* only supported server roles */
-		if (IS_ROLENAME_SYSADMIN(spec->rolename) || IS_ROLENAME_SECURITYADMIN(spec->rolename))
+		if (IS_BBF_FIXED_SERVER_ROLE(spec->rolename))
 			return true;
 	}
 
@@ -1731,7 +1744,8 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 	 * if server role is securityadmin and it has privileges of securityadmin
 	 */
 	if (!has_privs_of_role(GetSessionUserId(), sysadmin) && ((strcmp(granted_name, BABELFISH_SECURITYADMIN) != 0)
-										|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())))
+		|| !has_privs_of_role(GetSessionUserId(), get_securityadmin_oid())) && ((strcmp(granted_name, BABELFISH_DBCREATOR) != 0)
+						|| !has_privs_of_role(GetSessionUserId(), get_dbcreator_oid())))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("Current login %s does not have permission to alter server role",
