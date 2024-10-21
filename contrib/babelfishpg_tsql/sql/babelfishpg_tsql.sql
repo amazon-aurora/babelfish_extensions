@@ -1254,7 +1254,9 @@ FROM pg_catalog.pg_class t1
 	JOIN sys.pg_namespace_ext t2 ON t1.relnamespace = t2.oid
 	JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
 	JOIN information_schema.column_privileges t5 ON t1.relname = t5.table_name AND t2.nspname = t5.table_schema
-	JOIN pg_attribute t6 ON t6.attrelid = t1.oid AND t6.attname = t5.column_name;
+	JOIN pg_attribute t6 ON t6.attrelid = t1.oid AND t6.attname = t5.column_name
+	JOIN sys.babelfish_authid_user_ext ext ON ext.rolname = t5.grantee
+WHERE ext.orig_username NOT IN ('db_datawriter', 'db_datareader');
 GRANT SELECT ON sys.sp_column_privileges_view TO PUBLIC;
 
 CREATE OR REPLACE PROCEDURE sys.sp_column_privileges(
@@ -1362,7 +1364,8 @@ FROM pg_catalog.pg_class t1
 	JOIN sys.pg_namespace_ext t2 ON t1.relnamespace = t2.oid
 	JOIN sys.schemas s1 ON s1.schema_id = t1.relnamespace
 	JOIN information_schema.table_privileges t4 ON t1.relname = t4.table_name
-WHERE t4.privilege_type = 'DELETE'; 
+	JOIN sys.babelfish_authid_user_ext ext ON ext.rolname = t4.grantee
+WHERE t4.privilege_type = 'DELETE' AND ext.orig_username != 'db_datawriter';
 GRANT SELECT on sys.sp_table_privileges_view TO PUBLIC;
 
 CREATE OR REPLACE PROCEDURE sys.sp_table_privileges(
@@ -2118,7 +2121,7 @@ BEGIN
 		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter')
 		ORDER BY UserName, RoleName;
 	END
 	-- If the security account is the db fixed role - db_owner
@@ -2150,7 +2153,7 @@ BEGIN
 		WHERE Ext1.database_name = DB_NAME()
 		AND Ext2.database_name = DB_NAME()
 		AND Ext1.type = 'R'
-		AND Ext2.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext2.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY Role_name, Users_in_role;
 	END
@@ -2188,7 +2191,7 @@ BEGIN
 		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY UserName, RoleName;
 	END
@@ -2348,11 +2351,13 @@ CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NUL
 $$
 BEGIN
 	-- Returns a list of the fixed database roles. 
-	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin')
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter')
 	BEGIN
 		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
 			VALUES ('db_owner', 'DB Owners'),
-			('db_accessadmin', 'DB Access Administrators')) x(DbFixedRole, Description)
+			('db_accessadmin', 'DB Access Administrators'),
+			('db_datareader', 'DB Data Reader'),
+			('db_datawriter', 'DB Data Writer')) x(DbFixedRole, Description)
 			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
 	END
 	ELSE IF LOWER(RTRIM(@rolename)) IN (

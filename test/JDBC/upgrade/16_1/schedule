@@ -543,3 +543,4 @@ db_accessadmin
 securityadmin_role
 xml_exist-before-16_5
 BABEL-CASE_EXPR-before-16_5-or-15_9
+datareader_datawriter
