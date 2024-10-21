@@ -1332,6 +1332,7 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 
 		SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
 		add_to_bbf_authid_user_ext(db_accessadmin, DB_ACCESSADMIN, dbname, NULL, NULL, true, true, false);
+		add_to_bbf_authid_user_ext(db_securityadmin, DB_SECURITYADMIN, dbname, NULL, NULL, true, true, false);
 
 		foreach(parsetree_item, parsetree_list)
 		{
@@ -1369,6 +1370,7 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 		SetUserIdAndSecContext(save_userid, save_sec_context);
 		pfree(db_owner);
 		pfree(db_accessadmin);
+		pfree(db_securityadmin);
 	}
 	PG_END_TRY();
 }
