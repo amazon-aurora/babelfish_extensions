@@ -3316,8 +3316,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						Oid 		db_accessadmin = get_db_accessadmin_oid(db_name, false);
 						Oid			db_securityadmin = get_role_oid(get_db_securityadmin_role_name(db_name), false);
 						Oid 		user_oid = get_role_oid(stmt->role->rolename, false);
-
-						/* db principal being altered should be a user or role in the current active logical database */
 						if ((isuser && get_db_principal_kind(user_oid, db_name) != BBF_USER) ||
 						    (isrole && get_db_principal_kind(user_oid, db_name) != BBF_ROLE))
 							ereport(ERROR,

@@ -573,6 +573,7 @@ SELECT_INTO_TEST
 binary-datatype-operators
 securityadmin_role
 sys_dm_os_sys_info
+BABEL-5059
 cast-varchar-to-time
 xml_exist
 test_db_collation
@@ -581,3 +582,4 @@ BABEL-5129
 db_accessadmin
 db_securityadmin
 BABEL-CASE_EXPR
+BABEL-5186
