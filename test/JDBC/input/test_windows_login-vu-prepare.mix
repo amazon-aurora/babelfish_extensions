@@ -1,4 +1,4 @@
--- sla 65000
+-- sla 70000
 -- psql
 do 
 $$ begin 

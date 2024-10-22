@@ -1396,6 +1396,17 @@ grant_perms_to_dbreader_dbwriter(const uint16 dbid,
 }
 
 static void
+rolname_same_as_db_rolname(char *rolname)
+{
+	if (OidIsValid(get_role_oid(rolname, true)))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", rolname)));
+	}
+}
+
+static void
 create_db_roles_in_database(const char *dbname, List *parsetree_list)
 {
 	Node           *stmt;
@@ -1413,29 +1424,10 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	db_datareader = get_db_datareader_name(dbname);
 	db_datawriter = get_db_datawriter_name(dbname);
 
-
-	if (OidIsValid(get_role_oid(db_accessadmin, true)))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_accessadmin)));
-	}
-	
-	if (OidIsValid(get_role_oid(db_datareader, true)))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_datareader)));
-		return;
-	}
-
-	if (OidIsValid(get_role_oid(db_datawriter, true)))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_datawriter)));
-		return;
-	}
+	/* Throws error if a role exists already with the same name as db role. */
+	rolname_same_as_db_rolname(db_accessadmin);
+	rolname_same_as_db_rolname(db_datareader);
+	rolname_same_as_db_rolname(db_datawriter);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_datareader, NULL, NULL);
