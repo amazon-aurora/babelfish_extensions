@@ -1,3 +1,14 @@
+-- tsql
+-- bbf dump does not dump password so reset the password
+ALTER LOGIN babel_5135_l1 WITH PASSWORD='12345678';
+GO
+
+ALTER LOGIN babel_5135_l2 WITH PASSWORD='12345678';
+GO
+
+ALTER LOGIN babel_5135_dbsecadmin_l1 WITH PASSWORD='12345678';
+GO
+
 -- CASE 1 Allowed syntaxes to modify the membership of db_securityadmin
     -- CASE 1.1 Validate ALTER ROLE ... ADD/DROP MEMBER
     -- CASE 1.2 Validate sp_addrolemember
@@ -125,6 +136,8 @@ DROP SCHEMA babel_5135_sch2;
 GO
 
 -- CASE 5 - GRANT/REVOKE management of permissions
+	-- CASE 5.1 - Validate GRANT/REVOKE of object/schema privileges
+	-- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects 
 GRANT SELECT, INSERT, UPDATE, DELETE ON babel_5135_schema1.babel_5135_t1 TO babel_5135_u1;
 GO
 
@@ -235,7 +248,106 @@ GO
 SELECT babel_5135_schema1.babel_5135_f1();
 GO
 
--- ADD is_member(), is_rolemember(), system views testcases
+-- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects 
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT current_user;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+-- CASE 6 - is_member() / is_rolemember() testcases
+-- tsql
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+
+SELECT is_rolemember('db_securityadmin', 'dbo');
+GO
+
+SELECT is_rolemember('db_securityadmin', 'db_owner');
+GO
+
+SELECT is_rolemember('db_securityadmin', 'db_accessadmin');
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+
+-- tsql
+EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+
+-- tsql
+EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+
+-- CASE 7 - system procedures
+ -- CASE 7.1 - sp_helpdbfixedrole testcase are covered in respective test Test-sp_helpdbfixedrole file
+ -- CASE 7.2 - sp_helpuser
+ -- CASE 7.3 - sp_helprole
+ -- CASE 7.4 - sp_helprolemember
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+CREATE TABLE temp_sp_helpuser(UserName sys.sysname, RoleName sys.sysname, LoginName sys.sysname, 
+DefDBName sys.sysname, DefSchemaName sys.sysname, UserID int, SID SYS.VARBINARY(85));
+GO
+
+CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId smallint, IsAppRole int);
+GO
+
+CREATE TABLE temp_sp_helprolemember(DbRole sys.sysname, MemberName sys.sysname, MemberSID SYS.VARBINARY(85));
+GO
+
+INSERT INTO temp_sp_helpuser(UserName, RoleName, LoginName, DefDBName, DefSchemaName, UserID, SID) EXEC sp_helpuser 'db_securityadmin';
+GO
+
+SELECT UserName, Rolename, LoginName, DefDBName, DefSchemaName FROM temp_sp_helpuser
+where UserName = 'db_securityadmin';
+GO
+
+exec sp_helpuser 'db_securityadmin';
+GO
+
+exec sp_helprole 'db_securityadmin';
+GO
+
+exec sp_helprolemember 'sp_helprolemember';
+GO
+
+exec sp_helprole '';
+
+-- cleanup
+DROP TABLE temp_sp_helpuser;
+GO
+
+DROP TABLE temp_sp_helprole;
+GO
+
+DROP TABLE temp_sp_helprolemember;
+GO
+
+-- system views testcases
 
 USE babel_5135_db1;
 GO
