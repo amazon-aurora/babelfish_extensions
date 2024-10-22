@@ -85,12 +85,12 @@ $$
 DECLARE
     existing_server_roles TEXT;
 BEGIN
-    IF EXISTS (
-               SELECT STRING_AGG(rolname::text, ', ')
-               AS existing_server_roles FROM pg_catalog.pg_roles
-               WHERE rolname IN ('securityadmin', 'dbcreator'))
-        THEN
-            RAISE EXCEPTION 'The following role(s) already exist(s): %', existing_server_roles;
+    SELECT STRING_AGG(rolname::text, ', ')
+    INTO existing_server_roles FROM pg_catalog.pg_roles
+    WHERE rolname IN ('securityadmin', 'dbcreator');
+        
+    IF existing_server_roles IS NOT NULL THEN
+            RAISE EXCEPTION 'The following role(s) already exist(s): %', existing_server_roles;   
     ELSE
         EXECUTE format('CREATE ROLE securityadmin CREATEROLE INHERIT PASSWORD NULL');
         EXECUTE format('GRANT securityadmin TO bbf_role_admin WITH ADMIN TRUE');
