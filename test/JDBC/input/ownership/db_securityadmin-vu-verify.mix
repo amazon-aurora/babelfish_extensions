@@ -295,7 +295,7 @@ SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
 GO
 
 -- tsql
-EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
+EXEC sp_addrolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
 GO
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -308,46 +308,100 @@ GO
  -- CASE 7.3 - sp_helprole
  -- CASE 7.4 - sp_helprolemember
 
+-- test for helpuser
+-- tsql
+CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id smallint, 
+Users_in_role sys.sysname, UserID smallint);
+GO
+
+GRANT INSERT,SELECT ON temp_sp_helpuser TO PUBLIC;
+GO
+
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
-CREATE TABLE temp_sp_helpuser(UserName sys.sysname, RoleName sys.sysname, LoginName sys.sysname, 
-DefDBName sys.sysname, DefSchemaName sys.sysname, UserID int, SID SYS.VARBINARY(85));
+INSERT INTO temp_sp_helpuser(RoleName, Role_id, Users_in_role, UserID) EXEC sp_helpuser 'db_securityadmin';
 GO
 
-CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId smallint, IsAppRole int);
+SELECT Rolename, sys.user_name(Role_id), Users_in_role, sys.user_name(UserID) FROM temp_sp_helpuser
+WHERE Rolename = 'db_securityadmin' ORDER BY Users_in_role;
 GO
 
-CREATE TABLE temp_sp_helprolemember(DbRole sys.sysname, MemberName sys.sysname, MemberSID SYS.VARBINARY(85));
+-- tsql
+TRUNCATE TABLE temp_sp_helpuser;
 GO
 
-INSERT INTO temp_sp_helpuser(UserName, RoleName, LoginName, DefDBName, DefSchemaName, UserID, SID) EXEC sp_helpuser 'db_securityadmin';
+-- tsql
+INSERT INTO temp_sp_helpuser(RoleName, Role_id, Users_in_role, UserID) EXEC sp_helpuser 'db_securityadmin';
 GO
 
-SELECT UserName, Rolename, LoginName, DefDBName, DefSchemaName FROM temp_sp_helpuser
-where UserName = 'db_securityadmin';
+SELECT Rolename, sys.user_name(Role_id), Users_in_role, sys.user_name(UserID) FROM temp_sp_helpuser
+WHERE Rolename = 'db_securityadmin' ORDER BY Users_in_role;
 GO
 
-exec sp_helpuser 'db_securityadmin';
-GO
-
-exec sp_helprole 'db_securityadmin';
-GO
-
-exec sp_helprolemember 'sp_helprolemember';
-GO
-
-exec sp_helprole '';
-
--- cleanup
+-- tsql
 DROP TABLE temp_sp_helpuser;
 GO
 
+-- test for sp_helprole
+CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId smallint, IsAppRole int);
+GO
+
+GRANT INSERT,SELECT ON temp_sp_helprole TO PUBLIC;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+INSERT INTO temp_sp_helprole(RoleName, RoleId, IsAppRole) EXEC sp_helprole 'db_securityadmin';
+GO
+
+SELECT RoleName, sys.user_name(RoleId), IsAppRole FROM temp_sp_helprole
+WHERE RoleName = 'db_securityadmin';
+GO
+
+-- tsql
+TRUNCATE TABLE temp_sp_helprole;
+GO
+
+-- tsql
+INSERT INTO temp_sp_helprole(RoleName, RoleId, IsAppRole) EXEC sp_helprole 'db_securityadmin';
+GO
+
+SELECT RoleName, sys.user_name(RoleId), IsAppRole FROM temp_sp_helprole
+WHERE RoleName = 'db_securityadmin';
+GO
+
+-- tsql
 DROP TABLE temp_sp_helprole;
 GO
 
-DROP TABLE temp_sp_helprolemember;
+-- test for temp_sp_helprolemember
+CREATE TABLE temp_sp_helprolemember(DbRole sys.sysname, MemberName sys.sysname, MemberSID SYS.VARBINARY(85));
 GO
 
--- system views testcases
+GRANT INSERT,SELECT ON temp_sp_helprolemember TO PUBLIC;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+INSERT INTO temp_sp_helprolemember(DbRole, MemberName, MemberSID) EXEC sp_helprolemember 'db_securityadmin';
+GO
+
+SELECT DbRole, MemberName FROM temp_sp_helprolemember
+WHERE DbRole = 'db_securityadmin' ORDER BY MemberName;
+GO
+
+-- tsql
+TRUNCATE TABLE temp_sp_helprolemember;
+GO
+
+-- tsql
+INSERT INTO temp_sp_helprolemember(DbRole, MemberName, MemberSID) EXEC sp_helprolemember 'db_securityadmin';
+GO
+
+SELECT DbRole, MemberName FROM temp_sp_helprolemember
+WHERE DbRole = 'db_securityadmin' ORDER BY MemberName;
+GO
+
+-- tsql
+DROP TABLE temp_sp_helprolemember;
+GO
 
 USE babel_5135_db1;
 GO

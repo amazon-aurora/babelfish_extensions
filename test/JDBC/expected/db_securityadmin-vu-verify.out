@@ -1,4 +1,15 @@
 -- tsql
+-- bbf dump does not dump password so reset the password
+ALTER LOGIN babel_5135_l1 WITH PASSWORD='12345678';
+GO
+
+ALTER LOGIN babel_5135_l2 WITH PASSWORD='12345678';
+GO
+
+ALTER LOGIN babel_5135_dbsecadmin_l1 WITH PASSWORD='12345678';
+GO
+
+-- tsql
 -- CASE 1 Allowed syntaxes to modify the membership of db_securityadmin
     -- CASE 1.1 Validate ALTER ROLE ... ADD/DROP MEMBER
     -- CASE 1.2 Validate sp_addrolemember
@@ -188,6 +199,8 @@ DROP SCHEMA babel_5135_sch2;
 GO
 
 -- CASE 5 - GRANT/REVOKE management of permissions
+	-- CASE 5.1 - Validate GRANT/REVOKE of object/schema privileges
+	-- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects 
 GRANT SELECT, INSERT, UPDATE, DELETE ON babel_5135_schema1.babel_5135_t1 TO babel_5135_u1;
 GO
 ~~ERROR (Code: 33557097)~~
@@ -408,14 +421,261 @@ GO
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
 
 
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+-- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects 
+SELECT current_user;
+GO
+~~START~~
+varchar
+babel_5135_dbsecadmin_u1
+~~END~~
 
--- ADD is_member(), is_rolemember(), system views testcases
-USE babel_5135_db1;
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: The server principal "babel_5135_l1" is not able to access the database "babel_5135_db1" under the current security context)~~
+~~ERROR (Message: permission denied for table babel_5135_t1)~~
 
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view babel_5135_v1)~~
+
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for procedure babel_5135_p1)~~
+
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+-- tsql
+-- CASE 6 - is_member() / is_rolemember() testcases
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+~~START~~
+int#!#int
+0#!#1
+~~END~~
+
+
+SELECT is_rolemember('db_securityadmin', 'dbo');
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+SELECT is_rolemember('db_securityadmin', 'db_owner');
+GO
+~~START~~
+int
+0
+~~END~~
+
+
+SELECT is_rolemember('db_securityadmin', 'db_accessadmin');
+GO
+~~START~~
+int
+0
+~~END~~
+
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+~~START~~
+int#!#int
+1#!#1
+~~END~~
+
+
+-- tsql
+EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+~~START~~
+int#!#int
+0#!#0
+~~END~~
+
+
+-- tsql
+EXEC sp_addrolemember 'db_securityadmin', 'babel_5135_dbsecadmin_u1';
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+SELECT is_member('db_securityadmin'), is_rolemember('db_securityadmin');
+GO
+~~START~~
+int#!#int
+1#!#1
+~~END~~
+
+
+
+-- tsql
+-- CASE 7 - system procedures
+ -- CASE 7.1 - sp_helpdbfixedrole testcase are covered in respective test Test-sp_helpdbfixedrole file
+ -- CASE 7.2 - sp_helpuser
+ -- CASE 7.3 - sp_helprole
+ -- CASE 7.4 - sp_helprolemember
+-- test for helpuser
+CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id smallint, 
+Users_in_role sys.sysname, UserID smallint);
+GO
+
+GRANT INSERT,SELECT ON temp_sp_helpuser TO PUBLIC;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+INSERT INTO temp_sp_helpuser(RoleName, Role_id, Users_in_role, UserID) EXEC sp_helpuser 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT Rolename, sys.user_name(Role_id), Users_in_role, sys.user_name(UserID) FROM temp_sp_helpuser
+WHERE Rolename = 'db_securityadmin' ORDER BY Users_in_role;
+GO
+~~START~~
+varchar#!#nvarchar#!#varchar#!#nvarchar
+db_securityadmin#!#db_securityadmin#!#babel_5135_dbsecadmin_u1#!#babel_5135_dbsecadmin_u1
+~~END~~
+
+
+-- tsql
+TRUNCATE TABLE temp_sp_helpuser;
+GO
+
+-- tsql
+INSERT INTO temp_sp_helpuser(RoleName, Role_id, Users_in_role, UserID) EXEC sp_helpuser 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT Rolename, sys.user_name(Role_id), Users_in_role, sys.user_name(UserID) FROM temp_sp_helpuser
+WHERE Rolename = 'db_securityadmin' ORDER BY Users_in_role;
+GO
+~~START~~
+varchar#!#nvarchar#!#varchar#!#nvarchar
+db_securityadmin#!#db_securityadmin#!#babel_5135_dbsecadmin_u1#!#babel_5135_dbsecadmin_u1
+~~END~~
+
+
+-- tsql
+DROP TABLE temp_sp_helpuser;
+GO
+
+-- test for sp_helprole
+CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId smallint, IsAppRole int);
+GO
+
+GRANT INSERT,SELECT ON temp_sp_helprole TO PUBLIC;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+INSERT INTO temp_sp_helprole(RoleName, RoleId, IsAppRole) EXEC sp_helprole 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT RoleName, sys.user_name(RoleId), IsAppRole FROM temp_sp_helprole
+WHERE RoleName = 'db_securityadmin';
+GO
+~~START~~
+varchar#!#nvarchar#!#int
+db_securityadmin#!#db_securityadmin#!#0
+~~END~~
+
+
+-- tsql
+TRUNCATE TABLE temp_sp_helprole;
+GO
+
+-- tsql
+INSERT INTO temp_sp_helprole(RoleName, RoleId, IsAppRole) EXEC sp_helprole 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT RoleName, sys.user_name(RoleId), IsAppRole FROM temp_sp_helprole
+WHERE RoleName = 'db_securityadmin';
+GO
+~~START~~
+varchar#!#nvarchar#!#int
+db_securityadmin#!#db_securityadmin#!#0
+~~END~~
+
+
+-- tsql
+DROP TABLE temp_sp_helprole;
+GO
+
+-- test for temp_sp_helprolemember
+CREATE TABLE temp_sp_helprolemember(DbRole sys.sysname, MemberName sys.sysname, MemberSID SYS.VARBINARY(85));
+GO
+
+GRANT INSERT,SELECT ON temp_sp_helprolemember TO PUBLIC;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+INSERT INTO temp_sp_helprolemember(DbRole, MemberName, MemberSID) EXEC sp_helprolemember 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT DbRole, MemberName FROM temp_sp_helprolemember
+WHERE DbRole = 'db_securityadmin' ORDER BY MemberName;
+GO
+~~START~~
+varchar#!#varchar
+db_securityadmin#!#babel_5135_dbsecadmin_u1
+~~END~~
+
+
+-- tsql
+TRUNCATE TABLE temp_sp_helprolemember;
+GO
+
+-- tsql
+INSERT INTO temp_sp_helprolemember(DbRole, MemberName, MemberSID) EXEC sp_helprolemember 'db_securityadmin';
+GO
+~~ROW COUNT: 1~~
+
+
+SELECT DbRole, MemberName FROM temp_sp_helprolemember
+WHERE DbRole = 'db_securityadmin' ORDER BY MemberName;
+GO
+~~START~~
+varchar#!#varchar
+db_securityadmin#!#babel_5135_dbsecadmin_u1
+~~END~~
+
+
+-- tsql
+DROP TABLE temp_sp_helprolemember;
+GO
+
+USE babel_5135_db1;
+GO
 
 SELECT name, type, type_desc, default_schema_name, is_fixed_role, authentication_type_desc FROM sys.database_principals WHERE NAME = 'db_securityadmin';
 GO
