@@ -1409,6 +1409,16 @@ get_db_owner_name(const char *dbname)
 	return get_db_owner_name_by_mode(dbname, get_migration_mode());
 }
 
+Oid
+get_db_owner_oid(const char *dbname, bool missing_ok)
+{
+	char *db_owner_name = get_db_owner_name(dbname);
+	Oid  db_owner_oid = get_role_oid(db_owner_name, missing_ok);
+	pfree(db_owner_name);
+	
+	return db_owner_oid;
+}
+
 char *
 get_db_datareader_name(const char *dbname)
 {
