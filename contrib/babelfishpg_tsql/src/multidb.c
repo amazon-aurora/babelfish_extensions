@@ -758,8 +758,18 @@ select_json_modify(SelectStmt *stmt)
 
 				if (is_json_modify(json_mod_fc->funcname) && is_select_for_json(from_sel_stmt))
 				{
-
 					Node	   *n1 = lfourth(json_mod_fc->args);
+					A_Const    *escape = (A_Const *) n1;
+					
+					rewrite_plain_name(json_mod_fc->funcname);
+
+					escape->val.boolval.boolval = true;
+				}
+
+				else if (is_json_query1(json_mod_fc->funcname) && is_select_for_json(from_sel_stmt))
+				{
+					// is_select_for_json is_json_query func that returns json, escape = true
+					Node	   *n1 = llast(json_mod_fc->args);
 					A_Const    *escape = (A_Const *) n1;
 					
 					rewrite_plain_name(json_mod_fc->funcname);
@@ -768,6 +778,35 @@ select_json_modify(SelectStmt *stmt)
 				}
 			}
 		}
+	}
+}
+
+
+bool
+is_json_query1(List *name)
+{
+	switch (list_length(name))
+	{
+		case 1:
+			{
+				Node	   *func = (Node *) linitial(name);
+
+				if (strncmp("json_query", strVal(func), 10) == 0)
+					return true;
+				return false;
+			}
+		case 2:
+			{
+				Node	   *schema = (Node *) linitial(name);
+				Node	   *func = (Node *) lsecond(name);
+
+				if (strncmp("sys", strVal(schema), 3) == 0 &&
+					strncmp("json_query", strVal(func), 10) == 0)
+					return true;
+				return false;
+			}
+		default:
+			return false;
 	}
 }
 

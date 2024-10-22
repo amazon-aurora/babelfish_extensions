@@ -695,7 +695,7 @@ TsqlJsonModifyMakeFuncCall(Node *expr, Node *path, Node *newValue)
 	return (Node *) fc;
 }
 
-bool
+static bool
 is_json_query(List *name)
 {
 	switch (list_length(name))

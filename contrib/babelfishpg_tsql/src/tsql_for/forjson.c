@@ -43,7 +43,7 @@ typedef struct {
 	int idx;
 } JsonbEntry;
 
-static void tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values);
+static void tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values, bool escape);
 
 static void tsql_auto_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values);
 
@@ -78,6 +78,7 @@ tsql_query_to_json_sfunc(PG_FUNCTION_ARGS)
 	bool		include_null_values;
 	bool		without_array_wrapper;
 	char	   	*root_name;
+	bool 		escape;
 
 	MemoryContext agg_context;
 	MemoryContext old_context;
@@ -113,6 +114,8 @@ tsql_query_to_json_sfunc(PG_FUNCTION_ARGS)
 		without_array_wrapper = PG_GETARG_BOOL(4);
 		root_name = PG_ARGISNULL(5) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(5));
 
+		escape = PG_ARGISNULL(6) ? false : PG_GETARG_BOOL(6);
+
 		state->jsonbArray = jsonbArray;
 		state->without_array_wrapper = without_array_wrapper;
 		state->root_name = root_name;
@@ -129,7 +132,7 @@ tsql_query_to_json_sfunc(PG_FUNCTION_ARGS)
 			break;
 		case TSQL_FORJSON_PATH: /* FOR JSON PATH */
 			/* add the current row to the state */
-			tsql_row_to_json(jsonbArray, record, include_null_values);
+			tsql_row_to_json(jsonbArray, record, include_null_values, escape);
 			break;
 		default:
 			/* Invalid mode, should not happen, report internal error */
@@ -412,8 +415,9 @@ tsql_auto_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_va
 // Main row to json function. 
 // Creates a Jsonb row object, processes the row, determines if it should be inserted as a nested json object
 // inserts json object to row and then into the main jsonbArray.
+// escape is set to true when json 
 static void
-tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values)
+tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values, bool escape)
 {
 	// HashTable
 	HTAB	   *jsonbHash;
@@ -584,7 +588,11 @@ tsql_row_to_json(JsonbValue* jsonbArray, Datum record, bool include_null_values)
 		else	{
 			// Extract the colummn value in the correct format
 			value = palloc(sizeof(JsonbValue));
-			jsonb_get_value(colval, isnull, value, datatype_oid);
+			if(escape) {
+				jsonb_get_value(colval, isnull, value, JSONOID);
+			} else {
+				jsonb_get_value(colval, isnull, value, datatype_oid);
+			}
 			value = &value->val.array.elems[0];
 		}
 
