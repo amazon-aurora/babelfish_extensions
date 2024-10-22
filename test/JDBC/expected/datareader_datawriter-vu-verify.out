@@ -1,3 +1,11 @@
+-- tsql
+-- bbf dump does not dump password so reset the password
+ALTER LOGIN db_roles_l2 WITH PASSWORD = '123'
+GO
+
+ALTER LOGIN db_roles_l1 WITH PASSWORD = '123'
+GO
+
 -- tsql user=db_roles_l2 password=123
 -- create objects after upgrade
 use db_roles_db1;
