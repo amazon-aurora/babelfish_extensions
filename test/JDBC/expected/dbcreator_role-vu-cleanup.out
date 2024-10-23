@@ -35,6 +35,9 @@ go
 drop TRIGGER dbcreator_tggr1
 go
 
+DROP TABLE dbc_sp_helpsrvrolemember_tbl
+GO
+
 drop table dbcreator_tb1
 go
 

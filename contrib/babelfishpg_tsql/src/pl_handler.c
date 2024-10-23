@@ -6915,67 +6915,67 @@ gen_command_grant_revoke_priv_to_role(StringInfo query, const char *rolename,
 							bool is_grant, Oid login_oid)
 {
 	int createrole = 0, createdb = 0;
+	int prev_createrole = 0, prev_createdb = 0;
+	bool grant_createrole, revoke_createrole, grant_createdb, revoke_createdb;
+	bool is_sysadmin = 0, is_securityadmin = 0, is_dbcreator = 0; 
 
 	if (has_privs_of_role(login_oid, get_sysadmin_oid()))
 	{
 		createrole++;
 		createdb++;
+		is_sysadmin = 1;
 	}
+	if (has_privs_of_role(login_oid, get_securityadmin_oid()))
+	{
+		createrole++;
+		is_securityadmin = 2;
+	}
+	if (has_privs_of_role(login_oid, get_dbcreator_oid()))
+	{
+		createdb++;
+		is_dbcreator = 3;
+	}
+
+	/* keep granted attribute count*/
+	prev_createrole = createrole;
+	prev_createdb = createdb;
 
 	/* If sysadmin, provide attribute for role and database priv */
 	if (IS_ROLENAME_SYSADMIN(rolename))
 	{
-		if (is_grant)
-			appendStringInfo(query, "ALTER ROLE dummy WITH createrole createdb; ");
-		else
-		{
-			if (has_privs_of_role(login_oid, get_securityadmin_oid()))
-				createrole++;
-			if (has_privs_of_role(login_oid, get_dbcreator_oid()))
-				createdb++;
-
-			if (has_privs_of_role(login_oid, get_sysadmin_oid()))
-			{
-				if (createrole == 1 && createdb == 1)
-					appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole nocreatedb; ");
-				
-				/* If grantee role is member of securityadmin also then only revoke createdb */
-				else if (createdb == 1)
-					appendStringInfo(query, "ALTER ROLE dummy WITH nocreatedb; ");
-				
-				/* If grantee role is member of dbcreator also then only revoke createrole */
-				else if (createrole == 1)
-					appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole; ");
-			}
-		}
+		createrole += ((is_grant) ? 1 : (is_sysadmin) ? -1 : 0);
+		createdb += ((is_grant) ? 1 : ((is_sysadmin) ? -1 : 0));
 	}
-
-	/* If securityadmin, provide attribute for role priv */
 	else if (IS_ROLENAME_SECURITYADMIN(rolename))
 	{
-		if (is_grant)
-			appendStringInfo(query, "ALTER ROLE dummy WITH createrole; ");
-		
-		/* If grantee role is member of sysadmin then don't revoke createrole */
-		else if (has_privs_of_role(login_oid, get_securityadmin_oid()) && !createrole)
-			appendStringInfo(query, "ALTER ROLE dummy WITH nocreaterole; ");
+		createrole += ((is_grant) ? 1 : ((is_securityadmin) ? -1 : 0));
 	}
-
-	/* Otherwise if dbcreator, provide attribute for role priv */
 	else if (IS_ROLENAME_DBCREATOR(rolename))
 	{
-		if (is_grant)
-			appendStringInfo(query, "ALTER ROLE dummy WITH createdb; ");
-		
-		/* If grantee role is member of sysadmin then don't revoke createdb */
-		else if (has_privs_of_role(login_oid, get_dbcreator_oid()) && !createdb)
-			appendStringInfo(query, "ALTER ROLE dummy WITH nocreatedb; ");
+		createdb += ((is_grant) ? 1: ((is_dbcreator) ? -1 : 0));
 	}
-	/* Otherwise, throw error */
 	else
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			errmsg("\"%s\" is not a supported fixed server role.", rolename)));
 	}
+
+	grant_createrole = (prev_createrole == 0 && createrole == 1);
+	grant_createdb = (prev_createdb == 0 && createdb == 1);
+	revoke_createrole = (prev_createrole == 1 && createrole == 0);
+	revoke_createdb = (prev_createdb == 1 && createdb == 0);
+
+	// /* If both attributes need to be granted/revoked */
+	if ((grant_createrole && grant_createdb)
+		|| (revoke_createrole && revoke_createdb)) 
+		appendStringInfo(query, "ALTER ROLE dummy WITH %s %s; ", (grant_createrole) ? "createdb" :
+						 "nocreatedb", (grant_createrole) ? "createrole" : "nocreaterole");
+	
+	/* If only one attribute needs to be granted/revoked */
+	else if (grant_createrole || revoke_createrole
+		|| grant_createdb || revoke_createdb) 
+		appendStringInfo(query, "ALTER ROLE dummy WITH %s; ", (grant_createdb) ? "createdb" : 
+				((grant_createrole) ? "createrole" : ((revoke_createrole) ? "nocreaterole" : "nocreatedb")));
+
 }

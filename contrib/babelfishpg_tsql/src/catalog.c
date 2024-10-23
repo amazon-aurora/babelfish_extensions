@@ -4868,7 +4868,10 @@ rename_tsql_db(char *old_db_name, char *new_db_name)
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				errmsg("Cannot change the name of the system database %s.", old_db_name)));
 
-	/* Check permission on the given database. */
+	/* 
+	 * Check permission on the given database.
+	 * Dbcreator can only alter the databases in which it has a mapped user.
+	 */
 	if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid()) && !(get_user_for_database(old_db_name) 
 							&& has_privs_of_role(GetSessionUserId(), get_dbcreator_oid())))
 		ereport(ERROR,
