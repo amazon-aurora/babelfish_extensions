@@ -2604,12 +2604,10 @@ exec_database_roles_subcmds(const char *schema, char *schema_owner)
 }
 
 void
-throw_error_if_fixed_db_role(char *rolname, char *rol1, char *rol2, char *rol3)
+throw_error_for_fixed_db_role(char *rolname, char *dbname)
 {
 	if (rolname != NULL &&
-		(strcmp(rolname, rol1) == 0 ||
-		 strcmp(rolname, rol2) == 0 ||
-		 strcmp(rolname, rol3) == 0))
+		IS_FIXED_DB_PRINCIPAL(get_authid_user_ext_original_name(rolname, dbname)))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("Cannot grant, deny or revoke permissions to or from special roles.")));

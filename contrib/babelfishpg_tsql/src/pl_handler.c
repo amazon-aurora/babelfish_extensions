@@ -4276,7 +4276,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 								/* Special database roles should throw an error. */
-								throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 								add_or_update_object_in_bbf_schema(logical_schema, obj, ALL_PERMISSIONS_ON_RELATION, rol_spec->rolename, OBJ_RELATION, true, NULL);
 							}
 						}
@@ -4286,7 +4286,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 								/* Special database roles should throw an error. */
-								throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 								/*
 								 * 1. If permission on schema exists, don't revoke any permission from the object.
 								 * 2. If permission on object exists, update the privilege in the catalog and revoke permission.
@@ -4312,7 +4312,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								{
 									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 									/* Special database roles should throw an error. */
-									throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 									add_or_update_object_in_bbf_schema(logical_schema, obj, privilege, rol_spec->rolename, OBJ_RELATION, true, NULL);
 								}
 							}
@@ -4326,7 +4326,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								{
 									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 									/* Special database roles should throw an error. */
-									throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 									/*
 									 * If permission on schema exists, don't revoke any permission from the object.
 									 */
@@ -4397,7 +4397,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 								/* Special database roles should throw an error. */
-								throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 								add_or_update_object_in_bbf_schema(logicalschema, funcname, ALL_PERMISSIONS_ON_FUNCTION, rol_spec->rolename, obj_type, true, func_args);
 							}
 						}
@@ -4407,7 +4407,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 								/* Special database roles should throw an error. */
-								throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 								/*
 								 * 1. If permission on schema exists, don't revoke any permission from the object.
 								 * 2. If permission on object exists, update the privilege in the catalog and revoke permission.
@@ -4436,7 +4436,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								{
 									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 									/* Special database roles should throw an error. */
-									throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 									add_or_update_object_in_bbf_schema(logicalschema, funcname, privilege, rol_spec->rolename, obj_type, true, func_args);
 								}
 							}
@@ -4447,7 +4447,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
 								/* Special database roles should throw an error. */
-								throw_error_if_fixed_db_role(rol_spec->rolename, db_datareader, db_datawriter, db_accessadmin);
+								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
 								/*
 								 * If permission on schema exists, don't revoke any permission from the object.
 								 */

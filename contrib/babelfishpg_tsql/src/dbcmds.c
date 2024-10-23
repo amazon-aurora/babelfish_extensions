@@ -111,8 +111,6 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 	 */
 	initStringInfo(&query);
 
-	appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
-	appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
 	appendStringInfo(&query, "CREATE ROLE dummy CREATEROLE INHERIT; ");
 	appendStringInfo(&query, "CREATE ROLE dummy INHERIT CREATEROLE ROLE sysadmin IN ROLE dummy; ");
 	appendStringInfo(&query, "GRANT CREATE, CONNECT, TEMPORARY ON DATABASE dummy TO dummy; ");
@@ -122,6 +120,8 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 		appendStringInfo(&query, "GRANT dummy TO dummy; ");
 
 	/* create db_accessadmin for database */
+	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 	appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 
@@ -166,12 +166,6 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 
 	/* Replace dummy elements in parsetree with real values */
 	stmt = parsetree_nth_stmt(res, i++);
-	update_CreateRoleStmt(stmt, db_datareader, NULL, NULL);
-
-	stmt = parsetree_nth_stmt(res, i++);
-	update_CreateRoleStmt(stmt, db_datawriter, NULL, NULL);
-
-	stmt = parsetree_nth_stmt(res, i++);
 	update_CreateRoleStmt(stmt, db_owner, NULL, NULL);
 
 	stmt = parsetree_nth_stmt(res, i++);
@@ -187,6 +181,12 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 		update_GrantRoleStmt(stmt, list_make1(make_accesspriv_node(dbo)),
 							list_make1(make_rolespec_node(owner)));
 	}
+
+	stmt = parsetree_nth_stmt(res, i++);
+	update_CreateRoleStmt(stmt, db_datareader, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(res, i++);
+	update_CreateRoleStmt(stmt, db_datawriter, db_owner, NULL);
 
 	stmt = parsetree_nth_stmt(res, i++);
 	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);

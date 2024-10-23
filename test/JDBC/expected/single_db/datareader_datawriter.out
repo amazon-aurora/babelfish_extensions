@@ -255,6 +255,73 @@ int
 ~~END~~
 
 
+-- Test sp_helpuser
+CREATE TABLE #UserRoles(userName sys.SYSNAME, roleName sys.SYSNAME, loginName sys.SYSNAME NULL, defdb sys.SYSNAME NULL, defschema sys.SYSNAME, userid INT, sid sys.VARBINARY(85));
+go
+-- Insert the results of sp_helpuser into the temporary table
+INSERT INTO #UserRoles EXEC sp_helpuser;
+go
+~~ROW COUNT: 8~~
+
+-- Select the desired fields from the temporary table
+SELECT userName, roleName FROM #UserRoles WHERE roleName IN ('db_datareader', 'db_datawriter');
+go
+~~START~~
+varchar#!#varchar
+db_roles_r1#!#db_datareader
+db_roles_r1#!#db_datawriter
+db_roles_u1#!#db_datareader
+db_roles_u1#!#db_datawriter
+~~END~~
+
+-- Drop the temporary table
+DROP TABLE #UserRoles;
+go
+
+-- Test sp_helprole
+CREATE TABLE #UserRoles(RoleName sys.SYSNAME, RoleId integer, IsAppRole integer);
+go
+-- Insert the results of sp_helprole into the temporary table
+INSERT INTO #UserRoles EXEC sp_helprole;
+go
+~~ROW COUNT: 5~~
+
+-- Select the desired fields from the temporary table
+SELECT RoleName, IsAppRole FROM #UserRoles WHERE RoleName IN ('db_datareader', 'db_datawriter');
+go
+~~START~~
+varchar#!#int
+db_datareader#!#0
+db_datawriter#!#0
+~~END~~
+
+-- Drop the temporary table
+DROP TABLE #UserRoles;
+go
+
+-- Test sp_helprolemember
+CREATE TABLE #UserRoles(RoleName sys.SYSNAME, MemberName sys.SYSNAME, MemberSID sys.VARBINARY(85));
+go
+-- Insert the results of sp_helprolemember into the temporary table
+INSERT INTO #UserRoles EXEC sp_helprolemember;
+go
+~~ROW COUNT: 6~~
+
+-- Select the desired fields from the temporary table
+SELECT RoleName, MemberName FROM #UserRoles WHERE RoleName IN ('db_datareader', 'db_datawriter');
+go
+~~START~~
+varchar#!#varchar
+db_datareader#!#db_roles_r1
+db_datareader#!#db_roles_u1
+db_datawriter#!#db_roles_r1
+db_datawriter#!#db_roles_u1
+~~END~~
+
+-- Drop the temporary table
+DROP TABLE #UserRoles;
+go
+
 use master
 go
 
@@ -764,15 +831,12 @@ go
 alter role db_datareader drop member db_roles_r1;
 go
 
-alter role db_datawriter drop member db_roles_r1;
-go
-
 -- Basic membership check
 SELECT IS_ROLEMEMBER('db_datareader', 'db_roles_u1')
 GO
 ~~START~~
 int
-<NULL>
+0
 ~~END~~
 
 
@@ -780,7 +844,7 @@ SELECT IS_ROLEMEMBER('db_datawriter', 'db_roles_u1')
 GO
 ~~START~~
 int
-<NULL>
+0
 ~~END~~
 
 
@@ -788,7 +852,7 @@ SELECT IS_ROLEMEMBER('db_datareader', 'db_roles_r1')
 GO
 ~~START~~
 int
-<NULL>
+0
 ~~END~~
 
 
@@ -796,9 +860,12 @@ SELECT IS_ROLEMEMBER('db_datawriter', 'db_roles_r1')
 GO
 ~~START~~
 int
-<NULL>
+1
 ~~END~~
 
+
+alter role db_datawriter drop member db_roles_r1;
+go
 
 use master;
 go
@@ -1391,13 +1458,7 @@ int
 exec sp_droprolemember 'db_datareader', 'db_roles_u1';
 go
 
-exec sp_droprolemember 'db_datawriter', 'db_roles_u1';
-go
-
 exec sp_droprolemember 'db_datareader', 'db_roles_r1';
-go
-
-exec sp_droprolemember 'db_datawriter', 'db_roles_r1';
 go
 
 -- Basic membership check
@@ -1405,7 +1466,7 @@ SELECT IS_ROLEMEMBER('db_datareader', 'db_roles_u1')
 GO
 ~~START~~
 int
-<NULL>
+0
 ~~END~~
 
 
@@ -1413,7 +1474,7 @@ SELECT IS_ROLEMEMBER('db_datawriter', 'db_roles_u1')
 GO
 ~~START~~
 int
-<NULL>
+1
 ~~END~~
 
 
@@ -1421,7 +1482,7 @@ SELECT IS_ROLEMEMBER('db_datareader', 'db_roles_r1')
 GO
 ~~START~~
 int
-<NULL>
+0
 ~~END~~
 
 
@@ -1429,7 +1490,7 @@ SELECT IS_ROLEMEMBER('db_datawriter', 'db_roles_r1')
 GO
 ~~START~~
 int
-<NULL>
+1
 ~~END~~
 
 
@@ -1453,11 +1514,11 @@ SELECT IS_MEMBER('db_datawriter')
 GO
 ~~START~~
 int
-0
+1
 ~~END~~
 
 
--- user is a member of role which is not a member of db_datareader/db_datawriter, objects should not be accessible
+-- user is a member of role which is not a member of db_datareader, objects should not be accessible
 select * from after_t1; -- not allowed
 go
 ~~ERROR (Code: 33557097)~~
@@ -1486,6 +1547,29 @@ go
 ~~ERROR (Message: permission denied for view before_v1)~~
 
 
+insert into after_t1 values(1); -- allowed
+go
+~~ROW COUNT: 1~~
+
+
+use master
+go
+
+-- tsql
+use db_roles_db1
+go
+exec sp_droprolemember 'db_datawriter', 'db_roles_r1';
+go
+exec sp_droprolemember 'db_datawriter', 'db_roles_u1';
+go
+
+use master
+go
+
+-- tsql user=db_roles_l5 password=123
+-- user is a member of role which is not a member of db_datawriter, objects should not be accessible
+use db_roles_db1
+go
 insert into before_t1 values(1); -- not allowed
 go
 ~~ERROR (Code: 33557097)~~

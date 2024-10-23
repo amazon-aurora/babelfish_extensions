@@ -2203,7 +2203,7 @@ extern void update_ViewStmt(Node *n, const char *view_schema);
 extern void update_AlterDefaultPrivilegesStmt(Node *n, const char *schema, const char *role1, const char *role2, const char *grantee, const char *priv);
 extern AccessPriv *make_accesspriv_node(const char *priv_name);
 extern RoleSpec   *make_rolespec_node(const char *rolename);
-extern void throw_error_if_fixed_db_role(char *rolname, char *rol1, char *rol2, char *rol3);
+extern void throw_error_for_fixed_db_role(char *rolname, char *dbname);
 extern void pltsql_check_or_set_default_typmod_helper(TypeName *typeName, int32 *typmod, bool is_cast, bool is_procedure_or_func);
 extern void pltsql_check_or_set_default_typmod(TypeName *typeName, int32 *typmod, bool is_cast);
 extern bool TryLockLogicalDatabaseForSession(int16 dbid, LOCKMODE lockmode);

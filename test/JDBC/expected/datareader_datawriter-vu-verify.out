@@ -2,9 +2,54 @@
 -- bbf dump does not dump password so reset the password
 ALTER LOGIN db_roles_l2 WITH PASSWORD = '123'
 GO
-
 ALTER LOGIN db_roles_l1 WITH PASSWORD = '123'
 GO
+
+-- IS_ROLEMEMBER & IS_MEMBER should show db_datareader as member of dbo but not of db_owner
+SELECT IS_ROLEMEMBER('db_datareader')
+GO
+~~START~~
+int
+1
+~~END~~
+
+SELECT IS_ROLEMEMBER('db_datareader', 'dbo')
+GO
+~~START~~
+int
+1
+~~END~~
+
+SELECT IS_ROLEMEMBER('db_datareader', 'db_owner')
+GO
+~~START~~
+int
+0
+~~END~~
+
+
+-- IS_ROLEMEMBER & IS_MEMBER should show db_datawriter as member of dbo but not of db_owner
+SELECT IS_ROLEMEMBER('db_datawriter')
+GO
+~~START~~
+int
+1
+~~END~~
+
+SELECT IS_ROLEMEMBER('db_datawriter', 'dbo')
+GO
+~~START~~
+int
+1
+~~END~~
+
+SELECT IS_ROLEMEMBER('db_datawriter', 'db_owner')
+GO
+~~START~~
+int
+0
+~~END~~
+
 
 -- tsql user=db_roles_l2 password=123
 -- create objects after upgrade

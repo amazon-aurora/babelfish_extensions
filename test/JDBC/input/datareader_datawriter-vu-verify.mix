@@ -2,8 +2,23 @@
 -- bbf dump does not dump password so reset the password
 ALTER LOGIN db_roles_l2 WITH PASSWORD = '123'
 GO
-
 ALTER LOGIN db_roles_l1 WITH PASSWORD = '123'
+GO
+
+-- IS_ROLEMEMBER & IS_MEMBER should show db_datareader as member of dbo but not of db_owner
+SELECT IS_ROLEMEMBER('db_datareader')
+GO
+SELECT IS_ROLEMEMBER('db_datareader', 'dbo')
+GO
+SELECT IS_ROLEMEMBER('db_datareader', 'db_owner')
+GO
+
+-- IS_ROLEMEMBER & IS_MEMBER should show db_datawriter as member of dbo but not of db_owner
+SELECT IS_ROLEMEMBER('db_datawriter')
+GO
+SELECT IS_ROLEMEMBER('db_datawriter', 'dbo')
+GO
+SELECT IS_ROLEMEMBER('db_datawriter', 'db_owner')
 GO
 
 -- tsql user=db_roles_l2 password=123
