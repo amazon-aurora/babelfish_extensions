@@ -1430,10 +1430,10 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	rolname_same_as_db_rolname(db_datawriter);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
-	update_CreateRoleStmt(stmt, db_datareader, NULL, NULL);
+	update_CreateRoleStmt(stmt, db_datareader, db_owner, NULL);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
-	update_CreateRoleStmt(stmt, db_datawriter, NULL, NULL);
+	update_CreateRoleStmt(stmt, db_datawriter, db_owner, NULL);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);
@@ -1533,8 +1533,8 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 
 		initStringInfo(&query);
 
-		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
-		appendStringInfo(&query, "CREATE ROLE dummy INHERIT; ");
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 
