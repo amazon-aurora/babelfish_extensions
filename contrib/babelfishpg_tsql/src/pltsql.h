@@ -1993,6 +1993,7 @@ extern bool insert_bulk_check_constraints;
 #define DBO "dbo"
 #define DB_OWNER "db_owner"
 #define DB_ACCESSADMIN "db_accessadmin"
+#define DB_SECURITYADMIN "db_securityadmin"
 #define DB_DATAREADER "db_datareader"
 #define DB_DATAWRITER "db_datawriter"
 
@@ -2002,9 +2003,10 @@ extern bool insert_bulk_check_constraints;
      strncmp(dbname, "msdb", 4) == 0)
 
 #define IS_FIXED_DB_PRINCIPAL(rolname) \
-	(strncmp(rolname, DBO, 3) == 0 || \
-	 strncmp(rolname, DB_OWNER, 8) == 0 || \
-	 strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
+    (strncmp(rolname, DBO, 3) == 0 || \
+     strncmp(rolname, DB_OWNER, 8) == 0 || \
+     strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
+     strncmp(rolname, DB_SECURITYADMIN, 16) == 0 || \
 	 strncmp(rolname, DB_DATAREADER, 13) == 0 || \
 	 strncmp(rolname, DB_DATAWRITER, 13) == 0)
 

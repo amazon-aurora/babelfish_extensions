@@ -1,0 +1,73 @@
+-- tsql
+create login babel_5135_l1 with password='12345678';
+GO
+
+create user babel_5135_u1 for login babel_5135_l1;
+GO
+
+create role babel_5135_r1;
+GO
+
+create login babel_5135_l2 with password='12345678';
+GO
+
+create login babel_5135_dbsecadmin_l1 with password='12345678';
+GO
+
+create user babel_5135_dbsecadmin_u1 for login babel_5135_dbsecadmin_l1;
+GO
+
+create role babel_5135_dbsecadmin_r1;
+GO
+
+create schema babel_5135_schema1;
+GO
+
+create table babel_5135_schema1.babel_5135_t1(a int, b int);
+GO
+
+create view babel_5135_schema1.babel_5135_v1 as select 1;
+GO
+
+CREATE PROC babel_5135_schema1.babel_5135_p1 AS SELECT 1
+GO
+
+CREATE FUNCTION babel_5135_schema1.babel_5135_f1() RETURNS INT AS BEGIN return 1; END
+GO
+
+CREATE FUNCTION babel_5135_schema1.babel_5135_tvf1() RETURNS TABLE AS RETURN (SELECT a, b FROM babel_5135_schema1.babel_5135_t1);
+GO
+
+CREATE VIEW babel_5135_show_role_mem AS
+SELECT 
+roles.name AS RolePrincipalName
+, members.name AS MemberPrincipalName
+FROM sys.database_role_members AS db_role_mems
+INNER JOIN sys.database_principals AS roles
+    ON db_role_mems.role_principal_id = roles.principal_id
+INNER JOIN sys.database_principals AS members 
+    ON db_role_mems.member_principal_id = members.principal_id order by MemberPrincipalName;
+GO
+
+create database babel_5135_db1;
+GO
+
+create database babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+GO
+
+USE babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
+GO
+
+create user babel_5135_u1 for login babel_5135_l1;
+GO
+
+CREATE VIEW babel_5135_show_role_mem AS
+SELECT 
+roles.name AS RolePrincipalName
+, members.name AS MemberPrincipalName
+FROM sys.database_role_members AS db_role_mems
+INNER JOIN sys.database_principals AS roles
+    ON db_role_mems.role_principal_id = roles.principal_id
+INNER JOIN sys.database_principals AS members 
+    ON db_role_mems.member_principal_id = members.principal_id order by MemberPrincipalName;
+GO
