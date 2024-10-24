@@ -3,6 +3,8 @@ USE master
 GO
 DROP DATABASE IF EXISTS babel_5135_db1;
 GO
+DROP DATABASE IF EXISTS babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
+GO
 DROP ROLE babel_5135_r1;
 GO
 DROP LOGIN babel_5135_l2
@@ -20,6 +22,8 @@ GO
 DROP PROCEDURE babel_5135_schema1.babel_5135_p1;
 GO
 DROP FUNCTION babel_5135_schema1.babel_5135_f1();
+GO
+DROP FUNCTION babel_5135_schema1.babel_5135_tvf1();
 GO
 DROP SCHEMA babel_5135_schema1;
 GO

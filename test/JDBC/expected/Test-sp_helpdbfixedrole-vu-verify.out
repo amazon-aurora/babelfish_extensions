@@ -9,7 +9,7 @@ GO
 varchar#!#nvarchar
 db_owner#!#DB Owners
 db_accessadmin#!#DB Access Administrators
-db_securityadmin#!#DB Security Adiministrators
+db_securityadmin#!#DB Security Administrators
 db_datareader#!#DB Data Reader
 db_datawriter#!#DB Data Writer
 ~~END~~
@@ -80,7 +80,7 @@ GO
 ~~START~~
 varchar#!#nvarchar
 db_accessadmin#!#DB Access Administrators
-db_securityadmin#!#DB Security Adiministrators
+db_securityadmin#!#DB Security Administrators
 db_datareader#!#DB Data Reader
 db_datawriter#!#DB Data Writer
 ~~END~~

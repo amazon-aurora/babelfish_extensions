@@ -48,3 +48,23 @@ GO
 
 create database babel_5135_db1;
 GO
+
+create database babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+GO
+
+USE babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
+GO
+
+create user babel_5135_u1 for login babel_5135_l1;
+GO
+
+CREATE VIEW babel_5135_show_role_mem AS
+SELECT 
+roles.name AS RolePrincipalName
+, members.name AS MemberPrincipalName
+FROM sys.database_role_members AS db_role_mems
+INNER JOIN sys.database_principals AS roles
+    ON db_role_mems.role_principal_id = roles.principal_id
+INNER JOIN sys.database_principals AS members 
+    ON db_role_mems.member_principal_id = members.principal_id order by MemberPrincipalName;
+GO

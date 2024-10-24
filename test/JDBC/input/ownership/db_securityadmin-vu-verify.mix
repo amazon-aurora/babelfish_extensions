@@ -12,6 +12,7 @@ GO
 -- CASE 1 Allowed syntaxes to modify the membership of db_securityadmin
     -- CASE 1.1 Validate ALTER ROLE ... ADD/DROP MEMBER
     -- CASE 1.2 Validate sp_addrolemember
+	-- CASE 1.3 Test inside database with truncated name
 -- tsql
 ALTER ROLE db_securityadmin ADD MEMBER babel_5135_u1;
 GO
@@ -41,6 +42,37 @@ EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_r1';
 GO
 
 SELECT * FROM babel_5135_show_role_mem WHERE RolePrincipalName = 'db_securityadmin';
+GO
+
+-- CASE 1.3 Test inside database with truncated name
+USE babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
+GO
+
+ALTER ROLE db_securityadmin ADD MEMBER babel_5135_u1;
+GO
+
+SELECT * FROM babel_5135_show_role_mem WHERE RolePrincipalName = 'db_securityadmin';
+GO
+
+ALTER ROLE db_securityadmin DROP MEMBER babel_5135_u1;
+GO
+
+SELECT * FROM babel_5135_show_role_mem WHERE RolePrincipalName = 'db_securityadmin';
+GO
+
+EXEC sp_addrolemember 'db_securityadmin', 'babel_5135_u1';
+GO
+
+SELECT * FROM babel_5135_show_role_mem WHERE RolePrincipalName = 'db_securityadmin';
+GO
+
+EXEC sp_droprolemember 'db_securityadmin', 'babel_5135_u1';
+GO
+
+SELECT * FROM babel_5135_show_role_mem WHERE RolePrincipalName = 'db_securityadmin';
+GO
+
+USE master;
 GO
 
 -- CASE 2 - Only members of db_owner should be able to modify the membership of db_securityadmin
@@ -150,13 +182,15 @@ GO
 GRANT EXECUTE ON babel_5135_schema1.babel_5135_f1 TO babel_5135_u1;
 GO
 
+GRANT EXECUTE ON babel_5135_schema1.babel_5135_tvf1 TO babel_5135_u1;
+GO
 
 -- tsql user=babel_5135_l1 password=12345678
 SELECT current_user;
 GO
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -168,6 +202,9 @@ EXEC babel_5135_schema1.babel_5135_p1;
 GO
 
 SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -183,12 +220,15 @@ GO
 REVOKE EXECUTE ON babel_5135_schema1.babel_5135_f1 FROM babel_5135_u1;
 GO
 
+REVOKE EXECUTE ON babel_5135_schema1.babel_5135_tvf1 FROM babel_5135_u1;
+GO
+
 -- tsql user=babel_5135_l1 password=12345678
 SELECT current_user;
 GO
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -200,6 +240,9 @@ EXEC babel_5135_schema1.babel_5135_p1;
 GO
 
 SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -211,7 +254,7 @@ SELECT current_user;
 GO
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -223,6 +266,9 @@ EXEC babel_5135_schema1.babel_5135_p1;
 GO
 
 SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -234,7 +280,7 @@ SELECT current_user;
 GO
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -246,6 +292,9 @@ EXEC babel_5135_schema1.babel_5135_p1;
 GO
 
 SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
 -- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects 
@@ -254,7 +303,7 @@ SELECT current_user;
 GO
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -266,6 +315,9 @@ EXEC babel_5135_schema1.babel_5135_p1;
 GO
 
 SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
 -- CASE 6 - is_member() / is_rolemember() testcases
@@ -403,6 +455,7 @@ GO
 DROP TABLE temp_sp_helprolemember;
 GO
 
+-- CASE XXXXXX
 USE babel_5135_db1;
 GO
 

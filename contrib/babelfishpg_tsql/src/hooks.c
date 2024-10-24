@@ -5547,23 +5547,28 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclM
 	Oid				classid = InvalidOid;
 	Oid				schema_oid = InvalidOid;
 
-	if (!IS_TDS_CLIENT() || sql_dialect != SQL_DIALECT_TSQL)
+	/*
+	 * Return if any of following condition is true
+	 * 1. Not a TDS client
+	 * 2. Not a TSQL dialect
+	 * 3. Grantor is same as owner OR Grantor already has all the required privileges.
+	 *    This means already the best grantor has been selected using select_best_grantor().
+	 */
+	if (!IS_TDS_CLIENT() ||
+		sql_dialect != SQL_DIALECT_TSQL ||
+		*grantorId == ownerId ||
+		*grantOptions == ACL_GRANT_OPTION_FOR(privileges))
 		return;
 
 	switch(objType)
 	{
 		case OBJECT_TABLE:
-		case OBJECT_SEQUENCE:
 		case OBJECT_COLUMN:
+		case OBJECT_VIEW:
 			classid = RelationRelationId;
-			break;
-		case OBJECT_DOMAIN:
-		case OBJECT_TYPE:
-			classid = TypeRelationId;
 			break;
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
-		case OBJECT_ROUTINE:
 			classid = ProcedureRelationId;
 			break;
 		case OBJECT_SCHEMA:
