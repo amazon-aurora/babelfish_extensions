@@ -87,6 +87,65 @@ go
 EXEC sp_renamedb 'dbcreator_db_1', 'dbcreator_db'
 GO
 
+-- terminate-tsql-conn user=dbcreator_login1 password=123
+
+-- tsql
+-- transfer ownership to different login
+alter authorization on database::dbcreator_db to no_dbcreator_login1
+go
+
+-- terminate-tsql-conn
+
+-- tsql user=dbcreator_login1 password=123
+-- should not be allowed
+use dbcreator_db
+go
+
+EXEC sp_renamedb 'dbcreator_db', 'dbcreator_db_1'
+GO
+
+-- terminate-tsql-conn user=dbcreator_login1 password=123
+
+-- tsql
+use dbcreator_db
+go
+
+create user u1 for login dbcreator_login1
+go
+
+-- terminate-tsql-conn
+
+-- tsql user=dbcreator_login1 password=123
+-- should be allowed
+use dbcreator_db
+go
+
+-- should not be dbo
+select current_user
+go
+
+use master
+go
+
+EXEC sp_renamedb 'dbcreator_db', 'dbcreator_db_1'
+GO
+
+EXEC sp_renamedb 'dbcreator_db_1', 'dbcreator_db'
+GO
+
+-- terminate-tsql-conn user=dbcreator_login1 password=123
+
+-- tsql
+
+use dbcreator_db
+go
+
+drop user u1
+go
+
+-- terminate-tsql-conn
+
+-- tsql user=dbcreator_login1 password=123
 -- drop database should be allowed
 -- password based login
 drop database dbcreator_db
@@ -252,6 +311,10 @@ go
 -- terminate-tsql-conn
 
 -- tsql user=dbcreator_login1 password=123
+
+-- should be 1
+select is_srvrolemember('sysadmin')
+go
 
 -- both attribute should be true
 select rolname, rolcreaterole, rolcreatedb from pg_roles where rolname = 'dbcreator_login1'
