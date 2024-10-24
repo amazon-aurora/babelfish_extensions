@@ -696,8 +696,6 @@ GO
 varchar#!#nvarchar#!#varchar#!#nvarchar#!#nvarchar
 db1_guest#!#guest#!##!#db1#!#guest
 db_accessadmin#!#db_accessadmin#!##!#db1#!#
-db_owner#!#db_owner#!##!#db1#!#
-dbo#!#dbo#!##!#db1#!#dbo
 db_datareader#!#db_datareader#!##!#db1#!#
 db_datawriter#!#db_datawriter#!##!#db1#!#
 db_ddladmin#!#db_ddladmin#!##!#db1#!#
