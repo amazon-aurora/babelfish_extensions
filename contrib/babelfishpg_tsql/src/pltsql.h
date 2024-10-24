@@ -2006,9 +2006,9 @@ extern bool insert_bulk_check_constraints;
 	(strncmp(rolname, DBO, 3) == 0 || \
 	 strncmp(rolname, DB_OWNER, 8) == 0 || \
 	 strncmp(rolname, DB_ACCESSADMIN, 14) == 0 || \
-	 strncmp(rolname, DB_DDLADMIN, 11) == 0) \
 	 strncmp(rolname, DB_DATAREADER, 13) == 0 || \
-	 strncmp(rolname, DB_DATAWRITER, 13) == 0)
+	 strncmp(rolname, DB_DATAWRITER, 13) == 0 || \
+	 strncmp(rolname, DB_DDLADMIN, 11) == 0)
 
 /**********************************************************************
  * Function declarations

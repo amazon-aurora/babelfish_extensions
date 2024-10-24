@@ -152,13 +152,13 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 	if (guest)
 	{
 		if (!owner_is_sa)
-			expected_stmt_num = list_length(logins) > 0 ? 14 : 13;	
+			expected_stmt_num = list_length(logins) > 0 ? 16 : 15;
 		else
-			expected_stmt_num = list_length(logins) > 0 ? 13 : 12;
+			expected_stmt_num = list_length(logins) > 0 ? 15 : 14;
 	}
 	else
 	{
-		expected_stmt_num = 10;
+		expected_stmt_num = 12;
 
 		if (!owner_is_sa)
 			expected_stmt_num++;
@@ -282,7 +282,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	List	   *stmt_list;
 	ListCell   *elem;
 	Node	   *stmt;
-	int         expected_stmts = 10;
+	int         expected_stmts = 12;
 	int         i = 0;
 	const char *dbo;
 	const char *db_owner;
