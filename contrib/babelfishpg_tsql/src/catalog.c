@@ -4244,7 +4244,7 @@ grant_perms_to_objects_in_schema(const char *schema_name,
 
 				/* do this step */
 				ProcessUtility(wrapper,
-							"(GRANT STATEMENT )",
+							INTERNAL_GRANT_STATEMENT,
 							false,
 							PROCESS_UTILITY_SUBCOMMAND,
 							NULL,
@@ -4342,7 +4342,7 @@ exec_internal_grant_on_function(const char *logicalschema,
 
 			/* do this step */
 			ProcessUtility(wrapper,
-						"(GRANT STATEMENT )",
+						INTERNAL_GRANT_STATEMENT,
 						false,
 						PROCESS_UTILITY_SUBCOMMAND,
 						NULL,
