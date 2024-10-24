@@ -3003,11 +3003,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					else if (isuser || isrole)
 					{
 						char *current_db_name = get_cur_db_name();
-						const char *db_securityadmin_role = get_db_securityadmin_role_name(current_db_name);
 
 						if (has_privs_of_role(GetUserId(), get_db_owner_oid(current_db_name, false)) ||
 						    (isuser && has_privs_of_role(GetUserId(), get_db_accessadmin_oid(current_db_name, false))) ||
-							(isrole && has_privs_of_role(GetUserId(), get_role_oid(db_securityadmin_role, false))))
+							(isrole && has_privs_of_role(GetUserId(), get_db_securityadmin_oid(current_db_name, false))))
 						{
 							/*
 							 * members of db_owner can create roles and users

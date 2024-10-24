@@ -5605,10 +5605,12 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclM
 		else
 		{
 			if (is_member_of_role(GetUserId(),
-								  get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), false)))
+								  get_role_oid(get_db_securityadmin_role_name(get_current_pltsql_db_name()), false)))
 			{
 				*grantorId = ownerId;
 				*grantOptions = ACL_GRANT_OPTION_FOR(privileges);
+				if (nspname)
+					pfree(nspname);
 				return;
 			}
 		}

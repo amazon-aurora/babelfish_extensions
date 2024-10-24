@@ -1451,6 +1451,16 @@ get_db_accessadmin_role_name(const char *dbname)
 	return name;
 }
 
+Oid
+get_db_accessadmin_oid(const char *dbname, bool missing_ok)
+{
+	char *db_accessadmin_name = get_db_accessadmin_role_name(dbname);
+	Oid  db_accessadmin_oid = get_role_oid(db_accessadmin_name, missing_ok);
+	pfree(db_accessadmin_name);
+
+	return db_accessadmin_oid;
+}
+
 char *
 get_db_securityadmin_role_name(const char *dbname)
 {
@@ -1467,13 +1477,13 @@ get_db_securityadmin_role_name(const char *dbname)
 }
 
 Oid
-get_db_accessadmin_oid(const char *dbname, bool missing_ok)
+get_db_securityadmin_oid(const char *dbname, bool missing_ok)
 {
-	char *db_accessadmin_name = get_db_accessadmin_role_name(dbname);
-	Oid  db_accessadmin_oid = get_role_oid(db_accessadmin_name, missing_ok);
-	pfree(db_accessadmin_name);
+	char *db_securityadmin_name = get_db_securityadmin_role_name(dbname);
+	Oid  db_securityadmin_oid = get_role_oid(db_securityadmin_name, missing_ok);
+	pfree(db_securityadmin_name);
 	
-	return db_accessadmin_oid;
+	return db_securityadmin_oid;
 }
 
 char *

@@ -3738,7 +3738,6 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	Oid		schemaOid;
 	char		*user = GetUserNameFromId(GetUserId(), false);
 	const char	*db_owner = get_owner_of_db(dbname);
-	const char	*db_securityadmin_role = get_db_securityadmin_role_name(dbname);
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3803,7 +3802,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		if (!is_member_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
 			!login_is_db_owner &&
 			!object_ownercheck(NamespaceRelationId, schemaOid, GetUserId()) &&
-			!has_privs_of_role(GetUserId(), get_role_oid(db_securityadmin_role, false)))
+			!has_privs_of_role(GetUserId(), get_db_securityadmin_oid(dbname, false)))
 			ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("Cannot find the schema \"%s\", because it does not exist or you do not have permission.", stmt->schema_name)));

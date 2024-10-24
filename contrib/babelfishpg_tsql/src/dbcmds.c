@@ -221,6 +221,14 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 		update_CreateSchemaStmt(stmt, guest_schema, guest);
 	}
 
+	pfree(schema);
+	pfree(dbo);
+	pfree(db_owner);
+	pfree(db_accessadmin);
+	pfree(db_securityadmin);
+	prfree(guest);
+	pfree(guest_schema);
+
 	return res;
 }
 
@@ -242,7 +250,7 @@ add_fixed_user_roles_to_bbf_authid_user_ext(const char *dbname)
 	add_to_bbf_authid_user_ext(dbo, "dbo", dbname, "dbo", NULL, false, true, false);
 	add_to_bbf_authid_user_ext(db_owner, "db_owner", dbname, NULL, NULL, true, true, false);
 	add_to_bbf_authid_user_ext(db_accessadmin, DB_ACCESSADMIN, dbname, NULL, NULL, true, true, false);
-	add_to_bbf_authid_user_ext(db_securityadmin, DB_SECURITYADMIN, dbname, NULL, NULL, true, true, false);
+	add_to_bbf_authid_user_ext(db_securityadmin, DB_SECURITYADMIN, dbname, NULL, NULL, true, false, false);
 
 	/*
 	 * For master, tempdb and msdb databases, the guest user will be
@@ -252,6 +260,12 @@ add_fixed_user_roles_to_bbf_authid_user_ext(const char *dbname)
 		add_to_bbf_authid_user_ext(guest, "guest", dbname, "guest", NULL, false, true, false);
 	else
 		add_to_bbf_authid_user_ext(guest, "guest", dbname, "guest", NULL, false, false, false);
+
+	pfree(dbo);
+	pfree(db_owner);
+	pfree(db_accessadmin);
+	pfree(db_securityadmin);
+	pfree(guest);
 }
 
 /*
@@ -356,6 +370,13 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	update_DropRoleStmt(stmt, db_owner);
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, dbo);
+
+	pfree(dbo);
+	pfree(db_owner);
+	pfree(db_accessadmin);
+	pfree(db_securityadmin);
+	pfree(schema);
+	pfree(guest_schema);
 
 	return stmt_list;
 }
