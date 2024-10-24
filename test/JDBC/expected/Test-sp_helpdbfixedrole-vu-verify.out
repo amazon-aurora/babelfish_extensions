@@ -80,9 +80,9 @@ GO
 ~~START~~
 varchar#!#nvarchar
 db_accessadmin#!#DB Access Administrators
+db_ddladmin#!#DB DDL Administrators
 db_datareader#!#DB Data Reader
 db_datawriter#!#DB Data Writer
-db_ddladmin#!#DB DDL Administrators
 ~~END~~
 
 

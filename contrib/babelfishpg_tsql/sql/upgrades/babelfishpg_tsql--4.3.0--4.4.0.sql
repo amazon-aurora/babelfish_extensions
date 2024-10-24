@@ -4441,9 +4441,9 @@ BEGIN
 		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
 			VALUES ('db_owner', 'DB Owners'),
 			('db_accessadmin', 'DB Access Administrators'),
-			('db_ddladmin', 'DB DDL Administrators')) x(DbFixedRole, Description),
 			('db_datareader', 'DB Data Reader'),
-			('db_datawriter', 'DB Data Writer')) x(DbFixedRole, Description)
+			('db_datawriter', 'DB Data Writer'),
+			('db_ddladmin', 'DB DDL Administrators')) x(DbFixedRole, Description)
 			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
 	END
 	ELSE IF LOWER(RTRIM(@rolename)) IN (
