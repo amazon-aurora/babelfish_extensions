@@ -33,6 +33,6 @@ extern bool physical_schema_name_exists(char *phys_schema_name);
 extern bool is_builtin_database(const char *dbname);
 extern bool is_user_database_singledb(const char *dbname);
 extern bool is_json_modify(List *name);
-extern bool is_json_query1(List *name);
+extern bool is_select_for_json_result(List *name);
 
 #endif

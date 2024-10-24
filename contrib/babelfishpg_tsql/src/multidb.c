@@ -765,10 +765,23 @@ select_json_modify(SelectStmt *stmt)
 
 					escape->val.boolval.boolval = true;
 				}
-
-				else if (is_json_query1(json_mod_fc->funcname) && is_select_for_json(from_sel_stmt))
+				else if (is_select_for_json_result(json_mod_fc->funcname))
 				{
+					// Instead of 'is_select_for_json_result' should I call is_for_json(json_mod_fc) 
+					// which also checks wrapper arg along with funcname check
+					
 					// is_select_for_json is_json_query func that returns json, escape = true
+					Node	   *n1 = llast(json_mod_fc->args);
+					//llast removed the 6th argument instead!
+					A_Const    *escape = (A_Const *) n1;
+					
+					rewrite_plain_name(json_mod_fc->funcname);
+
+					escape->val.boolval.boolval = true;
+				}
+
+				else if(is_for_json(json_mod_fc))
+				{
 					Node	   *n1 = llast(json_mod_fc->args);
 					A_Const    *escape = (A_Const *) n1;
 					
@@ -783,7 +796,7 @@ select_json_modify(SelectStmt *stmt)
 
 
 bool
-is_json_query1(List *name)
+is_select_for_json_result(List *name)
 {
 	switch (list_length(name))
 	{
@@ -791,7 +804,7 @@ is_json_query1(List *name)
 			{
 				Node	   *func = (Node *) linitial(name);
 
-				if (strncmp("json_query", strVal(func), 10) == 0)
+				if (strncmp("tsql_select_for_json_result", strVal(func), 10) == 0)
 					return true;
 				return false;
 			}
@@ -801,7 +814,7 @@ is_json_query1(List *name)
 				Node	   *func = (Node *) lsecond(name);
 
 				if (strncmp("sys", strVal(schema), 3) == 0 &&
-					strncmp("json_query", strVal(func), 10) == 0)
+					strncmp("tsql_select_for_json_result", strVal(func), 10) == 0)
 					return true;
 				return false;
 			}
