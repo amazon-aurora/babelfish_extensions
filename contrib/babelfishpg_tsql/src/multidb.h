@@ -32,6 +32,8 @@ extern char *get_db_ddladmin_role_name(const char *dbname);
 extern Oid  get_db_ddladmin_oid(const char *dbname, bool missing_ok);
 extern char *get_guest_role_name(const char *dbname);
 extern char *get_guest_schema_name(const char *dbname);
+extern char *get_db_datareader_name(const char *dbname);
+extern char *get_db_datawriter_name(const char *dbname);
 extern bool is_shared_schema(const char *name);
 extern void truncate_tsql_identifier(char *ident);
 extern bool physical_schema_name_exists(char *phys_schema_name);

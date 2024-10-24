@@ -92,6 +92,8 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 	const char     *guest_schema;
 	Oid       	owner_oid;
 	bool     	owner_is_sa;
+	const char     *db_datareader;
+	const char     *db_datawriter;
 
 	schema = get_dbo_schema_name(dbname);
 	dbo = get_dbo_role_name(dbname);
@@ -102,6 +104,8 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 	guest_schema = get_guest_schema_name(dbname);
 	owner_oid = get_role_oid(owner, true);
 	owner_is_sa = role_is_sa(owner_oid);
+	db_datareader = get_db_datareader_name(dbname);
+	db_datawriter = get_db_datawriter_name(dbname);
 
 	/*
 	 * To avoid SQL injection, we generate statement parsetree with dummy
@@ -118,6 +122,8 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 		appendStringInfo(&query, "GRANT dummy TO dummy; ");
 
 	/* create db_accessadmin for database */
+	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 	appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 	appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 
@@ -183,6 +189,12 @@ gen_createdb_subcmds(const char *dbname, const char *owner)
 	}
 
 	stmt = parsetree_nth_stmt(res, i++);
+	update_CreateRoleStmt(stmt, db_datareader, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(res, i++);
+	update_CreateRoleStmt(stmt, db_datawriter, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(res, i++);
 	update_CreateRoleStmt(stmt, db_accessadmin, db_owner, NULL);
 
 	stmt = parsetree_nth_stmt(res, i++);
@@ -231,6 +243,8 @@ add_fixed_user_roles_to_bbf_authid_user_ext(const char *dbname)
 	const char     *db_owner;
 	const char     *db_accessadmin;
 	const char     *db_ddladmin;
+	const char     *db_datareader;
+	const char     *db_datawriter;
 	const char     *guest;
 
 	dbo = get_dbo_role_name(dbname);
@@ -238,11 +252,15 @@ add_fixed_user_roles_to_bbf_authid_user_ext(const char *dbname)
 	db_accessadmin = get_db_accessadmin_role_name(dbname);
 	db_ddladmin = get_db_ddladmin_role_name(dbname);
 	guest = get_guest_role_name(dbname);
+	db_datareader = get_db_datareader_name(dbname);
+	db_datawriter = get_db_datawriter_name(dbname);
 
-	add_to_bbf_authid_user_ext(dbo, "dbo", dbname, "dbo", NULL, false, true, false);
-	add_to_bbf_authid_user_ext(db_owner, "db_owner", dbname, NULL, NULL, true, true, false);
+	add_to_bbf_authid_user_ext(dbo, DBO, dbname, DBO, NULL, false, true, false);
+	add_to_bbf_authid_user_ext(db_owner, DB_OWNER, dbname, NULL, NULL, true, true, false);
 	add_to_bbf_authid_user_ext(db_accessadmin, DB_ACCESSADMIN, dbname, NULL, NULL, true, true, false);
 	add_to_bbf_authid_user_ext(db_ddladmin, DB_DDLADMIN, dbname, NULL, NULL, true, false, false);
+	add_to_bbf_authid_user_ext(db_datareader, DB_DATAREADER, dbname, NULL, NULL, true, true, false);
+	add_to_bbf_authid_user_ext(db_datawriter, DB_DATAWRITER, dbname, NULL, NULL, true, true, false);
 
 	/*
 	 * For master, tempdb and msdb databases, the guest user will be
@@ -272,6 +290,8 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	const char *db_ddladmin;
 	const char *schema;
 	const char *guest_schema;
+	const char *db_datareader;
+	const char *db_datawriter;
 
 	dbo = get_dbo_role_name(dbname);
 	db_owner = get_db_owner_name(dbname);
@@ -279,10 +299,13 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	db_ddladmin = get_db_ddladmin_role_name(dbname);
 	schema = get_dbo_schema_name(dbname);
 	guest_schema = get_guest_schema_name(dbname);
+	db_datareader = get_db_datareader_name(dbname);
+	db_datawriter = get_db_datawriter_name(dbname);
 
 	initStringInfo(&query);
 	appendStringInfo(&query, "DROP SCHEMA dummy CASCADE; ");
 	appendStringInfo(&query, "DROP SCHEMA dummy CASCADE; ");
+
 	/* First drop guest user and custom users if they exist */
 	foreach(elem, db_users)
 	{
@@ -303,6 +326,10 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	/* Then drop db_ddladmin, db_accessadmin, db_owner and dbo in that order */
 	appendStringInfo(&query, "REVOKE CREATE ON DATABASE dummy FROM dummy; ");
 	appendStringInfo(&query, "DROP ROLE dummy; ");
+	/* Then drop db_accessadmin, db_owner and dbo in that order */
+	appendStringInfo(&query, "DROP ROLE dummy; ");
+	appendStringInfo(&query, "DROP ROLE dummy; ");
+
 	appendStringInfo(&query, "REVOKE CREATE ON DATABASE dummy FROM dummy; ");
 	appendStringInfo(&query, "DROP ROLE dummy; ");
 	appendStringInfo(&query, "REVOKE CREATE, CONNECT, TEMPORARY ON DATABASE dummy FROM dummy; ");
@@ -347,6 +374,11 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_ddladmin, NULL);
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, db_ddladmin);
+
+	stmt = parsetree_nth_stmt(stmt_list, i++);
+	update_DropRoleStmt(stmt, db_datareader);
+	stmt = parsetree_nth_stmt(stmt_list, i++);
+	update_DropRoleStmt(stmt, db_datawriter);
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_accessadmin, NULL);
@@ -1291,8 +1323,118 @@ create_guest_schema_for_all_dbs(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(0);
 }
 
+/* Grant permissions on all the existing objects to db_datareader/db_datawriter. */
 static void
-create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
+grant_perms_to_dbreader_dbwriter(const uint16 dbid,
+				const char *db_datareader,
+				const char *db_datawriter)
+{
+	Relation    namespace_rel;
+	TupleDesc   namespace_rel_descr;
+	ScanKeyData key;
+	HeapTuple   tuple;
+	TableScanDesc	tblscan;
+	StringInfoData	query;
+	List		*stmt_list;
+	char		*dbname = get_db_name(dbid);
+	MigrationMode	baseline_mode = is_user_database_singledb(dbname) ? SINGLE_DB : MULTI_DB;
+
+	namespace_rel = table_open(namespace_ext_oid, RowExclusiveLock);
+	namespace_rel_descr = RelationGetDescr(namespace_rel);
+
+	initStringInfo(&query);
+	appendStringInfo(&query, "GRANT SELECT ON ALL TABLES IN SCHEMA dummy TO dummy; ");
+	appendStringInfo(&query, "GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA dummy TO dummy; ");
+
+	/* Grant ALTER DEFAULT PRIVILEGES on schema owner and dbo user. */
+	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT SELECT ON TABLES TO dummy; ");
+	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT INSERT, UPDATE, DELETE ON TABLES TO dummy; ");
+
+	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
+
+	ScanKeyInit(&key,
+				Anum_namespace_ext_dbid,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(dbid));
+
+	tblscan = table_beginscan_catalog(namespace_rel, 1, &key);
+
+	tuple = heap_getnext(tblscan, ForwardScanDirection);
+
+	while (HeapTupleIsValid(tuple))
+	{
+		bool		isNull;
+		Datum		datum;
+		char		*schema_name;
+		Node		*stmts;
+		int			i = 0;
+		ListCell	*parsetree_item;
+		char		*schema_owner;
+		char		*dbo_user;
+
+		datum = heap_getattr(tuple, Anum_namespace_ext_namespace, namespace_rel_descr, &isNull);
+		schema_name = NameStr(*DatumGetName(datum));
+		schema_owner = GetUserNameFromId(get_owner_of_schema(schema_name), false);
+		dbo_user = get_dbo_role_name_by_mode(dbname, baseline_mode);
+
+		/* Replace dummy elements in parsetree with real values */
+		stmts = parsetree_nth_stmt(stmt_list, i++);
+		update_GrantStmt(stmts, schema_name, NULL, db_datareader, NULL);
+		stmts = parsetree_nth_stmt(stmt_list, i++);
+		update_GrantStmt(stmts, schema_name, NULL, db_datawriter, NULL);
+
+		stmts = parsetree_nth_stmt(stmt_list, i++);
+		update_AlterDefaultPrivilegesStmt(stmts, schema_name, schema_owner, dbo_user, db_datareader, NULL);
+		stmts = parsetree_nth_stmt(stmt_list, i++);
+		update_AlterDefaultPrivilegesStmt(stmts, schema_name, schema_owner, dbo_user, db_datawriter, NULL);
+
+		/* Run all subcommands */
+		foreach(parsetree_item, stmt_list)
+		{
+			Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
+
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 0;
+
+			/* do this step */
+			ProcessUtility(wrapper,
+						CREATE_FIXED_DB_ROLES,
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
+		}
+		tuple = heap_getnext(tblscan, ForwardScanDirection);
+	}
+
+	/* Cleanup. */
+	table_endscan(tblscan);
+	table_close(namespace_rel, RowExclusiveLock);
+	pfree(dbname);
+	pfree(query.data);
+}
+
+static void
+rolname_same_as_db_rolname(char *rolname)
+{
+	if (OidIsValid(get_role_oid(rolname, true)))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", rolname)));
+	}
+}
+
+static void
+create_db_roles_in_database(const char *dbname, List *parsetree_list)
 {
 	Node           *stmt;
 	Oid            save_userid;
@@ -1301,15 +1443,26 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 	char           *db_owner;
 	char           *db_accessadmin;
 	char           *db_ddladmin;
+	char           *db_datareader;
+	char           *db_datawriter;
+	int16			dbid = get_db_id(dbname);
 
 	db_owner = get_db_owner_name(dbname);
 	db_accessadmin = get_db_accessadmin_role_name(dbname);
 	db_ddladmin = get_db_ddladmin_role_name(dbname);
+  db_datareader = get_db_datareader_name(dbname);
+	db_datawriter = get_db_datawriter_name(dbname);
 
-	if (OidIsValid(get_role_oid(db_accessadmin, true)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("role \"%s\" already exists. Please drop the role and restart upgrade.", db_accessadmin)));
+	/* Throws error if a role exists already with the same name as db role. */
+	rolname_same_as_db_rolname(db_accessadmin);
+	rolname_same_as_db_rolname(db_datareader);
+	rolname_same_as_db_rolname(db_datawriter);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_CreateRoleStmt(stmt, db_datareader, db_owner, NULL);
+
+	stmt = parsetree_nth_stmt(parsetree_list, i++);
+	update_CreateRoleStmt(stmt, db_datawriter, db_owner, NULL);
 
 	if (OidIsValid(get_role_oid(db_ddladmin, true)))
 		ereport(ERROR,
@@ -1337,6 +1490,8 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 		SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
 		add_to_bbf_authid_user_ext(db_accessadmin, DB_ACCESSADMIN, dbname, NULL, NULL, true, true, false);
 		add_to_bbf_authid_user_ext(db_ddladmin, DB_DDLADMIN, dbname, NULL, NULL, true, false, false);
+		add_to_bbf_authid_user_ext(db_datareader, DB_DATAREADER, dbname, NULL, NULL, true, true, false);
+		add_to_bbf_authid_user_ext(db_datawriter, DB_DATAWRITER, dbname, NULL, NULL, true, true, false);
 
 		foreach(parsetree_item, parsetree_list)
 		{
@@ -1368,6 +1523,8 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 
 			CommandCounterIncrement();
 		}
+		/* Grant permissions on all the schemas in a database to db_datareader/db_datawriter */
+		grant_perms_to_dbreader_dbwriter(dbid, db_datareader, db_datawriter);
 	}
 	PG_FINALLY();
 	{
@@ -1375,6 +1532,8 @@ create_db_roles_if_not_exists(const char *dbname, List *parsetree_list)
 		pfree(db_owner);
 		pfree(db_accessadmin);
 		pfree(db_ddladmin);
+		pfree(db_datareader);
+		pfree(db_datawriter);
 	}
 	PG_END_TRY();
 }
@@ -1417,6 +1576,8 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 		initStringInfo(&query);
 
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
+		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
 		appendStringInfo(&query, "CREATE ROLE dummy ROLE dummy; ");
 		appendStringInfo(&query, "GRANT CREATE ON DATABASE dummy TO dummy; ");
@@ -1439,7 +1600,7 @@ create_db_roles_during_upgrade(PG_FUNCTION_ARGS)
 
 			db_name = TextDatumGetCString(datum);
 
-			create_db_roles_if_not_exists(db_name, parsetree_list);
+			create_db_roles_in_database(db_name, parsetree_list);
 
 			pfree(db_name);
 		}
