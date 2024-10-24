@@ -6998,16 +6998,9 @@ gen_command_grant_revoke_priv_to_role(StringInfo query, const char *rolename,
 	revoke_createrole = (prev_createrole == 1 && createrole == 0);
 	revoke_createdb = (prev_createdb == 1 && createdb == 0);
 
-	// /* If both attributes need to be granted/revoked */
-	if ((grant_createrole && grant_createdb)
-		|| (revoke_createrole && revoke_createdb)) 
-		appendStringInfo(query, "ALTER ROLE dummy WITH %s %s; ", (grant_createrole) ? "createdb" :
-						 "nocreatedb", (grant_createrole) ? "createrole" : "nocreaterole");
-	
-	/* If only one attribute needs to be granted/revoked */
-	else if (grant_createrole || revoke_createrole
-		|| grant_createdb || revoke_createdb) 
-		appendStringInfo(query, "ALTER ROLE dummy WITH %s; ", (grant_createdb) ? "createdb" : 
-				((grant_createrole) ? "createrole" : ((revoke_createrole) ? "nocreaterole" : "nocreatedb")));
+	/* Genarate grante/revoke required attribute to the required role query */
+	appendStringInfo(query, "ALTER ROLE dummy WITH %s %s; ", grant_createrole ? "createrole" : 
+				(revoke_createrole ? "nocreaterole" : ""), grant_createdb ? "createdb" : 
+					(revoke_createdb ? "nocreatedb" : ""));
 
 }
