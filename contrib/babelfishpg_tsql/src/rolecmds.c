@@ -1751,7 +1751,7 @@ check_alter_server_stmt(GrantRoleStmt *stmt)
 	 * sysadmin role is not granted if grantee login has a user in one of the
 	 * databases, as Babelfish only supports one dbo currently
 	 */
-	if (stmt->is_grant && IS_ROLENAME_SYSADMIN(grantee_name) && has_user_in_db(grantee_name, &db_name))
+	if (stmt->is_grant && IS_ROLENAME_SYSADMIN(granted_name) && has_user_in_db(grantee_name, &db_name))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("'sysadmin' role cannot be granted to login: a user is already created in database '%s'", db_name)));
