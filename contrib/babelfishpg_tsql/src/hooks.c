@@ -34,6 +34,7 @@
 #include "common/logging.h"
 #include "executor/execExpr.h"
 #include "funcapi.h"
+#include "libpq/libpq.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -5540,8 +5541,14 @@ pltsql_get_object_identity_event_trigger(ObjectAddress* address)
     return identity;
 }
 
+/*
+ * Allows execution of GRANT/REVOKE statement if current_user is member of db_securityadmin
+ * given that GRANT/REVOKE is being executed on current database's object. It is being
+ * ensured that schema of given object(in GRANT/REVOKE statement) belongs to current database.  
+ */
 static void
-handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclMode privileges, Oid *grantorId, AclMode *grantOptions)
+handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
+								AclMode privileges, Oid *grantorId, AclMode *grantOptions)
 {
 	ObjectAddress	address;
 	Oid				classid = InvalidOid;
@@ -5554,7 +5561,7 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclM
 	 * 3. Grantor is same as owner OR Grantor already has all the required privileges.
 	 *    This means already the best grantor has been selected using select_best_grantor().
 	 */
-	if (!IS_TDS_CLIENT() ||
+	if (!MyProcPort->is_tds_conn ||
 		sql_dialect != SQL_DIALECT_TSQL ||
 		*grantorId == ownerId ||
 		*grantOptions == ACL_GRANT_OPTION_FOR(privileges))
@@ -5595,10 +5602,9 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclM
 	{
 		char *nspname = get_namespace_name(schema_oid);
 		/*
-		* Check if function's schema is from a different logical database and
-		* it is not a shared schema. If yes, then set userid to session user
-		* to allow cross database access.
-		*/
+		 * Don't allow if object's schema is not from current database OR
+		 * it is a shared schema.
+		 */
 		if (nspname == NULL ||
 			is_shared_schema(nspname) ||
 			!is_schema_from_db(schema_oid, get_cur_db_id()))
@@ -5609,6 +5615,11 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId, AclM
 		}
 		else
 		{
+			/*
+			 * Check if current user is member of db_securityadmin role.
+			 * If so, then grant/revoke the requested privileges by overriding
+			 * grantId with ownerId.
+			 */
 			if (is_member_of_role(GetUserId(),
 								  get_role_oid(get_db_securityadmin_role_name(get_current_pltsql_db_name()), false)))
 			{
