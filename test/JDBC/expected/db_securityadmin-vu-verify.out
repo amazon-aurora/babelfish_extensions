@@ -539,8 +539,8 @@ int#!#int
  -- CASE 7.3 - sp_helprole
  -- CASE 7.4 - sp_helprolemember
 -- test for helpuser
-CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id smallint, 
-Users_in_role sys.sysname, UserID smallint);
+CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id int,
+Users_in_role sys.sysname, UserID int);
 GO
 
 GRANT INSERT,SELECT ON temp_sp_helpuser TO PUBLIC;

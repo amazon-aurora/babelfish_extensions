@@ -310,8 +310,8 @@ GO
 
 -- test for helpuser
 -- tsql
-CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id smallint, 
-Users_in_role sys.sysname, UserID smallint);
+CREATE TABLE temp_sp_helpuser(RoleName sys.sysname, Role_id int,
+Users_in_role sys.sysname, UserID int);
 GO
 
 GRANT INSERT,SELECT ON temp_sp_helpuser TO PUBLIC;
