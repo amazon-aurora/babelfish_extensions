@@ -23,6 +23,8 @@ DROP PROCEDURE babel_5135_schema1.babel_5135_p1;
 GO
 DROP FUNCTION babel_5135_schema1.babel_5135_f1();
 GO
+DROP FUNCTION babel_5135_schema1.babel_5135_tvf1();
+GO
 DROP SCHEMA babel_5135_schema1;
 GO
 DROP USER babel_5135_u1;

@@ -279,6 +279,12 @@ GO
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
 
 
+GRANT EXECUTE ON babel_5135_schema1.babel_5135_tvf1 TO babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
+
 
 -- tsql user=babel_5135_l1 password=12345678
 SELECT current_user;
@@ -290,7 +296,7 @@ babel_5135_u1
 
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -318,6 +324,13 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
 
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -333,6 +346,9 @@ GO
 REVOKE EXECUTE ON babel_5135_schema1.babel_5135_f1 FROM babel_5135_u1;
 GO
 
+REVOKE EXECUTE ON babel_5135_schema1.babel_5135_tvf1 FROM babel_5135_u1;
+GO
+
 -- tsql user=babel_5135_l1 password=12345678
 SELECT current_user;
 GO
@@ -343,7 +359,7 @@ babel_5135_u1
 
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -371,6 +387,13 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
 
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -387,7 +410,7 @@ babel_5135_u1
 
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -427,6 +450,13 @@ int
 ~~END~~
 
 
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~START~~
+int#!#int
+~~END~~
+
+
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
 REVOKE SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::babel_5135_schema1 FROM babel_5135_u1;
 GO
@@ -441,7 +471,7 @@ babel_5135_u1
 
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -469,6 +499,13 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
 
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
@@ -482,7 +519,7 @@ babel_5135_dbsecadmin_u1
 
 
 SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
-INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1);
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
 UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
 DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
 GO
@@ -510,6 +547,13 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
 
 
 -- tsql
