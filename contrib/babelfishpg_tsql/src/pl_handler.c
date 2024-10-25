@@ -6955,17 +6955,17 @@ gen_command_grant_revoke_priv_to_role(StringInfo query, const char *rolename,
 	{
 		createrole++;
 		createdb++;
-		is_sysadmin = 1;
+		is_sysadmin = true;
 	}
 	if (has_privs_of_role(login_oid, get_securityadmin_oid()))
 	{
 		createrole++;
-		is_securityadmin = 2;
+		is_securityadmin = true;
 	}
 	if (has_privs_of_role(login_oid, get_dbcreator_oid()))
 	{
 		createdb++;
-		is_dbcreator = 3;
+		is_dbcreator = true;
 	}
 
 	/* keep granted attribute count*/

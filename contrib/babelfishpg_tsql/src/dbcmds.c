@@ -578,8 +578,8 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 		SetUserIdAndSecContext(GetSessionUserId(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 		/* Session user must be member of sysadmin or dbcreator fixed server role */
-		if (!have_createdb_privilege() && !is_member_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
-							!is_member_of_role(GetSessionUserId(), get_dbcreator_oid()))
+		if (!has_privs_of_role(GetSessionUserId(), get_sysadmin_oid()) &&
+							!has_privs_of_role(GetSessionUserId(), get_dbcreator_oid()))
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("permission denied to create database")));
