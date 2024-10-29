@@ -49,10 +49,10 @@ INNER JOIN sys.database_principals AS members
     ON db_role_mems.member_principal_id = members.principal_id order by MemberPrincipalName;
 GO
 
-create database babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+create database babel_5135_longdb
 GO
 
-USE babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
+USE babel_5135_longdb;
 GO
 
 create user babel_5135_u1 for login babel_5135_l1;
