@@ -1998,6 +1998,7 @@ extern bool insert_bulk_check_constraints;
 #define DB_DATAWRITER "db_datawriter"
 
 #define IS_BBF_BUILT_IN_DB(dbname) \
+<<<<<<< HEAD
     (strcmp(dbname, "master") == 0 || \
      strcmp(dbname, "tempdb") == 0 || \
      strcmp(dbname, "msdb") == 0)
@@ -2009,6 +2010,24 @@ extern bool insert_bulk_check_constraints;
 	 strcmp(rolname, DB_SECURITYADMIN) == 0 || \
 	 strcmp(rolname, DB_DATAREADER) == 0 || \
 	 strcmp(rolname, DB_DATAWRITER) == 0)
+=======
+    ((dbname) && \
+     (({ size_t len = strlen(dbname); \
+         (len == 6 && strncmp(dbname, "master", 6) == 0) || \
+         (len == 6 && strncmp(dbname, "tempdb", 6) == 0) || \
+         (len == 4 && strncmp(dbname, "msdb", 4) == 0); \
+     })))
+
+#define IS_FIXED_DB_PRINCIPAL(rolname) \
+    ((rolname) && \
+     (({ size_t len = strlen(rolname); \
+         (len == 3 && strncmp(rolname, DBO, 3) == 0) || \
+         (len == 8 && strncmp(rolname, DB_OWNER, 8) == 0) || \
+		 (len == 14 && strncmp(rolname, DB_ACCESSADMIN, 14) == 0) || \
+         (len == 13 && strncmp(rolname, DB_DATAREADER, 13) == 0) || \
+         (len == 13 && strncmp(rolname, DB_DATAWRITER, 13) == 0); \
+     })))
+>>>>>>> 94c81af0a (fix merge conflicts)
 
 /**********************************************************************
  * Function declarations
