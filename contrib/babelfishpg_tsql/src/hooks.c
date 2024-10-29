@@ -5616,7 +5616,7 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 			 * grantId with ownerId.
 			 */
 			if (is_member_of_role(GetUserId(),
-								  get_role_oid(get_db_securityadmin_role_name(get_current_pltsql_db_name()), false)))
+								  get_db_securityadmin_oid(get_current_pltsql_db_name(), false)))
 			{
 				*grantorId = ownerId;
 				*grantOptions = ACL_GRANT_OPTION_FOR(privileges);

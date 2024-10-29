@@ -3315,7 +3315,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						Oid 		save_userid;
 						Oid 		db_owner = get_db_owner_oid(db_name, false);
 						Oid 		db_accessadmin = get_db_accessadmin_oid(db_name, false);
-						Oid			db_securityadmin = get_role_oid(get_db_securityadmin_role_name(db_name), false);
+						Oid			db_securityadmin = get_db_securityadmin_oid(db_name, false);
 						Oid 		user_oid = get_role_oid(stmt->role->rolename, false);
 						if ((isuser && get_db_principal_kind(user_oid, db_name) != BBF_USER) ||
 						    (isrole && get_db_principal_kind(user_oid, db_name) != BBF_ROLE))
@@ -3478,7 +3478,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							{
 								Oid		db_owner = get_db_owner_oid(db_name, false);
 								Oid		db_accessadmin = get_db_accessadmin_oid(db_name, false);
-								Oid		db_securityadmin = get_role_oid(get_db_securityadmin_role_name(db_name), false);
+								Oid		db_securityadmin = get_db_securityadmin_oid(db_name, false);
 
 								foreach(item, stmt->roles)
 								{
@@ -3729,7 +3729,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					{
 						const char *db_name = get_current_pltsql_db_name();
 						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
-						Oid       db_securityadmin = get_role_oid(get_db_securityadmin_role_name(get_cur_db_name()), false);
+						Oid        db_securityadmin = get_db_securityadmin_oid(db_name, false);
 
 						owner_oid = get_rolespec_oid(rolspec, true);
 						/*
@@ -4224,6 +4224,12 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				char		*db_datareader = get_db_datareader_name(dbname);
 				char		*db_datawriter = get_db_datawriter_name(dbname);
 				char		*db_accessadmin = get_db_accessadmin_role_name(dbname);
+
+				/*
+				 * NOTE: GRANT/REVOKE on OBJECT(schema-contained)/SCHEMA are allowed
+				 * if current_user is member of db_securityadmin via engine hooks.
+				 * Please refer handle_grantstmt_for_dbsecadmin() function for more details.
+				 */
 
 				/* Ignore when GRANT statement has no specific named object. */
 				if (sql_dialect != SQL_DIALECT_TSQL || grant->targtype != ACL_TARGET_OBJECT)

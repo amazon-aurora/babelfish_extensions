@@ -326,10 +326,11 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	{
 		char	   *user_name = (char *) lfirst(elem);
 
-		if (strcmp(user_name, db_owner) != 0 && strcmp(user_name, dbo) != 0 &&
+		if (strcmp(user_name, db_owner) != 0 &&
+			strcmp(user_name, dbo) != 0 &&
 			strcmp(user_name, db_accessadmin) != 0 &&
 			strcmp(user_name, db_securityadmin) != 0 &&
-		    strcmp(user_name, db_datareader) != 0 &&
+			strcmp(user_name, db_datareader) != 0 &&
 			strcmp(user_name, db_datawriter) != 0)
 		{
 			appendStringInfo(&query, "DROP OWNED BY dummy CASCADE; ");
@@ -371,10 +372,11 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	{
 		char	   *user_name = (char *) lfirst(elem);
 
-		if (strcmp(user_name, db_owner) != 0 && strcmp(user_name, dbo) != 0 &&
+		if (strcmp(user_name, db_owner) != 0 &&
+			strcmp(user_name, dbo) != 0 &&
 			strcmp(user_name, db_accessadmin) != 0 &&
 			strcmp(user_name, db_securityadmin) != 0 &&
-		    strcmp(user_name, db_datareader) != 0 &&
+			strcmp(user_name, db_datareader) != 0 &&
 			strcmp(user_name, db_datawriter) != 0)
 		{
 			stmt = parsetree_nth_stmt(stmt_list, i++);
