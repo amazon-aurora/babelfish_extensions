@@ -165,6 +165,32 @@ GO
 CREATE SCHEMA babel_5135_sch2 AUTHORIZATION babel_5135_u1;
 GO
 
+SELECT name, sys.user_name(principal_id) FROM sys.schemas WHERE name IN ('babel_5135_sch1','babel_5135_sch2') ORDER BY name;
+GO
+
+-- granting db_securityadmin to guest and create schema
+-- tsql
+alter role db_securityadmin add member guest;
+GO
+
+-- tsql user=babel_5135_l2 password=12345678
+select current_user;
+GO
+
+CREATE SCHEMA babel_5135_sch3;
+GO
+
+SELECT name, sys.user_name(principal_id) FROM sys.schemas WHERE name LIKE 'babel_5135_sch3' ORDER BY name;
+GO
+
+DROP SCHEMA babel_5135_sch3;
+GO
+
+-- tsql
+alter role db_securityadmin DROP member guest;
+GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
 -- schema creation inside procedure
 -- execution should be succeeded with no error
 EXEC babel_5135_schemaop_proc1;
