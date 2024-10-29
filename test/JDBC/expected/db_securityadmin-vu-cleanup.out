@@ -31,6 +31,8 @@ DROP PROCEDURE babel_5135_roleop_proc3;
 GO
 DROP PROCEDURE babel_5135_schemaop_proc1;
 GO
+DROP PROCEDURE babel_5135_grantop_proc1, babel_5135_revokeop_proc1;
+GO
 DROP SCHEMA babel_5135_schema1;
 GO
 DROP USER babel_5135_u1;

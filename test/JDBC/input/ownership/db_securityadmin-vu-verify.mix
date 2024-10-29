@@ -269,6 +269,61 @@ GO
 SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
 GO
 
+-- Testing GRANT inside procedure
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+EXEC babel_5135_grantop_proc1;
+GO
+
+-- tsql user=babel_5135_l1 password=12345678
+SELECT current_user;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+
+-- Testing revokes inside procedure
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+EXEC babel_5135_revokeop_proc1;
+GO
+
+-- tsql user=babel_5135_l1 password=12345678
+SELECT current_user;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
+GO
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+
+
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::babel_5135_schema1 TO babel_5135_u1;
 GO

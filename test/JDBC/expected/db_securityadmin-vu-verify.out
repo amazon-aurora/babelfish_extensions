@@ -413,6 +413,121 @@ GO
 
 
 -- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+-- Testing GRANT inside procedure
+EXEC babel_5135_grantop_proc1;
+GO
+
+-- tsql user=babel_5135_l1 password=12345678
+SELECT current_user;
+GO
+~~START~~
+varchar
+babel_5135_u1
+~~END~~
+
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
+GO
+~~START~~
+int
+0
+~~END~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+~~ROW COUNT: 1~~
+
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~START~~
+int#!#int
+~~END~~
+
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+-- Testing revokes inside procedure
+EXEC babel_5135_revokeop_proc1;
+GO
+
+-- tsql user=babel_5135_l1 password=12345678
+SELECT current_user;
+GO
+~~START~~
+varchar
+babel_5135_u1
+~~END~~
+
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_t1;
+INSERT INTO babel_5135_schema1.babel_5135_t1 VALUES (1,2);
+UPDATE babel_5135_schema1.babel_5135_t1 SET a = 2 WHERE a = 1;
+DELETE FROM babel_5135_schema1.babel_5135_t1 WHERE a = 2;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for table babel_5135_t1)~~
+
+
+SELECT COUNT(*) FROM babel_5135_schema1.babel_5135_v1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view babel_5135_v1)~~
+
+
+EXEC babel_5135_schema1.babel_5135_p1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for procedure babel_5135_p1)~~
+
+
+SELECT babel_5135_schema1.babel_5135_f1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_f1)~~
+
+
+SELECT * FROM babel_5135_schema1.babel_5135_tvf1();
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5135_tvf1)~~
+
+
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::babel_5135_schema1 TO babel_5135_u1;
 GO
 

@@ -57,6 +57,22 @@ CREATE PROCEDURE babel_5135_roleop_proc3 AS BEGIN ALTER ROLE babel_5135_r1 DROP 
 GO
 CREATE PROCEDURE babel_5135_schemaop_proc1 AS BEGIN CREATE SCHEMA babel_5135_sch11; END
 GO
+CREATE PROCEDURE babel_5135_grantop_proc1 AS BEGIN
+GRANT SELECT, INSERT, UPDATE, DELETE ON babel_5135_schema1.babel_5135_t1 TO babel_5135_u1;
+GRANT SELECT ON babel_5135_schema1.babel_5135_v1 TO babel_5135_u1;
+GRANT EXECUTE ON babel_5135_schema1.babel_5135_p1 TO babel_5135_u1;
+GRANT EXECUTE ON babel_5135_schema1.babel_5135_f1 TO babel_5135_u1;
+GRANT EXECUTE ON babel_5135_schema1.babel_5135_tvf1 TO babel_5135_u1;
+END
+GO
+CREATE PROCEDURE babel_5135_revokeop_proc1 AS BEGIN
+REVOKE SELECT, INSERT, UPDATE, DELETE ON babel_5135_schema1.babel_5135_t1 FROM babel_5135_u1;
+REVOKE SELECT ON babel_5135_schema1.babel_5135_v1 FROM babel_5135_u1;
+REVOKE EXECUTE ON babel_5135_schema1.babel_5135_p1 FROM babel_5135_u1;
+REVOKE EXECUTE ON babel_5135_schema1.babel_5135_f1 FROM babel_5135_u1;
+REVOKE EXECUTE ON babel_5135_schema1.babel_5135_tvf1 FROM babel_5135_u1;
+END
+GO
 
 GRANT EXECUTE ON babel_5135_roleop_proc1 TO PUBLIC;
 GO
@@ -65,6 +81,10 @@ GO
 GRANT EXECUTE ON babel_5135_roleop_proc3 TO PUBLIC;
 GO
 GRANT EXECUTE ON babel_5135_schemaop_proc1 TO PUBLIC;
+GO
+GRANT EXECUTE ON babel_5135_grantop_proc1 TO PUBLIC;
+GO
+GRANT EXECUTE ON babel_5135_revokeop_proc1 TO PUBLIC;
 GO
 
 create database babel_5135_db1
