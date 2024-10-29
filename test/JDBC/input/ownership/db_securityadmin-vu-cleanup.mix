@@ -1,7 +1,7 @@
 -- tsql
 USE master
 GO
-DROP DATABASE IF EXISTS babel_5135_longdb;
+DROP DATABASE IF EXISTS babel_5135_db1;
 GO
 DROP ROLE babel_5135_r1;
 GO
