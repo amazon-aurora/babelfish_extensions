@@ -152,20 +152,27 @@ GO
 DROP ROLE babel_5135_role4;
 GO
 
+-- create/alter/drop role inside procedure
+-- execution should be succeeded with no error
+EXEC babel_5135_roleop_proc1;
+GO
+
 -- CASE 3.2 - ADD/DROP the membership of user-defined database roles
 ALTER ROLE babel_5135_r1 ADD MEMBER babel_5135_u1;
 GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: Current login babel_5135_dbsecadmin_l1 does not have permission to alter role master_babel_5135_r1)~~
-
 
 ALTER ROLE babel_5135_r1 DROP MEMBER babel_5135_u1;
 GO
-~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: Current login babel_5135_dbsecadmin_l1 does not have permission to alter role master_babel_5135_r1)~~
+-- alter role add member inside procedure
+-- execution should be succeeded with no error
+-- Add
+EXEC babel_5135_roleop_proc2;
+GO
 
+-- Drop
+EXEC babel_5135_roleop_proc3;
+GO
 
 -- CASE 3.3 - ADD/DROP the membership of system-defined database roles should be blocked
 ALTER ROLE db_accessadmin ADD MEMBER babel_5135_u1;
@@ -216,6 +223,14 @@ CREATE SCHEMA babel_5135_sch1;
 GO
 
 CREATE SCHEMA babel_5135_sch2 AUTHORIZATION babel_5135_u1;
+GO
+
+-- schema creation inside procedure
+-- execution should be succeeded with no error
+EXEC babel_5135_schemaop_proc1;
+GO
+
+DROP SCHEMA babel_5135_sch11;
 GO
 
 -- ALTER/DROP of unowned schema should not be allowed

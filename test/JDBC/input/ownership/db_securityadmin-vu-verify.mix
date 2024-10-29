@@ -116,11 +116,26 @@ GO
 DROP ROLE babel_5135_role4;
 GO
 
+-- create/alter/drop role inside procedure
+-- execution should be succeeded with no error
+EXEC babel_5135_roleop_proc1;
+GO
+
 -- CASE 3.2 - ADD/DROP the membership of user-defined database roles
 ALTER ROLE babel_5135_r1 ADD MEMBER babel_5135_u1;
 GO
 
 ALTER ROLE babel_5135_r1 DROP MEMBER babel_5135_u1;
+GO
+
+-- alter role add member inside procedure
+-- execution should be succeeded with no error
+-- Add
+EXEC babel_5135_roleop_proc2;
+GO
+
+-- Drop
+EXEC babel_5135_roleop_proc3;
 GO
 
 -- CASE 3.3 - ADD/DROP the membership of system-defined database roles should be blocked
@@ -148,6 +163,14 @@ CREATE SCHEMA babel_5135_sch1;
 GO
 
 CREATE SCHEMA babel_5135_sch2 AUTHORIZATION babel_5135_u1;
+GO
+
+-- schema creation inside procedure
+-- execution should be succeeded with no error
+EXEC babel_5135_schemaop_proc1;
+GO
+
+DROP SCHEMA babel_5135_sch11;
 GO
 
 -- ALTER/DROP of unowned schema should not be allowed
