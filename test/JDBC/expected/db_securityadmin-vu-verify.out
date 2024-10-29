@@ -746,7 +746,7 @@ DROP TABLE temp_sp_helpuser;
 GO
 
 -- test for sp_helprole
-CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId smallint, IsAppRole int);
+CREATE TABLE temp_sp_helprole(RoleName sys.sysname, RoleId int, IsAppRole int);
 GO
 
 GRANT INSERT,SELECT ON temp_sp_helprole TO PUBLIC;
@@ -836,7 +836,7 @@ DROP TABLE temp_sp_helprolemember;
 GO
 
 -- CASE XXXXXX
-USE babel_5135_db1;
+USE babel_5135_longdb_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz;
 GO
 
 SELECT name, type, type_desc, default_schema_name, is_fixed_role, authentication_type_desc FROM sys.database_principals WHERE NAME = 'db_securityadmin';
