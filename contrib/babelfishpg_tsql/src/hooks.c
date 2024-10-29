@@ -5600,17 +5600,12 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 
 	if (OidIsValid(schema_oid))
 	{
-		char *nspname = get_namespace_name(schema_oid);
 		/*
 		 * Don't allow if object's schema is not from current database OR
 		 * it is a shared schema.
 		 */
-		if (nspname == NULL ||
-			is_shared_schema(nspname) ||
-			!is_schema_from_db(schema_oid, get_cur_db_id()))
+		if (!is_schema_from_db(schema_oid, get_cur_db_id()))
 		{
-			if (nspname)
-				pfree(nspname);
 			return;
 		}
 		else
@@ -5625,8 +5620,6 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 			{
 				*grantorId = ownerId;
 				*grantOptions = ACL_GRANT_OPTION_FOR(privileges);
-				if (nspname)
-					pfree(nspname);
 				return;
 			}
 		}
