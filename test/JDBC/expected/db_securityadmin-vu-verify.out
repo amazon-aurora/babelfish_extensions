@@ -267,6 +267,7 @@ GO
 	-- CASE 5.1 - Validate GRANT/REVOKE of object/schema privileges
 	-- CASE 5.2 - Validate members of db_securityadmin can not actually access given objects
 	-- CASE 5.3 - Validate that after GRANT/REVOKE, objectowner/dbo can execute REVOKE/GRANT respectively
+	-- CASE 5.4 - Grant/Revoke should not be allowed for show shared schema or any other database's schema
 GRANT SELECT, INSERT, UPDATE, DELETE ON babel_5135_schema1.babel_5135_t1 TO babel_5135_u1;
 GO
 ~~ERROR (Code: 33557097)~~
@@ -752,6 +753,51 @@ GO
 
 REVOKE EXECUTE ON babel_5135_schema1.babel_5135_tvf1 FROM babel_5135_u1;
 GO
+
+-- tsql user=babel_5135_dbsecadmin_l1 password=12345678
+-- CASE 5.4 - Grant/Revoke should not be allowed for show shared schema or any other database's schema
+-- Following error is misleading, will be fixed separately
+GRANT SELECT ON sys.database_principals TO babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Could find logical schema name for: "sys")~~
+
+
+REVOKE SELECT ON sys.database_principals FROM babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Could find logical schema name for: "sys")~~
+
+
+GRANT SELECT ON pg_catalog.pg_namespace TO babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Could find logical schema name for: "pg_catalog")~~
+
+
+REVOKE SELECT ON pg_catalog.pg_namespace FROM babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Could find logical schema name for: "pg_catalog")~~
+
+
+REVOKE SELECT ON babel_5135_db1.dbo.babel_5135_show_role_mem TO babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for table babel_5135_show_role_mem)~~
+
+
+REVOKE SELECT ON babel_5135_db1.dbo.babel_5135_show_role_mem FROM babel_5135_u1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for table babel_5135_show_role_mem)~~
+
 
 -- tsql
 -- CASE 6 - is_member() / is_rolemember() testcases
