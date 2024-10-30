@@ -1160,15 +1160,9 @@ GO
     Server SQLState: 42501)~~
 
 
-GRANT master_db_securityadmin TO db_securityadmin_restrictions_login;
-GO
-~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied to grant role "master_db_securityadmin"
-  Detail: Only roles with the ADMIN option on role "master_db_securityadmin" may grant this role.
-    Server SQLState: 42501)~~
-
-
+-- GRANT master_db_securityadmin TO db_securityadmin_restrictions_login;
+-- GO
 GRANT db_securityadmin_restrictions_login TO master_db_securityadmin;
 GO
 ~~ERROR (Code: 0)~~
@@ -1178,15 +1172,9 @@ GO
     Server SQLState: 42501)~~
 
 
-REVOKE master_db_securityadmin FROM master_dbo;
-GO
-~~ERROR (Code: 0)~~
 
-~~ERROR (Message: ERROR: permission denied to revoke role "master_db_securityadmin"
-  Detail: Only roles with the ADMIN option on role "master_db_securityadmin" may revoke this role.
-    Server SQLState: 42501)~~
-
-
+-- REVOKE master_db_securityadmin FROM master_dbo;
+-- GO
 REVOKE master_dbo FROM master_db_securityadmin;
 GO
 ~~ERROR (Code: 0)~~

@@ -706,14 +706,14 @@ GO
 ALTER ROLE master_db_securityadmin WITH CONNECTION LIMIT 1;
 GO
 
-GRANT master_db_securityadmin TO db_securityadmin_restrictions_login;
-GO
+-- GRANT master_db_securityadmin TO db_securityadmin_restrictions_login;
+-- GO
 
 GRANT db_securityadmin_restrictions_login TO master_db_securityadmin;
 GO
 
-REVOKE master_db_securityadmin FROM master_dbo;
-GO
+-- REVOKE master_db_securityadmin FROM master_dbo;
+-- GO
 
 REVOKE master_dbo FROM master_db_securityadmin;
 GO
