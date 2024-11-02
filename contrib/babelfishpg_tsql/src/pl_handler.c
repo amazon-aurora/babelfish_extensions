@@ -3726,8 +3726,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					else if (rolspec && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 					{
 						const char *db_name = get_current_pltsql_db_name();
-						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
-						Oid        db_securityadmin = get_db_securityadmin_oid(db_name, false);
 
 						owner_oid = get_rolespec_oid(rolspec, true);
 						/*
@@ -3736,8 +3734,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						* to current user and later alter schema owner using bbf_role_admin
 						*/
 						if (!member_can_set_role(GetUserId(), owner_oid) &&
-							(has_privs_of_role(GetUserId(), db_accessadmin) ||
-							has_privs_of_role(GetUserId(), db_securityadmin)) &&
+							(has_privs_of_role(GetUserId(), get_db_accessadmin_oid(db_name, false)) ||
+							has_privs_of_role(GetUserId(), get_db_securityadmin_oid(db_name, false)) ||
+							has_privs_of_role(GetUserId(), get_db_ddladmin_oid(db_name, false))) &&
 							get_db_principal_kind(owner_oid, db_name))
 						{
 							create_schema->authrole = NULL;
@@ -3794,6 +3793,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						{
 							SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 							AlterSchemaOwner_oid(get_namespace_oid(create_schema->schemaname, false), owner_oid);
+							CommandCounterIncrement();
 						}
 						PG_FINALLY();
 						{
@@ -3804,10 +3804,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					/* Execute subcommands for database roles.*/
 					if (strcmp(queryString, CREATE_GUEST_SCHEMAS_DURING_UPGRADE) != 0)
 					{
-						if (rolspec)
-							exec_database_roles_subcmds(create_schema->schemaname, rolspec->rolename);
-						else
-							exec_database_roles_subcmds(create_schema->schemaname, NULL);
+						exec_database_roles_subcmds(create_schema->schemaname);
 					}
 
 					/* Grant ALL schema privileges to the user.*/

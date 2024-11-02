@@ -307,7 +307,7 @@ BEGIN
         END IF;
     ELSIF EXISTS (SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE orig_username = role COLLATE sys.database_default)
     THEN
-        IF (((SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE rolname = CURRENT_USER) = 'dbo' COLLATE sys.database_default) AND role COLLATE sys.database_default IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter'))
+        IF (((SELECT orig_username FROM sys.babelfish_authid_user_ext WHERE rolname = CURRENT_USER) = 'dbo' COLLATE sys.database_default) AND role COLLATE sys.database_default IN ('db_owner', 'db_accessadmin', 'db_datareader', 'db_datawriter', 'db_ddladmin'))
         THEN RETURN 1;
         ELSIF EXISTS (SELECT name FROM sys.user_token WHERE name = role COLLATE sys.database_default)
         THEN RETURN 1; -- Return 1 if current session user is a member of role or windows group
@@ -637,14 +637,15 @@ CREATE OR REPLACE PROCEDURE sys.sp_helpdbfixedrole("@rolename" sys.SYSNAME = NUL
 $$
 BEGIN
 	-- Returns a list of the fixed database roles. 
-	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin', 'db_securityadmin', 'db_datareader', 'db_datawriter')
+	IF LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) IN ('db_owner', 'db_accessadmin', 'db_securityadmin', 'db_datareader', 'db_datawriter', 'db_ddladmin')
 	BEGIN
 		SELECT CAST(DbFixedRole as sys.SYSNAME) AS DbFixedRole, CAST(Description AS sys.nvarchar(70)) AS Description FROM (
 			VALUES ('db_owner', 'DB Owners'),
 			('db_accessadmin', 'DB Access Administrators'),
 			('db_securityadmin', 'DB Security Administrators'),
 			('db_datareader', 'DB Data Reader'),
-			('db_datawriter', 'DB Data Writer')) x(DbFixedRole, Description)
+			('db_datawriter', 'DB Data Writer'),
+			('db_ddladmin', 'DB DDL Administrators')) x(DbFixedRole, Description)
 			WHERE LOWER(RTRIM(@rolename)) IS NULL OR LOWER(RTRIM(@rolename)) = DbFixedRole;
 	END
 	ELSE IF LOWER(RTRIM(@rolename)) IN (
@@ -694,7 +695,7 @@ BEGIN
 		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter', 'db_ddladmin')
 		ORDER BY UserName, RoleName;
 	END
 	-- If the security account is the db fixed role - db_owner
@@ -726,7 +727,7 @@ BEGIN
 		WHERE Ext1.database_name = DB_NAME()
 		AND Ext2.database_name = DB_NAME()
 		AND Ext1.type = 'R'
-		AND Ext2.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter')
+		AND Ext2.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter', 'db_ddladmin')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY Role_name, Users_in_role;
 	END
@@ -764,7 +765,7 @@ BEGIN
 		LEFT OUTER JOIN pg_catalog.pg_roles AS Base4 ON Base4.rolname = Bsdb.owner
 		WHERE Ext1.database_name = DB_NAME()
 		AND (Ext1.type != 'R' OR Ext1.type != 'A')
-		AND Ext1.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter')
+		AND Ext1.orig_username NOT IN ('db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter', 'db_ddladmin')
 		AND (Ext1.orig_username = @name_in_db OR pg_catalog.lower(Ext1.orig_username) = pg_catalog.lower(@name_in_db))
 		ORDER BY UserName, RoleName;
 	END

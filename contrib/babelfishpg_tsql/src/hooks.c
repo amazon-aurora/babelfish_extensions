@@ -211,6 +211,8 @@ static object_access_hook_type prev_object_access_hook = NULL;
 static void bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
 static void revoke_func_permission_from_public(Oid objectId);
 static bool is_partitioned_table_reloptions_allowed(Datum reloptions);
+static Oid pltsql_get_object_owner(Oid namespaceId, Oid ownerId);
+static bool is_bbf_db_ddladmin_operation(Oid classId, Oid namespaceId);
 
 /*****************************************
  * 			Planner Hook
@@ -503,6 +505,10 @@ InstallExtendedHooks(void)
 	bbf_execute_grantstmt_as_dbsecadmin_hook = handle_grantstmt_for_dbsecadmin;
 	
 	pltsql_get_object_identity_event_trigger_hook = pltsql_get_object_identity_event_trigger;
+
+	pltsql_get_object_owner_hook = pltsql_get_object_owner;
+
+	is_bbf_db_ddladmin_operation_hook = is_bbf_db_ddladmin_operation;
 }
 
 void
@@ -5718,4 +5724,102 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 		}
 	}
 	return;
+}
+
+
+static Oid
+pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
+{
+	HeapTuple          tuple;
+	Form_pg_namespace  nsptup;
+	const char         *logical_schema_name;
+
+	Assert(OidIsValid(namespaceId));
+
+	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
+		return ownerId;
+
+	if (!OidIsValid(ownerId))
+		ownerId = GetUserId();
+
+	tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(namespaceId));
+	nsptup = (Form_pg_namespace) GETSTRUCT(tuple);
+
+	logical_schema_name = get_logical_schema_name(NameStr(nsptup->nspname), true);
+
+	if (logical_schema_name)
+	{
+		Oid		nsp_owner;
+		char	*db_name = get_cur_db_name();
+		char	*dbo_name = get_dbo_role_name(db_name);
+
+		/*
+		 * babelfish issue special handing for dbo schema since it is
+		 * owned by db_owner but the correct owner should have been dbo
+		 */
+		if (strcmp(logical_schema_name, "dbo") == 0)
+			nsp_owner = get_role_oid(dbo_name, false);
+		else
+			nsp_owner = nsptup->nspowner;
+
+		if (has_privs_of_role(ownerId, nsp_owner))
+			ownerId = nsp_owner;
+		else
+		{
+			Oid 	db_ddladmin = get_db_ddladmin_oid(db_name, false);
+			Oid 	schema_db_id = get_dbid_from_physical_schema_name(NameStr(nsptup->nspname), false);
+
+			if (schema_db_id == get_cur_db_id() &&
+				has_privs_of_role(GetUserId(), db_ddladmin))
+				ownerId = nsp_owner;
+		}
+
+		pfree(db_name);
+		pfree(dbo_name);
+	}
+	ReleaseSysCache(tuple);
+
+	return ownerId;
+}
+
+static bool
+is_bbf_db_ddladmin_operation(Oid classId, Oid namespaceId)
+{
+	Assert(OidIsValid(classId) && OidIsValid(namespaceId));
+
+	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
+		return false;
+
+	switch(classId)
+	{
+		case RelationRelationId:
+		case ProcedureRelationId:
+		case NamespaceRelationId:
+			break;
+		default:
+			return false;
+			break;
+	}
+
+	if (namespaceId)
+	{
+		char 	*nspname = get_namespace_name(namespaceId);
+		Oid 	schema_db_id = get_dbid_from_physical_schema_name(nspname, false);
+		Oid 	db_ddladmin = get_db_ddladmin_oid(get_current_pltsql_db_name(), false);
+
+		if (schema_db_id == get_cur_db_id())
+		{
+			/*
+			 * Check if current user is member of db_ddladmin role and if it is then
+			 * allow the operation by returning true.
+			 */
+			if (is_member_of_role(GetUserId(), db_ddladmin))
+			{
+				pfree(nspname);
+				return true;
+			}
+		}
+		pfree(nspname);
+	}
+	return false;
 }
