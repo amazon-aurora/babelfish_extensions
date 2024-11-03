@@ -158,14 +158,14 @@ create user db_datareader for login db_roles_l1; -- Error, this role already exi
 go
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: role "db_roles_db1_db_datareader" already exists)~~
+~~ERROR (Message: role "db_datareader" already exists)~~
 
 
 create user db_datawriter for login db_roles_l1; -- Error, this role already exists
 go
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: role "db_roles_db1_db_datawriter" already exists)~~
+~~ERROR (Message: role "db_datawriter" already exists)~~
 
 
 create user db_roles_u1 for login db_roles_l1;

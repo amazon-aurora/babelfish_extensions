@@ -1523,6 +1523,7 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	rolname_same_as_db_rolname(db_datareader);
 	rolname_same_as_db_rolname(db_datawriter);
 	rolname_same_as_db_rolname(db_securityadmin);
+	rolname_same_as_db_rolname(db_ddladmin);
 
 	stmt = parsetree_nth_stmt(parsetree_list, i++);
 	update_CreateRoleStmt(stmt, db_datareader, db_owner, NULL);
@@ -1557,8 +1558,8 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 		SetConfigOption("createrole_self_grant", "inherit", PGC_USERSET, PGC_S_OVERRIDE);
 		add_to_bbf_authid_user_ext(db_accessadmin, DB_ACCESSADMIN, dbname, NULL, NULL, true, true, false);
 		add_to_bbf_authid_user_ext(db_securityadmin, DB_SECURITYADMIN, dbname, NULL, NULL, true, false, false);
-		add_to_bbf_authid_user_ext(db_datareader, DB_DATAREADER, dbname, NULL, NULL, true, true, false);
-		add_to_bbf_authid_user_ext(db_datawriter, DB_DATAWRITER, dbname, NULL, NULL, true, true, false);
+		add_to_bbf_authid_user_ext(db_datareader, DB_DATAREADER, dbname, NULL, NULL, true, false, false);
+		add_to_bbf_authid_user_ext(db_datawriter, DB_DATAWRITER, dbname, NULL, NULL, true, false, false);
 		add_to_bbf_authid_user_ext(db_ddladmin, DB_DDLADMIN, dbname, NULL, NULL, true, false, false);
 
 		foreach(parsetree_item, parsetree_list)
