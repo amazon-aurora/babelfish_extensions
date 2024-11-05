@@ -1417,8 +1417,6 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 
 	tblscan = table_beginscan_catalog(namespace_rel, 1, &key);
 
-	tuple = heap_getnext(tblscan, ForwardScanDirection);
-
 	while ((tuple = heap_getnext(tblscan, ForwardScanDirection)) != NULL)
 	{
 		bool		isNull;
