@@ -573,6 +573,9 @@ $$
 LANGUAGE 'pltsql';
 GRANT EXECUTE ON PROCEDURE sys.sp_table_privileges TO PUBLIC;
 
+CREATE OR REPLACE FUNCTION sys.bbf_is_role_member(member NAME, rolename NAME)
+RETURNS BOOLEAN
+AS 'babelfishpg_tsql', 'bbf_is_role_member' LANGUAGE C;
 
 -- DATABASE_PRINCIPALS
 CREATE OR REPLACE VIEW sys.database_principals AS
