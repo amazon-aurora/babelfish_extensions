@@ -605,7 +605,7 @@ LEFT OUTER JOIN pg_catalog.pg_roles Base2
 ON Ext.login_name = Base2.rolname
 WHERE Ext.database_name = DB_NAME()
   AND (Ext.orig_username IN ('dbo', 'db_owner', 'db_securityadmin', 'db_accessadmin', 'db_datareader', 'db_datawriter', 'guest') -- system users should always be visible
-  OR pg_has_role(Ext.rolname, 'MEMBER')) -- Current user should be able to see users it has permission of
+  OR bbf_is_role_member(current_user, Ext.rolname)) -- Current user should be able to see users it has permission of
 UNION ALL
 SELECT
 CAST(name AS SYS.SYSNAME) AS name,

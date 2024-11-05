@@ -237,6 +237,7 @@ db_accessadmin
 db_datareader
 db_datawriter
 db_owner
+db_securityadmin
 dbo
 guest
 INFORMATION_SCHEMA
@@ -282,6 +283,7 @@ db_accessadmin
 db_datareader
 db_datawriter
 db_owner
+db_securityadmin
 dbo
 dbowner__r1
 dbowner__r2
@@ -393,6 +395,7 @@ db_accessadmin
 db_datareader
 db_datawriter
 db_owner
+db_securityadmin
 dbo
 dbowner__u2
 guest
@@ -567,6 +570,7 @@ db_accessadmin
 db_datareader
 db_datawriter
 db_owner
+db_securityadmin
 dbo
 dbowner__r1
 dbowner__r2
@@ -996,6 +1000,7 @@ dbowner__test_db_db_accessadmin
 dbowner__test_db_db_datareader
 dbowner__test_db_db_datawriter
 dbowner__test_db_db_owner
+dbowner__test_db_db_securityadmin
 dbowner__test_db_dbo
 dbowner__test_db_dbowner__test_db_dbowner__u1
 dbowner__test_db_dbowner__test_db_dbowner__u1_obj
@@ -1024,6 +1029,7 @@ dbowner__test_db_db_accessadmin
 dbowner__test_db_db_datareader
 dbowner__test_db_db_datawriter
 dbowner__test_db_db_owner
+dbowner__test_db_db_securityadmin
 dbowner__test_db_dbo
 dbowner__test_db_guest
 ~~END~~

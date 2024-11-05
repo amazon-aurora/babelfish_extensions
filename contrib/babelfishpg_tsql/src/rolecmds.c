@@ -1855,10 +1855,7 @@ check_alter_role_stmt(GrantRoleStmt *stmt)
 {
 	Oid			granted;
 	Oid			grantee;
-<<<<<<< HEAD
 	Oid			db_owner;
-=======
->>>>>>> 94c81af0a (fix merge conflicts)
 	const char *granted_name;
 	const char *grantee_name;
 	const char *original_user_name;

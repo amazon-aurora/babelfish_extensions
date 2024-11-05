@@ -835,10 +835,12 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 
 		db_owner_role = get_db_owner_name(dbname);
 		db_owner_oid = get_role_oid(db_owner_role, false);
-
+		
 		/* Check if login has required privilege to drop the database */
-		if (!(has_privs_of_role(roleid, get_sysadmin_oid()) 
-			|| has_privs_of_role(roleid, get_dbcreator_oid()) || login_is_db_owner))
+		/* If current login's associated user in database is member of db_owner role, allow it to drop the database */
+		if (!has_privs_of_role(prev_current_user_id, db_owner_oid) &&
+			(!(has_privs_of_role(roleid, get_sysadmin_oid()) 
+			|| has_privs_of_role(roleid, get_dbcreator_oid()) || login_is_db_owner)))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
 						   dbname);
 
