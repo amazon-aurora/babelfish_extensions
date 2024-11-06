@@ -1622,6 +1622,10 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 		db_owner_id = get_role_oid(get_db_owner_name(get_cur_db_name()), false);
 		old_username_id = get_role_oid(stmt->role->rolename, false);
 
+		/*
+		 * If user is member of db_owner role, we will also have to
+		 * rename the associated internal object owning role as well
+		 */
 		if (is_member_of_role(old_username_id, db_owner_id))
 		{
 			old_obj_rolname = get_obj_role(stmt->role->rolename);
@@ -2051,7 +2055,6 @@ is_rolemember(PG_FUNCTION_ARGS)
 	if (role_oid == principal_oid)
 		PG_RETURN_INT32(1);
 
-	cur_db_name = get_cur_db_name();
 	db_owner_name = get_db_owner_name(cur_db_name);
 	db_owner_oid = get_role_oid(db_owner_name, false);
 
@@ -2699,6 +2702,7 @@ static List
 	appendStringInfoString(&query, "CREATE ROLE dummy; ");
 	appendStringInfoString(&query, "GRANT dummy TO dummy; ");
 
+	/* We will first transfer ownership of all the schemas owned by user */
 	rel = table_open(NamespaceRelationId, AccessShareLock);
 
 	ScanKeyInit(&skey,
@@ -2724,6 +2728,7 @@ static List
 	systable_endscan(sscan);
 	table_close(rel, AccessShareLock);
 
+	/* Ownership of rest of the objects will be taken care of by REASSIGN OWNED */
 	appendStringInfoString(&query, "REASSIGN OWNED BY dummy TO dummy; ");
 	appendStringInfoString(&query, "GRANT dummy TO dummy; ");
 	appendStringInfoString(&query, "REVOKE dummy FROM dummy; ");
@@ -2797,6 +2802,7 @@ static List
 	appendStringInfoString(&query, "GRANT dummy TO dummy; ");
 	appendStringInfoString(&query, "REVOKE dummy FROM dummy; ");
 
+	/* We will first transfer ownership of all the schemas owned by user */
 	rel = table_open(NamespaceRelationId, AccessShareLock);
 
 	ScanKeyInit(&skey,
@@ -2823,6 +2829,7 @@ static List
 	systable_endscan(sscan);
 	table_close(rel, AccessShareLock);
 
+	/* Ownership of rest of the objects will be taken care of by REASSIGN OWNED */
 	appendStringInfoString(&query, "REASSIGN OWNED BY dummy TO dummy; ");
 	appendStringInfoString(&query, "DROP ROLE dummy; ");
 
@@ -2944,6 +2951,10 @@ change_object_owner_if_db_owner()
 	cur_db_name = get_cur_db_name();
 	dbo_id = get_role_oid(get_dbo_role_name(cur_db_name), true);
 
+	/*
+	 * Don't change object owner if current user is
+	 * dbo or we are creating system databases
+	 */
 	if (role_oid == dbo_id || dbo_id == InvalidOid || is_create_bbf_builtin_dbs)
 		return;
 
@@ -2999,6 +3010,12 @@ change_object_owner_if_db_owner()
 }
 
 PG_FUNCTION_INFO_V1(bbf_is_role_member);
+
+/*
+ * The bbf_is_role_memeber function will check if a user (u1) is member of a role (r1):
+ * - If role is not a member of db_owner, we will check if u1 is member of r1 role
+ * - If role is a member of db_owner, we will check if u1 is member of r1_obj role
+ */
 Datum
 bbf_is_role_member(PG_FUNCTION_ARGS)
 {
