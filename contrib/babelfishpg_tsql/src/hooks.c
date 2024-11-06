@@ -212,7 +212,7 @@ static void bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid obj
 static void revoke_func_permission_from_public(Oid objectId);
 static bool is_partitioned_table_reloptions_allowed(Datum reloptions);
 static Oid pltsql_get_object_owner(Oid namespaceId, Oid ownerId);
-static bool is_bbf_db_ddladmin_operation(Oid classId, Oid namespaceId);
+static bool is_bbf_db_ddladmin_operation(Oid namespaceId);
 
 /*****************************************
  * 			Planner Hook
@@ -2990,9 +2990,13 @@ revoke_func_permission_from_public(Oid objectId)
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
 
-	/* Advance command counter so new tuple can be seen by validator */
 	CommandCounterIncrement();
 
+	/* public role does not have execute on this. nothing to do */
+	if (object_aclcheck(ProcedureRelationId, objectId, ACL_ID_PUBLIC, ACL_EXECUTE) != ACLCHECK_OK)
+		return;
+
+	/* Advance command counter so new tuple can be seen by validator */
 	/* get properties */
 	obj_name = get_func_name(objectId);
 	phy_sch_oid = get_func_namespace(objectId);
@@ -5727,6 +5731,12 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 }
 
 
+/*
+ * Objects are always owned by current user in postgres but in babelfish
+ * schema contained objects should be owned by the schema owner by default
+ * Use this hook to pick schema owner as object owner during object creation
+ * We currently only do this if current user is member of db_ddladmin
+ */
 static Oid
 pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 {
@@ -5782,44 +5792,32 @@ pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 	return ownerId;
 }
 
+/*
+ * Check if the given namespace is inside the current active logical
+ * database and if the current user is a member of db_ddladmin fixed
+ * database role of the current active logical database
+ */
 static bool
-is_bbf_db_ddladmin_operation(Oid classId, Oid namespaceId)
+is_bbf_db_ddladmin_operation(Oid namespaceId)
 {
-	Assert(OidIsValid(classId) && OidIsValid(namespaceId));
+	char 	*nspname;
+	Oid 	schema_db_id;
+	Oid 	db_ddladmin;
+
+	Assert(OidIsValid(namespaceId));
 
 	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
 		return false;
 
-	switch(classId)
-	{
-		case RelationRelationId:
-		case ProcedureRelationId:
-		case NamespaceRelationId:
-			break;
-		default:
-			return false;
-			break;
-	}
+	nspname = get_namespace_name(namespaceId);
+	schema_db_id = get_dbid_from_physical_schema_name(nspname, false);
+	db_ddladmin = get_db_ddladmin_oid(get_current_pltsql_db_name(), false);
 
-	if (namespaceId)
-	{
-		char 	*nspname = get_namespace_name(namespaceId);
-		Oid 	schema_db_id = get_dbid_from_physical_schema_name(nspname, false);
-		Oid 	db_ddladmin = get_db_ddladmin_oid(get_current_pltsql_db_name(), false);
+	pfree(nspname);
 
-		if (schema_db_id == get_cur_db_id())
-		{
-			/*
-			 * Check if current user is member of db_ddladmin role and if it is then
-			 * allow the operation by returning true.
-			 */
-			if (is_member_of_role(GetUserId(), db_ddladmin))
-			{
-				pfree(nspname);
-				return true;
-			}
-		}
-		pfree(nspname);
-	}
+	if (schema_db_id == get_cur_db_id() &&
+		has_privs_of_role(GetUserId(), db_ddladmin))
+		return true;
+
 	return false;
 }

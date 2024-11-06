@@ -1507,7 +1507,7 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 	char           *db_datareader;
 	char           *db_datawriter;
 	char           *db_ddladmin;
-	int16			dbid = get_db_id(dbname);
+	int16          dbid = get_db_id(dbname);
 
 	db_owner = get_db_owner_name(dbname);
 	db_accessadmin = get_db_accessadmin_role_name(dbname);

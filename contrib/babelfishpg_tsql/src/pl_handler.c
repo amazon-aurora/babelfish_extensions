@@ -5682,15 +5682,30 @@ pltsql_validator(PG_FUNCTION_ARGS)
 
 	MemoryContext oldMemoryContext = CurrentMemoryContext;
 	int			saved_dialect = sql_dialect;
-
-	if (!CheckFunctionValidatorAccess(fcinfo->flinfo->fn_oid, funcoid))
-		PG_RETURN_VOID();
+	int 		save_sec_context;
+	Oid 		save_userid;
 
 	/* Get the new function's pg_proc entry */
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcoid));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
+
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	PG_TRY();
+	{
+		if (GetUserId() != proc->proowner && IS_TDS_CONN() &&
+			has_privs_of_role(GetUserId(), get_db_ddladmin_oid(get_current_pltsql_db_name(), false)))
+			SetUserIdAndSecContext(proc->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+		if (!CheckFunctionValidatorAccess(fcinfo->flinfo->fn_oid, funcoid))
+			PG_RETURN_VOID();
+	}
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
 
 	prokind = proc->prokind;
 

@@ -2522,6 +2522,7 @@ exec_database_roles_subcmds(const char *schema)
 	char		*schema_owner;
 	const char	*dbname = get_current_pltsql_db_name();
 	List		*stmt_list;
+	int 		expected_stmts = 5;
 	ListCell	*parsetree_item;
 	Node		*stmts;
 	int		i=0;
@@ -2547,9 +2548,21 @@ exec_database_roles_subcmds(const char *schema)
 	/* Grant privileges to db_ddladmin */
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT TRUNCATE ON TABLES TO dummy; ");
 	appendStringInfo(&query, "GRANT CREATE ON SCHEMA dummy TO dummy ; ");
+	/*
+	 * revoke default execute privileges for routines owned by schema owner
+	 * we also revoke execute privileges as part of post routine creation using
+	 * object access hook but that will fail for db_ddladmin since the routine
+	 * would already be transferred to schema owner by the time we reach there and
+	 * db_ddladmin will not have the privileges to run the revoke
+	 */
+	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy REVOKE EXECUTE ON ROUTINES FROM dummy; ");
 
 	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
-	Assert(list_length(stmt_list) == 4);
+	if (list_length(stmt_list) != expected_stmts)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("Expected %d statements, but got %d statements after parsing",
+						expected_stmts, list_length(stmt_list))));
 
 	stmts = parsetree_nth_stmt(stmt_list, i++);
 	update_AlterDefaultPrivilegesStmt(stmts, schema, schema_owner, dbo_role, db_datareader, NULL);
@@ -2561,6 +2574,9 @@ exec_database_roles_subcmds(const char *schema)
 	update_AlterDefaultPrivilegesStmt(stmts, schema, schema_owner, dbo_role, db_ddladmin, NULL);
 	stmts = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmts, schema, NULL, db_ddladmin, NULL);
+
+	stmts = parsetree_nth_stmt(stmt_list, i++);
+	update_AlterDefaultPrivilegesStmt(stmts, NULL, schema_owner, dbo_role, PUBLIC_ROLE_NAME, NULL);
 
 	PG_TRY();
 	{
