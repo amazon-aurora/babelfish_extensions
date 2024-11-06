@@ -3678,6 +3678,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					PG_TRY();
 					{
+						exec_drop_bbf_role_subcmds(stmt);
 						if (prev_ProcessUtility)
 							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 												params, queryEnv, dest,
