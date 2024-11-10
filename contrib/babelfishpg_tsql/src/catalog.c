@@ -4282,7 +4282,7 @@ exec_internal_grant_on_function(Oid objectId)
 	char 		object_type;
 
 	/* TSQL specific behavior */
-	if (sql_dialect != SQL_DIALECT_TSQL)
+	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
 		return;
 
 	object_name = get_func_name(objectId);
