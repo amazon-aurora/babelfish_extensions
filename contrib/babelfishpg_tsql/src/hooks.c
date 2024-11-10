@@ -2970,7 +2970,10 @@ bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int s
 		drop_bbf_roles(access, classId, objectId, subId, arg);
 
 	if (access == OAT_POST_CREATE && classId == ProcedureRelationId)
+	{
 		revoke_func_permission_from_public(objectId);
+		exec_internal_grant_on_function(objectId);
+	}
 }
 
 static void
@@ -5772,9 +5775,7 @@ pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 		else
 			nsp_owner = nsptup->nspowner;
 
-		if (has_privs_of_role(ownerId, nsp_owner))
-			ownerId = nsp_owner;
-		else
+		if (ownerId != nsp_owner)
 		{
 			Oid 	db_ddladmin = get_db_ddladmin_oid(db_name, false);
 			Oid 	schema_db_id = get_dbid_from_physical_schema_name(NameStr(nsptup->nspname), false);

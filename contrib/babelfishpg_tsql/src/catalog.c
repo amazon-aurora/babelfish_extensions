@@ -4265,9 +4265,7 @@ grant_perms_to_objects_in_schema(const char *schema_name,
  * implicitly at the time of CREATE function/procedure.
  */
 void
-exec_internal_grant_on_function(const char *logicalschema,
-								const char *object_name,
-								const char *object_type)
+exec_internal_grant_on_function(Oid objectId)
 {
 	SysScanDesc scan;
 	Relation	bbf_schema_rel;
@@ -4277,7 +4275,21 @@ exec_internal_grant_on_function(const char *logicalschema,
 	int			current_permission;
 	ScanKeyData scanKey[3];
 	int16		dbid = get_cur_db_id();
-	const char *db_name = get_cur_db_name();
+	Oid 		phy_sch_oid;
+	char 		*object_name;
+	char 		*schema;
+	const char 	*logicalschema;
+	char 		object_type;
+
+	/* TSQL specific behavior */
+	if (sql_dialect != SQL_DIALECT_TSQL)
+		return;
+
+	object_name = get_func_name(objectId);
+	phy_sch_oid = get_func_namespace(objectId);
+	schema = get_namespace_name(phy_sch_oid);
+	logicalschema = get_logical_schema_name(schema, true);
+	object_type = get_func_prokind(objectId);
 
 	/* Fetch the relation */
 	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
@@ -4318,16 +4330,15 @@ exec_internal_grant_on_function(const char *logicalschema,
 		if (current_permission & ALL_PERMISSIONS_ON_FUNCTION)
 		{
 			const char	*query = NULL;
-			char			*schema;
 			List			*res;
 			GrantStmt		*grant;
 			PlannedStmt		*wrapper;
+			Oid             save_userid;
+			int             save_sec_context;
 
-			schema = get_physical_schema_name((char *)db_name, logicalschema);
-
-			if (strcmp(object_type, OBJ_FUNCTION) == 0)
+			if (object_type == PROKIND_FUNCTION)
 				query = psprintf("GRANT EXECUTE ON FUNCTION [%s].[%s] TO %s", schema, object_name, grantee);
-			else if (strcmp(object_type, OBJ_PROCEDURE) == 0)
+			else if (object_type == PROKIND_PROCEDURE)
 				query = psprintf("GRANT EXECUTE ON PROCEDURE [%s].[%s] TO %s", schema, object_name, grantee);
 			res = raw_parser(query, RAW_PARSE_DEFAULT);
 			grant = (GrantStmt *) parsetree_nth_stmt(res, 0);
@@ -4340,20 +4351,33 @@ exec_internal_grant_on_function(const char *logicalschema,
 			wrapper->stmt_location = 0;
 			wrapper->stmt_len = 1;
 
-			/* do this step */
-			ProcessUtility(wrapper,
-						INTERNAL_GRANT_STATEMENT,
-						false,
-						PROCESS_UTILITY_SUBCOMMAND,
-						NULL,
-						NULL,
-						None_Receiver,
-						NULL);
+			GetUserIdAndSecContext(&save_userid, &save_sec_context);
+
+			PG_TRY();
+			{
+				SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+				ProcessUtility(wrapper,
+							INTERNAL_GRANT_STATEMENT,
+							false,
+							PROCESS_UTILITY_SUBCOMMAND,
+							NULL,
+							NULL,
+							None_Receiver,
+							NULL);
+			}
+			PG_FINALLY();
+			{
+				SetUserIdAndSecContext(save_userid, save_sec_context);
+			}
+			PG_END_TRY();
 		}
 		tuple_bbf_schema = systable_getnext(scan);
 	}
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, AccessShareLock);
+	pfree(schema);
+	pfree(object_name);
 }
 
 PG_FUNCTION_INFO_V1(update_user_catalog_for_guest_schema);

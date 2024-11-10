@@ -3678,7 +3678,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					PG_TRY();
 					{
-						exec_drop_bbf_role_subcmds(stmt);
+						if (!drop_login)
+							exec_drop_bbf_role_subcmds(stmt);
 						if (prev_ProcessUtility)
 							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 												params, queryEnv, dest,
@@ -4364,19 +4365,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					/* If ALL PRIVILEGES is granted/revoked. */
 					if (list_length(grant->privileges) == 0)
 					{
-						/*
-						 * Case: When ALL PRIVILEGES is revoked internally during create function.
-						 * pstmt->stmt_len = 0 means it is an implicit REVOKE statement issued at the time of create function/procedure.
-						 * For more details, please refer revoke_func_permission_from_public().
-						 * If schema entry exists in the catalog, implicitly grant permission on the new object to the user.
-						 */
-						if ((pstmt->stmt_len == 0) && privilege_exists_in_bbf_schema_permissions(logicalschema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, NULL))
-						{
-							call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
-							exec_internal_grant_on_function(logicalschema, funcname, obj_type);
-							return;
-						}
-
 						if (grant->is_grant)
 						{
 							foreach(lc, grant->grantees)
