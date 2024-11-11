@@ -2914,6 +2914,8 @@ exec_alter_dbowner_subcmds(GrantRoleStmt *stmt)
 					NULL,
 					None_Receiver,
 					NULL);
+
+		CommandCounterIncrement();
 	}
 }
 
@@ -3002,6 +3004,8 @@ change_object_owner_if_db_owner()
 					NULL,
 					None_Receiver,
 					NULL);
+
+	CommandCounterIncrement();
 
 	pfree(query.data);
 
