@@ -1406,9 +1406,12 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT INSERT, UPDATE, DELETE ON TABLES TO dummy; ");
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT TRUNCATE ON TABLES TO dummy; ");
 
+	/* for commentary see exec_database_roles_subcmds */
+	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy REVOKE EXECUTE ON ROUTINES FROM dummy; ");
+
 	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
-	Assert(list_length(stmt_list) == 7);
+	Assert(list_length(stmt_list) == 8);
 
 	ScanKeyInit(&key,
 				Anum_namespace_ext_dbid,
@@ -1427,6 +1430,8 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		ListCell	*parsetree_item;
 		char		*schema_owner;
 		char		*dbo_user;
+		Oid 		save_userid;
+		int 		save_sec_context;
 
 		datum = heap_getattr(tuple, Anum_namespace_ext_namespace, namespace_rel_descr, &isNull);
 		schema_name = NameStr(*DatumGetName(datum));
@@ -1450,30 +1455,48 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		stmts = parsetree_nth_stmt(stmt_list, i++);
 		update_AlterDefaultPrivilegesStmt(stmts, schema_name, schema_owner, dbo_user, db_ddladmin, NULL);
 
-		/* Run all subcommands */
-		foreach(parsetree_item, stmt_list)
+		stmts = parsetree_nth_stmt(stmt_list, i++);
+		update_AlterDefaultPrivilegesStmt(stmts, NULL, schema_owner, dbo_user, PUBLIC_ROLE_NAME, NULL);
+
+		GetUserIdAndSecContext(&save_userid, &save_sec_context);
+
+		PG_TRY();
 		{
-			Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
-			PlannedStmt *wrapper;
+			SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+			/* Run all subcommands */
+			foreach(parsetree_item, stmt_list)
+			{
+				Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+				PlannedStmt *wrapper;
 
-			/* need to make a wrapper PlannedStmt */
-			wrapper = makeNode(PlannedStmt);
-			wrapper->commandType = CMD_UTILITY;
-			wrapper->canSetTag = false;
-			wrapper->utilityStmt = stmt;
-			wrapper->stmt_location = 0;
-			wrapper->stmt_len = 0;
+				/* need to make a wrapper PlannedStmt */
+				wrapper = makeNode(PlannedStmt);
+				wrapper->commandType = CMD_UTILITY;
+				wrapper->canSetTag = false;
+				wrapper->utilityStmt = stmt;
+				wrapper->stmt_location = 0;
+				wrapper->stmt_len = 0;
 
-			/* do this step */
-			ProcessUtility(wrapper,
-						CREATE_FIXED_DB_ROLES,
-						false,
-						PROCESS_UTILITY_SUBCOMMAND,
-						NULL,
-						NULL,
-						None_Receiver,
-						NULL);
+				/* do this step */
+				ProcessUtility(wrapper,
+							CREATE_FIXED_DB_ROLES,
+							false,
+							PROCESS_UTILITY_SUBCOMMAND,
+							NULL,
+							NULL,
+							None_Receiver,
+							NULL);
+			}
 		}
+		PG_FINALLY();
+		{
+			SetUserIdAndSecContext(save_userid, save_sec_context);
+			pfree(db_datareader);
+			pfree(db_datawriter);
+			pfree(db_ddladmin);
+			pfree(dbo_user);
+		}
+		PG_END_TRY();
 	}
 
 	/* Cleanup. */
