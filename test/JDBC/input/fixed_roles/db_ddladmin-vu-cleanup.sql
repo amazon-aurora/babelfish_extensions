@@ -1,0 +1,30 @@
+DROP DATABASE babel_5116_db
+GO
+
+USE master
+GO
+
+DROP LOGIN babel_5116_l1
+GO
+DROP LOGIN babel_5116_l2
+GO
+DROP USER babel_5116_l1
+GO
+DROP USER babel_5116_l2
+GO
+DROP ROLE babel_5116_r1
+GO
+DROP VIEW babel_5116_v1
+GO
+DROP TRIGGER babel_5116_trig1
+GO
+DROP TABLE babel_5116_t1
+GO
+DROP FUNCTION babel_5116_f1
+GO
+DROP PROC babel_5116_p1
+GO
+DROP TYPE babel_5116_type1
+GO
+DROP TYPE babel_5116_tabletype1
+GO

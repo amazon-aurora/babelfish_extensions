@@ -1,0 +1,221 @@
+-- single_db_mode_expected
+-- tsql
+-- RESET LOGIN PASSWORD
+ALTER LOGIN babel_5116_l1 WITH PASSWORD = '12345678'
+GO
+ALTER LOGIN babel_5116_l1 WITH PASSWORD = '12345678'
+GO
+
+-- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
+-- 
+-- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS
+--
+SELECT CURRENT_USER
+GO
+CREATE LOGIN l WITH PASSWORD = '12345678'
+GO
+CREATE USER u
+GO
+CREATE ROLE r
+GO
+CREATE TABLE t (id INT)
+GO
+CREATE TRIGGER trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
+GO
+CREATE VIEW v AS SELECT * FROM babel_5116_t1
+GO
+CREATE PROCEDURE p AS SELECT 1
+GO
+CREATE FUNCTION f() RETURNS INT AS BEGIN RETURN 1 END
+GO
+CREATE TYPE t FROM sys.varchar(10)
+GO
+CREATE TYPE tabletype AS TABLE (id INT)
+GO
+TRUNCATE TABLE babel_5116_t1
+GO
+
+-- tsql database=babel_5116_db
+ALTER ROLE db_ddladmin ADD MEMBER babel_5116_l1
+GO
+
+-- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
+/**********  LOGGED IN USING DDLADMIN **********/
+SELECT IS_ROLEMEMBER('db_ddladmin')
+GO
+
+/**********  ROLE DDLs ARE NOT ALLOWED **********/
+CREATE USER babel_5116_l3
+GO
+CREATE ROLE babel_5116_r2
+GO
+DROP USER babel_5116_l3
+GO
+DROP USER babel_5116_l2
+GO
+DROP ROLE babel_5116_r1
+GO
+DROP ROLE babel_5116_r2
+GO
+
+
+/********** CREATE DDLs ARE ALLOWED TO DDLADMIN **********/
+CREATE TABLE babel_5116_t2 (id INT)
+GO
+CREATE TRIGGER babel_5116_trig2 ON babel_5116_t2 AFTER INSERT AS SELECT 1
+GO
+CREATE VIEW babel_5116_v2 AS SELECT * FROM babel_5116_t2
+GO
+CREATE PROCEDURE babel_5116_p2 AS SELECT 1
+GO
+CREATE FUNCTION babel_5116_f2() RETURNS INT AS BEGIN RETURN 1 END
+GO
+CREATE TYPE babel_5116_type2 FROM sys.varchar(10)
+GO
+CREATE TYPE babel_5116_tabletype2 AS TABLE (id INT)
+GO
+
+/********** ENABLE DISABLE TRIGGER SHOULD ALSO BE ALLOWED TO DDLADMIN **********/
+ENABLE TRIGGER babel_5116_trig1 ON babel_5116_t1
+GO
+ENABLE TRIGGER babel_5116_trig2 ON babel_5116_t2
+GO
+DISABLE TRIGGER babel_5116_trig1 ON babel_5116_t1
+GO
+DISABLE TRIGGER babel_5116_trig2 ON babel_5116_t2
+GO
+
+/* TRUNCATE ON TABLE SHOULD BE ALLOWED */
+TRUNCATE TABLE babel_5116_t1
+GO
+TRUNCATE TABLE babel_5116_t2
+GO
+
+/********** DMLs SHOULD STILL BE BLOCKED **********/
+/********** ON ALL OBJECTS OLD OR NEW **********/
+/********** IRRESPECTIVE OF WHO CREATED **********/
+SELECT * FROM babel_5116_t1
+GO
+INSERT INTO babel_5116_t1 VALUES (1)
+GO
+DELETE FROM babel_5116_t1
+GO
+UPDATE babel_5116_t1 SET id = 1
+GO
+SELECT * FROM babel_5116_t2
+GO
+INSERT INTO babel_5116_t2 VALUES (1)
+GO
+DELETE FROM babel_5116_t2
+GO
+UPDATE babel_5116_t2 SET id = 1
+GO
+SELECT * FROM babel_5116_v1
+GO
+INSERT INTO babel_5116_v1 VALUES (1)
+GO
+DELETE FROM babel_5116_v1
+GO
+UPDATE babel_5116_v1 SET id = 1
+GO
+SELECT * FROM babel_5116_v2
+GO
+INSERT INTO babel_5116_v2 VALUES (1)
+GO
+DELETE FROM babel_5116_v2
+GO
+UPDATE babel_5116_v2 SET id = 1
+GO
+
+/********** EXECUTE SHOULD STILL BE BLOCKED **********/
+EXEC babel_5116_p1
+GO
+EXEC babel_5116_p2
+GO
+SELECT babel_5116_f1()
+GO
+SELECT babel_5116_f2()
+GO
+
+/********** GRANT REVOKE IS NOT ALLOWED **********/
+ALTER ROLE babel_5116_r1 ADD MEMBER babel_5116_l2
+GO
+GRANT SELECT ON babel_5116_t1 TO babel_5116_l2
+GO
+GRANT CONNECT TO babel_5116_l2
+GO
+ALTER ROLE babel_5116_r1 DROP MEMBER babel_5116_l2
+GO
+REVOKE SELECT ON babel_5116_t1 TO babel_5116_l2
+GO
+REVOKE CONNECT TO babel_5116_l2
+GO
+
+/********** OBJECT OWNER SHOULD BE SCHEMA OWNER WHEN OBJECT IS CREATED BY DDLADMIN **********/
+SELECT relname, r.rolname
+    FROM pg_class c
+    JOIN pg_roles r ON (c.relowner = r.oid)
+    WHERE relname LIKE 'babel_5116%'
+    ORDER BY r.rolname, relname;
+GO
+SELECT proname, r.rolname
+    FROM pg_proc p
+    JOIN pg_roles r ON (p.proowner = r.oid)
+    WHERE proname LIKE 'babel_5116%'
+    ORDER BY r.rolname, proname;
+GO
+SELECT typname, r.rolname
+    FROM pg_type t
+    JOIN pg_roles r ON (t.typowner = r.oid)
+    WHERE typowner LIKE 'babel_5116%'
+    ORDER BY r.rolname, typowner;
+GO
+
+-- tsql database=babel_5116_db
+/********** DDLADMIN SHOULD NOT BE A DEPENDANT OF ANY OBJECT WE CREATED IN THIS TEST **********/
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(30)), deptype FROM pg_depend d
+    JOIN pg_roles r ON (d.refobjid = r.oid)
+    WHERE
+        object_name(objid) LIKE 'babel_5116%' AND
+        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid')
+    ORDER BY deptype, r.rolname, objid;
+GO
+
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(30)), deptype FROM pg_shdepend d
+    JOIN pg_roles r ON (d.refobjid = r.oid)
+    WHERE
+        object_name(objid) LIKE 'babel_5116%' AND
+        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid')
+    ORDER BY deptype, r.rolname, objid;
+GO
+
+-- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
+/********** DROP DDLs **********/
+DROP TRIGGER babel_5116_trig1
+GO
+DROP TRIGGER babel_5116_trig2
+GO
+DROP VIEW babel_5116_v1
+GO
+DROP VIEW babel_5116_v2
+GO
+DROP TABLE babel_5116_t2
+GO
+DROP TABLE babel_5116_t1
+GO
+DROP FUNCTION babel_5116_f2
+GO
+DROP FUNCTION babel_5116_f1
+GO
+DROP PROC babel_5116_p2
+GO
+DROP PROC babel_5116_p1
+GO
+DROP TYPE babel_5116_type2
+GO
+DROP TYPE babel_5116_type1
+GO
+DROP TYPE babel_5116_tabletype2
+GO
+DROP TYPE babel_5116_tabletype1
+GO
