@@ -18,7 +18,7 @@ DROP VIEW babel_5116_v1
 GO
 DROP SEQUENCE babel_5116_s1
 GO
-DROP TRIGGER babel_5116_trig1
+DROP TRIGGER babel_5116_trig
 GO
 DROP INDEX babel_5116_idx1 ON babel_5116_t1
 GO

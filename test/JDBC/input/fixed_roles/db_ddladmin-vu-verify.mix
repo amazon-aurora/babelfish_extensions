@@ -200,7 +200,8 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptyp
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
-        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid')
+        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
     ORDER BY deptype, r.rolname, objid;
 GO
 
@@ -208,7 +209,8 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptyp
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
-        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid')
+        refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
     ORDER BY deptype, r.rolname, objid;
 GO
 
