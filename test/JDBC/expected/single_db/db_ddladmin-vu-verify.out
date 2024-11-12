@@ -40,6 +40,12 @@ GO
 
 ~~ERROR (Message: permission denied for schema dbo)~~
 
+CREATE INDEX babel_5116_idx1 ON babel_5116_t1 (id)
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
 CREATE TRIGGER trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
 GO
 ~~ERROR (Code: 33557097)~~
@@ -47,6 +53,12 @@ GO
 ~~ERROR (Message: permission denied for schema dbo)~~
 
 CREATE VIEW v AS SELECT * FROM babel_5116_t1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema dbo)~~
+
+CREATE SEQUENCE babel_5116_s2 START WITH 1000 INCREMENT BY 1
 GO
 ~~ERROR (Code: 33557097)~~
 
@@ -139,9 +151,13 @@ GO
 /********** CREATE DDLs ARE ALLOWED TO DDLADMIN **********/
 CREATE TABLE babel_5116_t2 (id INT)
 GO
+CREATE INDEX babel_5116_idx1 ON babel_5116_t2 (id)
+GO
 CREATE TRIGGER babel_5116_trig2 ON babel_5116_t2 AFTER INSERT AS SELECT 1
 GO
 CREATE VIEW babel_5116_v2 AS SELECT * FROM babel_5116_t2
+GO
+CREATE SEQUENCE babel_5116_s2 START WITH 1000 INCREMENT BY 1
 GO
 CREATE PROCEDURE babel_5116_p2 AS SELECT 1
 GO
@@ -150,6 +166,16 @@ GO
 CREATE TYPE babel_5116_type2 FROM sys.varchar(10)
 GO
 CREATE TYPE babel_5116_tabletype2 AS TABLE (id INT)
+GO
+
+/********** ALTER DDLs ARE ALLOWED TO DDLADMIN **********/
+ALTER TABLE babel_5116_t1 ADD id_new INT
+GO
+ALTER TABLE babel_5116_t2 ADD id_new INT
+GO
+ALTER SEQUENCE babel_5116_s1 MINVALUE 99;
+GO
+ALTER SEQUENCE babel_5116_s2 MINVALUE 99;
 GO
 
 /********** ENABLE DISABLE TRIGGER SHOULD ALSO BE ALLOWED TO DDLADMIN **********/
@@ -177,7 +203,7 @@ GO
 
 ~~ERROR (Message: permission denied for table babel_5116_t1)~~
 
-INSERT INTO babel_5116_t1 VALUES (1)
+INSERT INTO babel_5116_t1 (id) VALUES (1)
 GO
 ~~ERROR (Code: 33557097)~~
 
@@ -201,7 +227,7 @@ GO
 
 ~~ERROR (Message: permission denied for table babel_5116_t2)~~
 
-INSERT INTO babel_5116_t2 VALUES (1)
+INSERT INTO babel_5116_t2 (id) VALUES (1)
 GO
 ~~ERROR (Code: 33557097)~~
 
@@ -225,7 +251,7 @@ GO
 
 ~~ERROR (Message: permission denied for view babel_5116_v1)~~
 
-INSERT INTO babel_5116_v1 VALUES (1)
+INSERT INTO babel_5116_v1 (id) VALUES (1)
 GO
 ~~ERROR (Code: 33557097)~~
 
@@ -249,7 +275,7 @@ GO
 
 ~~ERROR (Message: permission denied for view babel_5116_v2)~~
 
-INSERT INTO babel_5116_v2 VALUES (1)
+INSERT INTO babel_5116_v2 (id) VALUES (1)
 GO
 ~~ERROR (Code: 33557097)~~
 
@@ -266,6 +292,23 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for view babel_5116_v2)~~
+
+
+SELECT NEXT VALUE FOR babel_5116_s1;
+GO
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence babel_5116_s1)~~
+
+SELECT NEXT VALUE FOR babel_5116_s2;
+GO
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence babel_5116_s2)~~
 
 
 /********** EXECUTE SHOULD STILL BE BLOCKED **********/
@@ -329,58 +372,76 @@ GO
 
 
 /********** OBJECT OWNER SHOULD BE SCHEMA OWNER WHEN OBJECT IS CREATED BY DDLADMIN **********/
-SELECT relname, r.rolname
+SELECT CAST(relname AS CHAR(65)), CAST(r.rolname AS CHAR(20))
     FROM pg_class c
     JOIN pg_roles r ON (c.relowner = r.oid)
     WHERE relname LIKE 'babel_5116%'
     ORDER BY r.rolname, relname;
 GO
 ~~START~~
-varchar#!#varchar
-babel_5116_t1#!#dbo
-babel_5116_t2#!#dbo
-babel_5116_tabletype1#!#dbo
-babel_5116_tabletype2#!#dbo
-babel_5116_v1#!#dbo
-babel_5116_v2#!#dbo
-babel_5116_t1#!#master_dbo
-babel_5116_tabletype1#!#master_dbo
-babel_5116_v1#!#master_dbo
+char#!#char
+babel_5116_idx1babel_5116_t1e29153c477c95d679c4b63370567552b     #!#dbo                 
+babel_5116_idx1babel_5116_t2e29153c477c95d679c4b63370567552b     #!#dbo                 
+babel_5116_s1                                                    #!#dbo                 
+babel_5116_s2                                                    #!#dbo                 
+babel_5116_t1                                                    #!#dbo                 
+babel_5116_t2                                                    #!#dbo                 
+babel_5116_tabletype1                                            #!#dbo                 
+babel_5116_tabletype2                                            #!#dbo                 
+babel_5116_v1                                                    #!#dbo                 
+babel_5116_v2                                                    #!#dbo                 
+babel_5116_idx1babel_5116_t1e29153c477c95d679c4b63370567552b     #!#master_dbo          
+babel_5116_s1                                                    #!#master_dbo          
+babel_5116_t1                                                    #!#master_dbo          
+babel_5116_tabletype1                                            #!#master_dbo          
+babel_5116_v1                                                    #!#master_dbo          
 ~~END~~
 
-SELECT proname, r.rolname
+SELECT CAST(proname AS CHAR(65)), CAST(r.rolname AS CHAR(20))
     FROM pg_proc p
     JOIN pg_roles r ON (p.proowner = r.oid)
     WHERE proname LIKE 'babel_5116%'
     ORDER BY r.rolname, proname;
 GO
 ~~START~~
-varchar#!#varchar
-babel_5116_f1#!#dbo
-babel_5116_f2#!#dbo
-babel_5116_p1#!#dbo
-babel_5116_p2#!#dbo
-babel_5116_trig1#!#dbo
-babel_5116_trig2#!#dbo
-babel_5116_f1#!#master_dbo
-babel_5116_p1#!#master_dbo
-babel_5116_trig1#!#master_dbo
+char#!#char
+babel_5116_f1                                                    #!#dbo                 
+babel_5116_f2                                                    #!#dbo                 
+babel_5116_p1                                                    #!#dbo                 
+babel_5116_p2                                                    #!#dbo                 
+babel_5116_trig1                                                 #!#dbo                 
+babel_5116_trig2                                                 #!#dbo                 
+babel_5116_f1                                                    #!#master_dbo          
+babel_5116_p1                                                    #!#master_dbo          
+babel_5116_trig1                                                 #!#master_dbo          
 ~~END~~
 
-SELECT typname, r.rolname
+SELECT CAST(typname AS CHAR(65)), CAST(r.rolname AS CHAR(20))
     FROM pg_type t
     JOIN pg_roles r ON (t.typowner = r.oid)
-    WHERE typowner LIKE 'babel_5116%'
-    ORDER BY r.rolname, typowner;
+    WHERE typname LIKE 'babel_5116%'
+    ORDER BY r.rolname, typname;
 GO
 ~~START~~
-varchar#!#varchar
+char#!#char
+babel_5116_t1                                                    #!#dbo                 
+babel_5116_t2                                                    #!#dbo                 
+babel_5116_tabletype1                                            #!#dbo                 
+babel_5116_tabletype2                                            #!#dbo                 
+babel_5116_type1                                                 #!#dbo                 
+babel_5116_type2                                                 #!#dbo                 
+babel_5116_v1                                                    #!#dbo                 
+babel_5116_v2                                                    #!#dbo                 
+babel_5116_t1                                                    #!#master_dbo          
+babel_5116_tabletype1                                            #!#master_dbo          
+babel_5116_type1                                                 #!#master_dbo          
+babel_5116_v1                                                    #!#master_dbo          
 ~~END~~
 
 
 -- tsql database=babel_5116_db
 /********** DDLADMIN SHOULD NOT BE A DEPENDANT OF ANY OBJECT WE CREATED IN THIS TEST **********/
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(30)), deptype FROM pg_depend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_depend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
@@ -392,7 +453,7 @@ char#!#char#!#varchar
 ~~END~~
 
 
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(30)), deptype FROM pg_shdepend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_shdepend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
@@ -401,32 +462,34 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(30)), deptyp
 GO
 ~~START~~
 char#!#char#!#varchar
-db_datareader                 #!#babel_5116_t1                 #!#a
-db_datareader                 #!#babel_5116_v1                 #!#a
-db_datareader                 #!#babel_5116_t2                 #!#a
-db_datareader                 #!#babel_5116_v2                 #!#a
-db_datawriter                 #!#babel_5116_t1                 #!#a
-db_datawriter                 #!#babel_5116_v1                 #!#a
-db_datawriter                 #!#babel_5116_t2                 #!#a
-db_datawriter                 #!#babel_5116_v2                 #!#a
-db_ddladmin                   #!#babel_5116_t1                 #!#a
-db_ddladmin                   #!#babel_5116_v1                 #!#a
-db_ddladmin                   #!#babel_5116_t2                 #!#a
-db_ddladmin                   #!#babel_5116_v2                 #!#a
-dbo                           #!#babel_5116_t1                 #!#o
-dbo                           #!#babel_5116_trig1              #!#o
-dbo                           #!#babel_5116_v1                 #!#o
-dbo                           #!#babel_5116_p1                 #!#o
-dbo                           #!#babel_5116_f1                 #!#o
-dbo                           #!#babel_5116_type1              #!#o
-dbo                           #!#babel_5116_tabletype1         #!#o
-dbo                           #!#babel_5116_t2                 #!#o
-dbo                           #!#babel_5116_trig2              #!#o
-dbo                           #!#babel_5116_v2                 #!#o
-dbo                           #!#babel_5116_p2                 #!#o
-dbo                           #!#babel_5116_f2                 #!#o
-dbo                           #!#babel_5116_type2              #!#o
-dbo                           #!#babel_5116_tabletype2         #!#o
+db_datareader                 #!#babel_5116_t1       #!#a
+db_datareader                 #!#babel_5116_v1       #!#a
+db_datareader                 #!#babel_5116_t2       #!#a
+db_datareader                 #!#babel_5116_v2       #!#a
+db_datawriter                 #!#babel_5116_t1       #!#a
+db_datawriter                 #!#babel_5116_v1       #!#a
+db_datawriter                 #!#babel_5116_t2       #!#a
+db_datawriter                 #!#babel_5116_v2       #!#a
+db_ddladmin                   #!#babel_5116_t1       #!#a
+db_ddladmin                   #!#babel_5116_v1       #!#a
+db_ddladmin                   #!#babel_5116_t2       #!#a
+db_ddladmin                   #!#babel_5116_v2       #!#a
+dbo                           #!#babel_5116_t1       #!#o
+dbo                           #!#babel_5116_trig1    #!#o
+dbo                           #!#babel_5116_v1       #!#o
+dbo                           #!#babel_5116_s1       #!#o
+dbo                           #!#babel_5116_p1       #!#o
+dbo                           #!#babel_5116_f1       #!#o
+dbo                           #!#babel_5116_type1    #!#o
+dbo                           #!#babel_5116_tabletype#!#o
+dbo                           #!#babel_5116_t2       #!#o
+dbo                           #!#babel_5116_trig2    #!#o
+dbo                           #!#babel_5116_v2       #!#o
+dbo                           #!#babel_5116_s2       #!#o
+dbo                           #!#babel_5116_p2       #!#o
+dbo                           #!#babel_5116_f2       #!#o
+dbo                           #!#babel_5116_type2    #!#o
+dbo                           #!#babel_5116_tabletype#!#o
 ~~END~~
 
 
@@ -439,6 +502,12 @@ GO
 DROP VIEW babel_5116_v1
 GO
 DROP VIEW babel_5116_v2
+GO
+DROP SEQUENCE babel_5116_s1
+GO
+DROP SEQUENCE babel_5116_s2
+GO
+DROP INDEX babel_5116_idx1 ON babel_5116_t1
 GO
 DROP TABLE babel_5116_t2
 GO
