@@ -2993,13 +2993,13 @@ revoke_func_permission_from_public(Oid objectId)
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
 
+	/* Advance command counter so new tuple can be seen by validator */
 	CommandCounterIncrement();
 
 	/* public role does not have execute on this. nothing to do */
 	if (object_aclcheck(ProcedureRelationId, objectId, ACL_ID_PUBLIC, ACL_EXECUTE) != ACLCHECK_OK)
 		return;
 
-	/* Advance command counter so new tuple can be seen by validator */
 	/* get properties */
 	obj_name = get_func_name(objectId);
 	phy_sch_oid = get_func_namespace(objectId);
@@ -5778,9 +5778,11 @@ pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 		if (ownerId != nsp_owner)
 		{
 			Oid 	db_ddladmin = get_db_ddladmin_oid(db_name, false);
+			Oid 	db_owner = get_db_owner_oid(db_name, false);
 			Oid 	schema_db_id = get_dbid_from_physical_schema_name(NameStr(nsptup->nspname), false);
 
 			if (schema_db_id == get_cur_db_id() &&
+				!has_privs_of_role(GetUserId(), db_owner) &&
 				has_privs_of_role(GetUserId(), db_ddladmin))
 				ownerId = nsp_owner;
 		}
