@@ -1491,12 +1491,11 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		PG_FINALLY();
 		{
 			SetUserIdAndSecContext(save_userid, save_sec_context);
-			pfree(db_datareader);
-			pfree(db_datawriter);
-			pfree(db_ddladmin);
-			pfree(dbo_user);
 		}
 		PG_END_TRY();
+
+		pfree(dbo_user);
+		pfree(schema_owner);
 	}
 
 	/* Cleanup. */
