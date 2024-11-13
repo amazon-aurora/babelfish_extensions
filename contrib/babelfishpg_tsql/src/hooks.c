@@ -3000,10 +3000,6 @@ revoke_func_permission_from_public(Oid objectId)
 	/* Advance command counter so new tuple can be seen by validator */
 	CommandCounterIncrement();
 
-	/* public role does not have execute on this. nothing to do */
-	if (object_aclcheck(ProcedureRelationId, objectId, ACL_ID_PUBLIC, ACL_EXECUTE) != ACLCHECK_OK)
-		return;
-
 	proc_tuple = SearchSysCache1(PROCOID,
 								ObjectIdGetDatum(objectId));
 	if (!HeapTupleIsValid(proc_tuple))

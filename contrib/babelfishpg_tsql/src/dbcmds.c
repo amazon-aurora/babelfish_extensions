@@ -1442,9 +1442,6 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		stmts = parsetree_nth_stmt(stmt_list, i++);
 		update_AlterDefaultPrivilegesStmt(stmts, schema_name, schema_owner, dbo_user, db_ddladmin, NULL);
 
-		stmts = parsetree_nth_stmt(stmt_list, i++);
-		update_AlterDefaultPrivilegesStmt(stmts, NULL, schema_owner, dbo_user, PUBLIC_ROLE_NAME, NULL);
-
 		/* Run all subcommands */
 		foreach(parsetree_item, stmt_list)
 		{
