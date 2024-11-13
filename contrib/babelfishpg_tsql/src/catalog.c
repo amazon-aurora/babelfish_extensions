@@ -4271,6 +4271,7 @@ exec_internal_grant_on_function(Oid objectId)
 	Relation	bbf_schema_rel;
 	TupleDesc	dsc;
 	HeapTuple	tuple_bbf_schema;
+	HeapTuple	proc_tuple;
 	const char	*grantee = NULL;
 	int			current_permission;
 	ScanKeyData scanKey[3];
@@ -4280,16 +4281,24 @@ exec_internal_grant_on_function(Oid objectId)
 	char 		*schema;
 	const char 	*logicalschema;
 	char 		object_type;
+	Form_pg_proc	procedureStruct;
 
 	/* TSQL specific behavior */
 	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
 		return;
 
-	object_name = get_func_name(objectId);
-	phy_sch_oid = get_func_namespace(objectId);
+	proc_tuple = SearchSysCache1(PROCOID,
+								ObjectIdGetDatum(objectId));
+	if (!HeapTupleIsValid(proc_tuple))
+		elog(ERROR, "cache lookup failed for function %u", objectId);
+
+	procedureStruct = (Form_pg_proc) GETSTRUCT(proc_tuple);
+
+	object_name = NameStr(procedureStruct->proname);
+	phy_sch_oid = procedureStruct->pronamespace;
 	schema = get_namespace_name(phy_sch_oid);
 	logicalschema = get_logical_schema_name(schema, true);
-	object_type = get_func_prokind(objectId);
+	object_type = procedureStruct->prokind;
 
 	/* Fetch the relation */
 	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
@@ -4355,7 +4364,7 @@ exec_internal_grant_on_function(Oid objectId)
 
 			PG_TRY();
 			{
-				SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+				SetUserIdAndSecContext(procedureStruct->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 				ProcessUtility(wrapper,
 							INTERNAL_GRANT_STATEMENT,
@@ -4377,7 +4386,7 @@ exec_internal_grant_on_function(Oid objectId)
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, AccessShareLock);
 	pfree(schema);
-	pfree(object_name);
+	ReleaseSysCache(proc_tuple);
 }
 
 PG_FUNCTION_INFO_V1(update_user_catalog_for_guest_schema);

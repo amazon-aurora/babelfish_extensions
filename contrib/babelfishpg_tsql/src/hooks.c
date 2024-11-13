@@ -2979,7 +2979,7 @@ bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int s
 static void
 revoke_func_permission_from_public(Oid objectId)
 {
-	const char *query;
+	char	   *query;
 	List	   *res;
 	GrantStmt  *revoke;
 	PlannedStmt *wrapper;
@@ -2987,7 +2987,11 @@ revoke_func_permission_from_public(Oid objectId)
 	Oid			phy_sch_oid;
 	const char *phy_sch_name;
 	const char *arg_list;
-	char		kind;
+	char        kind;
+	Oid         save_userid;
+	int         save_sec_context;
+	HeapTuple   proc_tuple;
+	Form_pg_proc procedureStruct;
 
 	/* TSQL specific behavior */
 	if (sql_dialect != SQL_DIALECT_TSQL)
@@ -3000,11 +3004,18 @@ revoke_func_permission_from_public(Oid objectId)
 	if (object_aclcheck(ProcedureRelationId, objectId, ACL_ID_PUBLIC, ACL_EXECUTE) != ACLCHECK_OK)
 		return;
 
+	proc_tuple = SearchSysCache1(PROCOID,
+								ObjectIdGetDatum(objectId));
+	if (!HeapTupleIsValid(proc_tuple))
+		elog(ERROR, "cache lookup failed for function %u", objectId);
+
+	procedureStruct = (Form_pg_proc) GETSTRUCT(proc_tuple);
+
 	/* get properties */
-	obj_name = get_func_name(objectId);
-	phy_sch_oid = get_func_namespace(objectId);
+	obj_name = NameStr(procedureStruct->proname);
+	phy_sch_oid = procedureStruct->pronamespace;
 	phy_sch_name = get_namespace_name(phy_sch_oid);
-	kind = get_func_prokind(objectId);
+	kind = procedureStruct->prokind;
 	arg_list = gen_func_arg_list(objectId);
 
 	/* prepare subcommand */
@@ -3030,14 +3041,29 @@ revoke_func_permission_from_public(Oid objectId)
 	wrapper->stmt_location = 0;
 	wrapper->stmt_len = 0;
 
-	ProcessUtility(wrapper,
-				   query,
-				   false,
-				   PROCESS_UTILITY_SUBCOMMAND,
-				   NULL,
-				   NULL,
-				   None_Receiver,
-				   NULL);
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+
+	PG_TRY();
+	{
+		SetUserIdAndSecContext(procedureStruct->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+		ProcessUtility(wrapper,
+					INTERNAL_REVOKE_ALL_ON_ROUTINE,
+					false,
+					PROCESS_UTILITY_SUBCOMMAND,
+					NULL,
+					NULL,
+					None_Receiver,
+					NULL);
+	}
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
+
+	pfree(query);
+	ReleaseSysCache(proc_tuple);
 
 	/* Command Counter will be increased by validator */
 }

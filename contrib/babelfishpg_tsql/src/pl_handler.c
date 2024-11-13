@@ -3678,8 +3678,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					PG_TRY();
 					{
-						if (!drop_login)
-							exec_drop_bbf_role_subcmds(stmt);
 						if (prev_ProcessUtility)
 							prev_ProcessUtility(pstmt, queryString, readOnlyTree, context,
 												params, queryEnv, dest,
@@ -4229,7 +4227,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				 */
 
 				/* Ignore when GRANT statement has no specific named object. */
-				if (sql_dialect != SQL_DIALECT_TSQL || grant->targtype != ACL_TARGET_OBJECT)
+				if (sql_dialect != SQL_DIALECT_TSQL || grant->targtype != ACL_TARGET_OBJECT || strcmp(INTERNAL_REVOKE_ALL_ON_ROUTINE, queryString) == 0)
 					break;
 				Assert(list_length(grant->objects) == 1);
 				if (grant->objtype == OBJECT_SCHEMA)

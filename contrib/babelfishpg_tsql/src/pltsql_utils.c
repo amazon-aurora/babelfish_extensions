@@ -2506,67 +2506,6 @@ get_owner_of_schema(const char *schema)
 	return result;
 }
 
-void
-exec_drop_bbf_role_subcmds(DropRoleStmt *drop_stmt)
-{
-	StringInfoData	query;
-	List		*stmt_list;
-	int 		expected_stmts = 1;
-	ListCell	*parsetree_item;
-	Node		*stmt;
-	int			i=0;
-	ListCell    *lc;
-	AlterDefaultPrivilegesStmt *s;
-
-	initStringInfo(&query);
-
-	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy GRANT EXECUTE ON ROUTINES TO PUBLIC; ");
-
-	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
-	if (list_length(stmt_list) != expected_stmts)
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("Expected %d statements, but got %d statements after parsing",
-						expected_stmts, list_length(stmt_list))));
-
-	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_AlterDefaultPrivilegesStmt(stmt, NULL, NULL, NULL, PUBLIC_ROLE_NAME, NULL);
-
-	s = (AlterDefaultPrivilegesStmt *) stmt;
-	foreach(lc, s->options)
-	{
-		DefElem    *defel = (DefElem *) lfirst(lc);
-
-		if (strcmp(defel->defname, "roles") == 0)
-			defel->arg = (Node *)drop_stmt->roles;
-	}
-
-	foreach(parsetree_item, stmt_list)
-	{
-		Node		*pstmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
-		PlannedStmt *wrapper;
-
-		wrapper = makeNode(PlannedStmt);
-		wrapper->commandType = CMD_UTILITY;
-		wrapper->canSetTag = false;
-		wrapper->utilityStmt = pstmt;
-		wrapper->stmt_location = 0;
-		wrapper->stmt_len = 0;
-
-		ProcessUtility(wrapper,
-					ALTER_DEFAULT_PRIVILEGES,
-					false,
-					PROCESS_UTILITY_SUBCOMMAND,
-					NULL,
-					NULL,
-					None_Receiver,
-					NULL);
-	}
-	CommandCounterIncrement();
-
-	pfree(query.data);
-}
-
 /*
  * exec_database_roles_subcmds:
  * Alter default privileges on all the objects in a schema to the db_datareader/db_datareader while creating a schema.
@@ -2583,7 +2522,7 @@ exec_database_roles_subcmds(const char *schema)
 	char		*schema_owner;
 	const char	*dbname = get_current_pltsql_db_name();
 	List		*stmt_list;
-	int 		expected_stmts = 5;
+	int 		expected_stmts = 4;
 	ListCell	*parsetree_item;
 	Node		*stmts;
 	int		i=0;
@@ -2609,14 +2548,6 @@ exec_database_roles_subcmds(const char *schema)
 	/* Grant privileges to db_ddladmin */
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT TRUNCATE ON TABLES TO dummy; ");
 	appendStringInfo(&query, "GRANT CREATE ON SCHEMA dummy TO dummy ; ");
-	/*
-	 * revoke default execute privileges for routines owned by schema owner
-	 * we also revoke execute privileges as part of post routine creation using
-	 * object access hook but that will fail for db_ddladmin since the routine
-	 * would already be transferred to schema owner by the time we reach there and
-	 * db_ddladmin will not have the privileges to run the revoke
-	 */
-	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy REVOKE EXECUTE ON ROUTINES FROM dummy; ");
 
 	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 	if (list_length(stmt_list) != expected_stmts)
@@ -2635,9 +2566,6 @@ exec_database_roles_subcmds(const char *schema)
 	update_AlterDefaultPrivilegesStmt(stmts, schema, schema_owner, dbo_role, db_ddladmin, NULL);
 	stmts = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmts, schema, NULL, db_ddladmin, NULL);
-
-	stmts = parsetree_nth_stmt(stmt_list, i++);
-	update_AlterDefaultPrivilegesStmt(stmts, NULL, schema_owner, dbo_role, PUBLIC_ROLE_NAME, NULL);
 
 	PG_TRY();
 	{

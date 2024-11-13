@@ -1398,9 +1398,6 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT INSERT, UPDATE, DELETE ON TABLES TO dummy; ");
 	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy IN SCHEMA dummy GRANT TRUNCATE ON TABLES TO dummy; ");
 
-	/* for commentary see exec_database_roles_subcmds */
-	appendStringInfo(&query, "ALTER DEFAULT PRIVILEGES FOR ROLE dummy, dummy REVOKE EXECUTE ON ROUTINES FROM dummy; ");
-
 	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
 	Assert(list_length(stmt_list) == 8);

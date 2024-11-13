@@ -1991,6 +1991,7 @@ extern bool insert_bulk_check_constraints;
 #define CREATE_FIXED_DB_ROLES "(CREATE FIXED DATABASE ROLES )"
 #define ALTER_DEFAULT_PRIVILEGES "(ALTER DEFAULT PRIVILEGES )"
 #define INTERNAL_GRANT_STATEMENT "(GRANT STATEMENT )"
+#define INTERNAL_REVOKE_ALL_ON_ROUTINE "(REVOKE ALL ON ROUTINE )"
 
 /* FIXED DB PRINCIPALS */
 #define DBO "dbo"
@@ -2098,7 +2099,6 @@ extern AclMode string_to_privilege(const char *privname);
 extern const char *privilege_to_string(AclMode privilege);
 extern Oid get_owner_of_schema(const char *schema);
 extern void exec_database_roles_subcmds(const char *physical_schema);
-extern void exec_drop_bbf_role_subcmds(DropRoleStmt *stmt);
 
 /*
  * Functions for namespace handling in pl_funcs.c
