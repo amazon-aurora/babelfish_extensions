@@ -446,8 +446,9 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptyp
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
         refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
-        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
-    ORDER BY deptype, r.rolname, objid;
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%' AND
+        NOT (object_name(objid) = 'babel_5116_tabletype1' AND deptype = 'a')
+    ORDER BY deptype, r.rolname, object_name(objid);
 GO
 ~~START~~
 char#!#char#!#varchar
@@ -459,31 +460,32 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptyp
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
         refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
-        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
-    ORDER BY deptype, r.rolname, objid;
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%' AND
+        NOT (object_name(objid) = 'babel_5116_tabletype1' AND deptype = 'a')
+    ORDER BY deptype, r.rolname, object_name(objid);
 GO
 ~~START~~
 char#!#char#!#varchar
 db_ddladmin                   #!#babel_5116_t1         #!#a
-db_ddladmin                   #!#babel_5116_v1         #!#a
 db_ddladmin                   #!#babel_5116_t2         #!#a
+db_ddladmin                   #!#babel_5116_v1         #!#a
 db_ddladmin                   #!#babel_5116_v2         #!#a
-dbo                           #!#babel_5116_t1         #!#o
-dbo                           #!#babel_5116_trig1      #!#o
-dbo                           #!#babel_5116_v1         #!#o
-dbo                           #!#babel_5116_s1         #!#o
-dbo                           #!#babel_5116_p1         #!#o
 dbo                           #!#babel_5116_f1         #!#o
-dbo                           #!#babel_5116_type1      #!#o
-dbo                           #!#babel_5116_tabletype1 #!#o
-dbo                           #!#babel_5116_t2         #!#o
-dbo                           #!#babel_5116_trig2      #!#o
-dbo                           #!#babel_5116_v2         #!#o
-dbo                           #!#babel_5116_s2         #!#o
-dbo                           #!#babel_5116_p2         #!#o
 dbo                           #!#babel_5116_f2         #!#o
-dbo                           #!#babel_5116_type2      #!#o
+dbo                           #!#babel_5116_p1         #!#o
+dbo                           #!#babel_5116_p2         #!#o
+dbo                           #!#babel_5116_s1         #!#o
+dbo                           #!#babel_5116_s2         #!#o
+dbo                           #!#babel_5116_t1         #!#o
+dbo                           #!#babel_5116_t2         #!#o
+dbo                           #!#babel_5116_tabletype1 #!#o
 dbo                           #!#babel_5116_tabletype2 #!#o
+dbo                           #!#babel_5116_trig1      #!#o
+dbo                           #!#babel_5116_trig2      #!#o
+dbo                           #!#babel_5116_type1      #!#o
+dbo                           #!#babel_5116_type2      #!#o
+dbo                           #!#babel_5116_v1         #!#o
+dbo                           #!#babel_5116_v2         #!#o
 ~~END~~
 
 

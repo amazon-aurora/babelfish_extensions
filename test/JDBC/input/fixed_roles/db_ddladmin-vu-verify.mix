@@ -201,8 +201,9 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptyp
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
         refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
-        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
-    ORDER BY deptype, r.rolname, objid;
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%' AND
+        NOT (object_name(objid) = 'babel_5116_tabletype1' AND deptype = 'a')
+    ORDER BY deptype, r.rolname, object_name(objid);
 GO
 
 SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptype FROM pg_shdepend d
@@ -210,8 +211,9 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptyp
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
         refclassid = (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AND
-        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%'
-    ORDER BY deptype, r.rolname, objid;
+        r.rolname NOT LIKE '%datareader%' AND r.rolname NOT LIKE '%datawriter%' AND
+        NOT (object_name(objid) = 'babel_5116_tabletype1' AND deptype = 'a')
+    ORDER BY deptype, r.rolname, object_name(objid);
 GO
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
