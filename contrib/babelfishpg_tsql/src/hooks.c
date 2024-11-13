@@ -211,6 +211,7 @@ static object_access_hook_type prev_object_access_hook = NULL;
 static void bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
 static void revoke_func_permission_from_public(Oid objectId);
 static bool is_partitioned_table_reloptions_allowed(Datum reloptions);
+static Oid pltsql_get_object_owner(Oid namespaceId, Oid ownerId);
 
 /*****************************************
  * 			Planner Hook
@@ -503,6 +504,8 @@ InstallExtendedHooks(void)
 	bbf_execute_grantstmt_as_dbsecadmin_hook = handle_grantstmt_for_dbsecadmin;
 	
 	pltsql_get_object_identity_event_trigger_hook = pltsql_get_object_identity_event_trigger;
+
+	pltsql_get_object_owner_hook = pltsql_get_object_owner;
 }
 
 void
@@ -5722,3 +5725,63 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 	}
 	return;
 }
+
+/*
+ * Objects are always owned by current user in postgres but in babelfish
+ * schema contained objects should be owned by the schema owner by default
+ * Use this hook to pick schema owner as object owner during object creation
+ * We currently only do this if current user is member of db_ddladmin
+ */
+static Oid
+pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
+{
+	HeapTuple          tuple;
+	Form_pg_namespace  nsptup;
+	const char         *logical_schema_name;
+
+	Assert(OidIsValid(namespaceId));
+
+	if (sql_dialect != SQL_DIALECT_TSQL)
+		return ownerId;
+
+	if (!OidIsValid(ownerId))
+		ownerId = GetUserId();
+
+	tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(namespaceId));
+	nsptup = (Form_pg_namespace) GETSTRUCT(tuple);
+
+	logical_schema_name = get_logical_schema_name(NameStr(nsptup->nspname), true);
+
+	if (logical_schema_name)
+	{
+		Oid		nsp_owner;
+		char	*db_name = get_cur_db_name();
+		char	*dbo_name = get_dbo_role_name(db_name);
+
+		/*
+		 * babelfish issue special handing for dbo schema since it is
+		 * owned by db_owner but the correct owner should have been dbo
+		 */
+		if (strcmp(logical_schema_name, "dbo") == 0)
+			nsp_owner = get_role_oid(dbo_name, false);
+		else
+			nsp_owner = nsptup->nspowner;
+
+		if (ownerId != nsp_owner)
+		{
+			Oid 	db_owner = get_db_owner_oid(db_name, false);
+			Oid 	schema_db_id = get_dbid_from_physical_schema_name(NameStr(nsptup->nspname), false);
+
+			if (schema_db_id == get_cur_db_id() &&
+				has_privs_of_role(GetUserId(), db_owner))
+				ownerId = nsp_owner;
+		}
+
+		pfree(db_name);
+		pfree(dbo_name);
+	}
+	ReleaseSysCache(tuple);
+
+	return ownerId;
+}
+

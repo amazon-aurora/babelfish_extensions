@@ -35,6 +35,7 @@
 #include "commands/seclabel.h"
 #include "commands/user.h"
 #include "libpq/crypt.h"
+#include "libpq/libpq-be.h"
 #include "miscadmin.h"
 #include "parser/parser.h"
 #include "parser/scansup.h"
@@ -2947,7 +2948,7 @@ change_object_owner_if_db_owner()
 	PlannedStmt 	*wrapper;
 
 	/* TSQL specific behavior */
-	if (sql_dialect != SQL_DIALECT_TSQL)
+	if (sql_dialect != SQL_DIALECT_TSQL || (MyProcPort && !MyProcPort->is_tds_conn))
 		return;
 
 	cur_db_name = get_cur_db_name();

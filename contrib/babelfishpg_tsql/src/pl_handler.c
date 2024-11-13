@@ -3736,8 +3736,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						const char *db_name = get_current_pltsql_db_name();
 						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
 						Oid        db_securityadmin = get_db_securityadmin_oid(db_name, false);
+						Oid        db_owner = get_db_owner_oid(db_name, false);
 
 						owner_oid = get_rolespec_oid(rolspec, true);
+
 						/*
 						* db_accessadmin members can create schema with owner being any db principal
 						* If it does not have the pg permission then handle it here. We will set owner
@@ -3750,6 +3752,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						{
 							create_schema->authrole = NULL;
 							alter_owner = true;
+						}
+
+						if (has_privs_of_role(owner_oid, db_owner) && owner_oid != get_role_oid(get_dbo_role_name(db_name), false))
+						{
+							const char* new_owner = get_obj_role(get_rolespec_name(rolspec));
+							create_schema->authrole = make_rolespec_node(new_owner);
+							alter_owner = false;
 						}
 					}
 

@@ -6,10 +6,30 @@ go
 alter login dbowner__temp with password = '123'
 go
 
--- CASE 1: Able to access all objects in its own database
+-- Adding/Dropping non-existent user to db_owner should throw error
+alter role db_owner add member a_very_invalid_username
+go
+alter role db_owner drop member a_very_invalid_username
+go
+
+-- CASE 0: Should not be able to manipulate server level objects
 -- tsql user=dbowner__l1 password=123
 use dbowner__main_db
 go
+select is_member('db_owner')
+go
+create database dbowner_try_db_create
+go
+create login dbowner_try_login_create with password = '123'
+go
+drop login dbowner__l1
+go
+drop login dbowner__l2
+go
+alter server role sysadmin add member dbowner__temp
+go
+
+-- CASE 1: Able to access all objects in its own database
 select is_member('db_owner')
 go
 select * from dbo.dbowner__t0
@@ -36,11 +56,25 @@ create table dbowner__s1.dbowner__t11 (a int)
 go
 create schema dbowner__s3 authorization dbowner__u1
 go
+create schema dbowner__sch_u2 authorization dbowner__u2
+go
 create table dbowner__s3.dbowner__t3 (a int)
 go
 create function dbowner__s3.dbowner__f3() returns int as begin return 13 end
 go
 create procedure dbowner__s3.dbowner__p3 as select 23
+go
+alter table dbo.dbowner__t0 add b int
+go
+alter function dbo.dbowner__f0() returns int as begin return 134 end
+go
+alter procedure dbo.dbowner__p0 as select 234
+go
+alter table dbo.dbowner__t0 drop column b
+go
+alter function dbo.dbowner__f0() returns int as begin return 10 end
+go
+alter procedure dbo.dbowner__p0 as select 20
 go
 
 -- CASE 3: Able to GRANT/REVOKE on SCHEMA/OBJECT
@@ -135,9 +169,9 @@ go
 -- tsql
 use dbowner__main_db
 go
-alter role db_owner drop member dbowner__u1
+exec sp_droprolemember 'db_owner', 'dbowner__u1'
 go
-alter role db_owner add member dbowner__u1
+exec sp_addrolemember 'db_owner', 'dbowner__u1'
 go
 alter user dbowner__u1 with login = dbowner__l1
 go
@@ -220,7 +254,7 @@ AND c.relkind IN ('r', 'v', 'm', 'i', 'S', 's', 'f')
 ORDER BY n.nspname, c.relkind, c.relname;
 GO
 
--- Schema owners should be dbowner__main_db_dbowner__u1_obj
+-- Schemas owner should be dbowner__main_db_dbowner__u1_obj except for dbowner__main_db_dbowner__sch_u2
 SELECT
     r.rolname AS schema_owner,
     ns.nspname
@@ -231,9 +265,7 @@ JOIN
 ON
     ns.nspowner = r.oid
 WHERE
-    ns.nspname = 'dbowner__main_db_dbowner__s1'
-OR
-    ns.nspname = 'dbowner__main_db_dbowner__s3'
+    ns.nspname IN ('dbowner__main_db_dbowner__s1', 'dbowner__main_db_dbowner__s3', 'dbowner__main_db_dbowner__sch_u2')
 ORDER BY ns.nspname;
 GO
 
@@ -264,6 +296,23 @@ select dbowner__s3.dbowner__f3()
 go
 exec dbowner__s3.dbowner__p3
 go
+create schema dbowner__sch_u1 authorization dbowner__u1
+go
+
+-- Schema owners should be dbowner__main_db_dbowner__u1_obj
+SELECT
+    r.rolname AS schema_owner,
+    ns.nspname
+FROM
+    pg_namespace ns
+JOIN
+    pg_roles r 
+ON
+    ns.nspowner = r.oid
+WHERE
+    ns.nspname = 'dbowner__main_db_dbowner__sch_u1'
+ORDER BY ns.nspname;
+GO
 
 select name from sys.database_principals order by name
 go
@@ -303,6 +352,12 @@ exec dbowner__s3.dbowner__p3
 go
 
 -- CASE 6: If removed from db_owner, user should lose access to create objects in schemas except the ones it owns
+alter table dbo.dbowner__t0 add c int
+go
+alter function dbo.dbowner__f0() returns int as begin return 1345 end
+go
+alter procedure dbo.dbowner__p0 as select 2345
+go
 create role dbowner__r3
 go
 create role dbowner__r4
@@ -360,9 +415,7 @@ JOIN
 ON
     ns.nspowner = r.oid
 WHERE
-    ns.nspname = 'dbowner__main_db_dbowner__s1'
-OR
-    ns.nspname = 'dbowner__main_db_dbowner__s3'
+    ns.nspname IN ('dbowner__main_db_dbowner__s1', 'dbowner__main_db_dbowner__s3', 'dbowner__main_db_dbowner__sch_u1', 'dbowner__main_db_dbowner__sch_u2')
 ORDER BY ns.nspname;
 GO
 
@@ -441,6 +494,10 @@ drop schema dbowner__s2
 go
 drop schema dbowner__s3
 go
+drop schema dbowner__sch_u1
+go
+drop schema dbowner__sch_u2
+go
 drop user dbowner__u2
 go
 
@@ -483,10 +540,8 @@ create user dbowner__test_db_dbowner__u1 for login dbowner__l1
 go
 alter role db_owner add member dbowner__test_db_dbowner__u1
 go
-use master
-go
 
--- CASE 9: Add another user but as db_owner
+-- CASE 9: Should be able to add other users to db_owner role as a member of db_owner
 -- tsql user=dbowner__l1 password=123
 use dbowner__test_db
 go
@@ -494,15 +549,21 @@ select is_member('db_owner')
 go
 create user dbowner__test_db_dbowner__u2 for login dbowner__l2
 go
-
--- tsql
-use dbowner__test_db
-go
 alter role db_owner add member dbowner__test_db_dbowner__u2
 go
 select is_rolemember('db_owner', 'dbowner__test_db_dbowner__u1'), is_rolemember('db_owner', 'dbowner__test_db_dbowner__u2')
 go
-use dbowner__main_db
+
+-- CASE 10: Should be able to drop other users from db_owner role as a member of db_owner, including itself
+alter role db_owner drop member dbowner__test_db_dbowner__u2
+go
+alter role db_owner drop member dbowner__test_db_dbowner__u1
+go
+
+-- tsql
+alter role db_owner add member dbowner__test_db_dbowner__u1
+go
+alter role db_owner add member dbowner__test_db_dbowner__u2
 go
 
 -- psql
