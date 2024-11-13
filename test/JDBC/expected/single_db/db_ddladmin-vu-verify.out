@@ -441,7 +441,7 @@ babel_5116_v1                                                    #!#master_dbo
 
 -- tsql database=babel_5116_db
 /********** DDLADMIN SHOULD NOT BE A DEPENDANT OF ANY OBJECT WE CREATED IN THIS TEST **********/
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_depend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptype FROM pg_depend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
@@ -454,7 +454,7 @@ char#!#char#!#varchar
 ~~END~~
 
 
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_shdepend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptype FROM pg_shdepend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
@@ -464,26 +464,26 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptyp
 GO
 ~~START~~
 char#!#char#!#varchar
-db_ddladmin                   #!#babel_5116_t1       #!#a
-db_ddladmin                   #!#babel_5116_v1       #!#a
-db_ddladmin                   #!#babel_5116_t2       #!#a
-db_ddladmin                   #!#babel_5116_v2       #!#a
-dbo                           #!#babel_5116_t1       #!#o
-dbo                           #!#babel_5116_trig1    #!#o
-dbo                           #!#babel_5116_v1       #!#o
-dbo                           #!#babel_5116_s1       #!#o
-dbo                           #!#babel_5116_p1       #!#o
-dbo                           #!#babel_5116_f1       #!#o
-dbo                           #!#babel_5116_type1    #!#o
-dbo                           #!#babel_5116_tabletype#!#o
-dbo                           #!#babel_5116_t2       #!#o
-dbo                           #!#babel_5116_trig2    #!#o
-dbo                           #!#babel_5116_v2       #!#o
-dbo                           #!#babel_5116_s2       #!#o
-dbo                           #!#babel_5116_p2       #!#o
-dbo                           #!#babel_5116_f2       #!#o
-dbo                           #!#babel_5116_type2    #!#o
-dbo                           #!#babel_5116_tabletype#!#o
+db_ddladmin                   #!#babel_5116_t1         #!#a
+db_ddladmin                   #!#babel_5116_v1         #!#a
+db_ddladmin                   #!#babel_5116_t2         #!#a
+db_ddladmin                   #!#babel_5116_v2         #!#a
+dbo                           #!#babel_5116_t1         #!#o
+dbo                           #!#babel_5116_trig1      #!#o
+dbo                           #!#babel_5116_v1         #!#o
+dbo                           #!#babel_5116_s1         #!#o
+dbo                           #!#babel_5116_p1         #!#o
+dbo                           #!#babel_5116_f1         #!#o
+dbo                           #!#babel_5116_type1      #!#o
+dbo                           #!#babel_5116_tabletype1 #!#o
+dbo                           #!#babel_5116_t2         #!#o
+dbo                           #!#babel_5116_trig2      #!#o
+dbo                           #!#babel_5116_v2         #!#o
+dbo                           #!#babel_5116_s2         #!#o
+dbo                           #!#babel_5116_p2         #!#o
+dbo                           #!#babel_5116_f2         #!#o
+dbo                           #!#babel_5116_type2      #!#o
+dbo                           #!#babel_5116_tabletype2 #!#o
 ~~END~~
 
 

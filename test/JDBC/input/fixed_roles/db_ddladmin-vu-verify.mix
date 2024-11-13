@@ -196,7 +196,7 @@ GO
 
 -- tsql database=babel_5116_db
 /********** DDLADMIN SHOULD NOT BE A DEPENDANT OF ANY OBJECT WE CREATED IN THIS TEST **********/
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_depend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptype FROM pg_depend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
@@ -205,7 +205,7 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptyp
     ORDER BY deptype, r.rolname, objid;
 GO
 
-SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(20)), deptype FROM pg_shdepend d
+SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptype FROM pg_shdepend d
     JOIN pg_roles r ON (d.refobjid = r.oid)
     WHERE
         object_name(objid) LIKE 'babel_5116%' AND
