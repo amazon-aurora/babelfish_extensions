@@ -735,7 +735,7 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				is_set_userid = true;
 			}
-			else if (stmt->type == T_GrantStmt)
+			else if (stmt->type == T_GrantStmt && false)
 			{
 				SetUserIdAndSecContext(datdba,
 							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
@@ -1430,8 +1430,6 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		ListCell	*parsetree_item;
 		char		*schema_owner;
 		char		*dbo_user;
-		Oid 		save_userid;
-		int 		save_sec_context;
 
 		datum = heap_getattr(tuple, Anum_namespace_ext_namespace, namespace_rel_descr, &isNull);
 		schema_name = NameStr(*DatumGetName(datum));
@@ -1458,41 +1456,30 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 		stmts = parsetree_nth_stmt(stmt_list, i++);
 		update_AlterDefaultPrivilegesStmt(stmts, NULL, schema_owner, dbo_user, PUBLIC_ROLE_NAME, NULL);
 
-		GetUserIdAndSecContext(&save_userid, &save_sec_context);
-
-		PG_TRY();
+		/* Run all subcommands */
+		foreach(parsetree_item, stmt_list)
 		{
-			SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-			/* Run all subcommands */
-			foreach(parsetree_item, stmt_list)
-			{
-				Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
-				PlannedStmt *wrapper;
+			Node		*stmt = ((RawStmt *) lfirst(parsetree_item))->stmt;
+			PlannedStmt *wrapper;
 
-				/* need to make a wrapper PlannedStmt */
-				wrapper = makeNode(PlannedStmt);
-				wrapper->commandType = CMD_UTILITY;
-				wrapper->canSetTag = false;
-				wrapper->utilityStmt = stmt;
-				wrapper->stmt_location = 0;
-				wrapper->stmt_len = 0;
+			/* need to make a wrapper PlannedStmt */
+			wrapper = makeNode(PlannedStmt);
+			wrapper->commandType = CMD_UTILITY;
+			wrapper->canSetTag = false;
+			wrapper->utilityStmt = stmt;
+			wrapper->stmt_location = 0;
+			wrapper->stmt_len = 0;
 
-				/* do this step */
-				ProcessUtility(wrapper,
-							CREATE_FIXED_DB_ROLES,
-							false,
-							PROCESS_UTILITY_SUBCOMMAND,
-							NULL,
-							NULL,
-							None_Receiver,
-							NULL);
-			}
+			/* do this step */
+			ProcessUtility(wrapper,
+						CREATE_FIXED_DB_ROLES,
+						false,
+						PROCESS_UTILITY_SUBCOMMAND,
+						NULL,
+						NULL,
+						None_Receiver,
+						NULL);
 		}
-		PG_FINALLY();
-		{
-			SetUserIdAndSecContext(save_userid, save_sec_context);
-		}
-		PG_END_TRY();
 
 		pfree(dbo_user);
 		pfree(schema_owner);
@@ -1582,18 +1569,11 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 		add_to_bbf_authid_user_ext(db_datawriter, DB_DATAWRITER, dbname, NULL, NULL, true, false, false);
 		add_to_bbf_authid_user_ext(db_ddladmin, DB_DDLADMIN, dbname, NULL, NULL, true, false, false);
 
+		SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
 		foreach(parsetree_item, parsetree_list)
 		{
 			PlannedStmt 	*wrapper;
-
-			if (stmt->type == T_GrantStmt)
-			{
-				SetUserIdAndSecContext(get_sysadmin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-			}
-			else
-			{
-				SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-			}
 
 			wrapper = makeNode(PlannedStmt);
 			wrapper->commandType = CMD_UTILITY;

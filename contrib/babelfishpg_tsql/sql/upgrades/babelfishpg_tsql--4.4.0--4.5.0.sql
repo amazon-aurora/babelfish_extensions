@@ -12,6 +12,17 @@ SELECT set_config('search_path', 'sys, '||current_setting('search_path'), false)
  */
 
 
+/*
+ * Do this so that whenever we run grant statements during create logical database
+ * bbf_role_admin is never picked as the grantor
+ */
+DO $$
+BEGIN
+	EXECUTE format('REVOKE GRANT OPTION FOR CREATE ON DATABASE %s FROM bbf_role_admin; ', CURRENT_DATABASE());
+END;
+$$ LANGUAGE plpgsql;
+
+
 CREATE OR REPLACE PROCEDURE sys.create_db_roles_during_upgrade()
 LANGUAGE C
 AS 'babelfishpg_tsql', 'create_db_roles_during_upgrade';
