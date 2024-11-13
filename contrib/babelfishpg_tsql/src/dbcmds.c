@@ -735,12 +735,6 @@ create_bbf_db_internal(ParseState *pstate, const char *dbname, List *options, co
 							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 				is_set_userid = true;
 			}
-			else if (stmt->type == T_GrantStmt && false)
-			{
-				SetUserIdAndSecContext(datdba,
-							save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-				is_set_userid = true;
-			}
 			/* need to make a wrapper PlannedStmt */
 			wrapper = makeNode(PlannedStmt);
 			wrapper->commandType = CMD_UTILITY;
@@ -1375,7 +1369,7 @@ create_guest_schema_for_all_dbs(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(0);
 }
 
-/* Grant permissions on all the existing objects to db_datareader/db_datawriter. */
+/* Grant permissions on all the existing objects to db_datareader/db_datawriter/db_ddladmin */
 static void
 grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 				const char *db_datareader,
