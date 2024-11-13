@@ -353,7 +353,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 
 		pfree(original_user_name);
 	}
-	appendStringInfo(&query, "DROP OWNED BY dummy, dummy, dummy, dummy CASCADE; ");
+	appendStringInfo(&query, "DROP OWNED BY dummylist CASCADE; ");
 
 	/* 
 	 * Then drop db_ddladmin, db_datareader, db_datawriter, db_securityadmin, db_accessadmin,
@@ -406,7 +406,7 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	}
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
-	update_DropOwnedStmt(stmt, list_make4(pstrdup(db_securityadmin), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
+	update_DropOwnedStmt(stmt, list_make5(pstrdup(db_ddladmin), pstrdup(db_securityadmin), pstrdup(db_accessadmin), pstrdup(db_owner), pstrdup(dbo)));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_GrantStmt(stmt, get_database_name(MyDatabaseId), NULL, db_ddladmin, NULL);
