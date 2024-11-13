@@ -1400,7 +1400,7 @@ grant_perms_to_dbreader_dbwriter_ddladmin(const uint16 dbid,
 
 	stmt_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
-	Assert(list_length(stmt_list) == 8);
+	Assert(list_length(stmt_list) == 7);
 
 	ScanKeyInit(&key,
 				Anum_namespace_ext_dbid,

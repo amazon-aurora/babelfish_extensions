@@ -4342,8 +4342,8 @@ exec_internal_grant_on_function(Oid objectId)
 			List			*res;
 			GrantStmt		*grant;
 			PlannedStmt		*wrapper;
-			Oid             save_userid;
-			int             save_sec_context;
+			Oid     		save_userid;
+			int     		save_sec_context;
 
 			if (object_type == PROKIND_FUNCTION)
 				query = psprintf("GRANT EXECUTE ON FUNCTION [%s].[%s] TO %s", schema, object_name, grantee);
@@ -4364,6 +4364,7 @@ exec_internal_grant_on_function(Oid objectId)
 
 			PG_TRY();
 			{
+				/* babelfish routines could be owned by schema owner and not current user so switch it proowner */
 				SetUserIdAndSecContext(procedureStruct->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 				ProcessUtility(wrapper,
