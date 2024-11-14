@@ -41,7 +41,7 @@ CREATE USER babel_5116_l2
 GO
 CREATE ROLE babel_5116_r1
 GO
-CREATE TABLE babel_5116_t1 (id INT)
+CREATE TABLE babel_5116_t1 (id INT, con_col INT CONSTRAINT babel_5116_constr1 UNIQUE)
 GO
 CREATE INDEX babel_5116_idx1 ON babel_5116_t1 (id)
 GO

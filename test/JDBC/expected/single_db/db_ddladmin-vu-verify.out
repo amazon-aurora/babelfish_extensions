@@ -46,6 +46,30 @@ GO
 
 ~~ERROR (Message: must be owner of table babel_5116_t1)~~
 
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constrfk1 FOREIGN KEY (id_new) REFERENCES babel_5116_t2 (id)
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constrfk1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constr2
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
 CREATE TRIGGER trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
 GO
 ~~ERROR (Code: 33557097)~~
@@ -188,6 +212,24 @@ GO
 ALTER TABLE babel_5116_t1 ADD id_new INT
 GO
 ALTER TABLE babel_5116_t2 ADD id_new INT
+GO
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
+GO
+ALTER TABLE babel_5116_t2 ADD CONSTRAINT babel_5116_constr3 UNIQUE (id)
+GO
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constrfk1 FOREIGN KEY (id_new) REFERENCES babel_5116_t2 (id)
+GO
+ALTER TABLE babel_5116_t2 ADD CONSTRAINT babel_5116_constrfk2 FOREIGN KEY (id_new) REFERENCES babel_5116_t1 (id)
+GO
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constrfk1
+GO
+ALTER TABLE babel_5116_t2 DROP CONSTRAINT babel_5116_constrfk2
+GO
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constr1
+GO
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constr2
+GO
+ALTER TABLE babel_5116_t2 DROP CONSTRAINT babel_5116_constr3
 GO
 ALTER SEQUENCE babel_5116_s1 MINVALUE 99;
 GO
