@@ -3825,7 +3825,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 		case T_DropStmt:
 			{
 				DropStmt   *drop_stmt = (DropStmt *) parsetree;
-				bool 	   skip_bbf_catalog_cleanup;
 
 				if (drop_stmt->removeType == OBJECT_TABLE)
 					bbf_drop_handle_partitioned_table(drop_stmt);
@@ -3865,8 +3864,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					bbf_ExecDropStmt(drop_stmt);
 
-					skip_bbf_catalog_cleanup = drop_stmt->missing_ok && !OidIsValid(get_namespace_oid(schemaname, true));
-
 					if (!is_drop_db_statement)
 					{
 						/*
@@ -3888,7 +3885,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					 * belongs to the current logical database. This check only works if we
 					 * drop the babelfish catalog entry after executing the schema drop
 					 */
-					del_ns_ext_info(schemaname, skip_bbf_catalog_cleanup);
+					del_ns_ext_info(schemaname, drop_stmt->missing_ok);
 
 					return;
 				}
