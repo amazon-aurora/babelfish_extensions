@@ -869,7 +869,7 @@ BEGIN
 											ELSE 'FN'
 										END as sys.bpchar(2)) AS type INTO #tempTable
 							FROM pg_proc p INNER JOIN sys.schemas s1 ON p.pronamespace = s1.schema_id
-							WHERE s1.name = @schemaname AND p.proname = @subname;
+							WHERE s1.name = @schemaname AND CAST(p.proname AS sys.sysname) = @subname;
 							SELECT @count = COUNT(*) FROM #tempTable;
 						END
 					IF @count > 1
