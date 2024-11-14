@@ -4364,7 +4364,10 @@ exec_internal_grant_on_function(Oid objectId)
 
 			PG_TRY();
 			{
-				/* babelfish routines could be owned by schema owner and not current user so switch it proowner */
+				/*
+				 * babelfish routines could be transferred to schema owner during creation so
+				 * current user may not have grant privilege on this routine when we reach here
+				 */
 				SetUserIdAndSecContext(procedureStruct->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 				ProcessUtility(wrapper,

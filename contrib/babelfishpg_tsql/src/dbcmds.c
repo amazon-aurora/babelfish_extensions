@@ -1578,7 +1578,7 @@ create_db_roles_in_database(const char *dbname, List *parsetree_list)
 
 			CommandCounterIncrement();
 		}
-		/* Grant permissions on all the schemas in a database to db_datareader/db_datawriter */
+		/* Grant permissions on all the schemas in a database to db_datareader/db_datawriter/db_ddladmin */
 		grant_perms_to_dbreader_dbwriter_ddladmin(dbid, db_datareader, db_datawriter, db_ddladmin);
 	}
 	PG_FINALLY();

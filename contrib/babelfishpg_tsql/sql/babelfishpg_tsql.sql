@@ -3017,6 +3017,22 @@ BEGIN
 					WHERE s1.name = @schemaname AND o1.name = @subname;
 					SELECT @count = COUNT(*) FROM #tempTable;
 
+					IF @count < 1
+						BEGIN
+							-- sys.objects does not show routines which current user cannot execute but
+							-- roles like db_ddladmin allow renaming a procedure even though they cannot
+							-- execute it, so search again in pg_proc if count is zero
+							DROP TABLE #tempTable;
+							SELECT CAST(CASE 
+											WHEN p.prokind = 'p' THEN 'P'
+											WHEN p.prokind = 'a' THEN 'AF'
+											WHEN format_type(p.prorettype, NULL) = 'trigger' THEN 'TR'
+											ELSE 'FN'
+										END as sys.bpchar(2)) AS type INTO #tempTable
+							FROM pg_proc p INNER JOIN sys.schemas s1 ON p.pronamespace = s1.schema_id
+							WHERE s1.name = @schemaname AND p.proname = @subname;
+							SELECT @count = COUNT(*) FROM #tempTable;
+						END
 					IF @count > 1
 						BEGIN
 							THROW 33557097, N'There are multiple objects with the given @objname.', 1;
