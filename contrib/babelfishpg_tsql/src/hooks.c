@@ -5757,13 +5757,15 @@ pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 		Oid		nsp_owner;
 		char	*db_name = get_cur_db_name();
 		char	*dbo_name = get_dbo_role_name(db_name);
+		Oid		dbo_oid = get_role_oid(dbo_name, false);
+		Oid		user_oid = GetUserId();
 
 		/*
 		 * babelfish issue special handing for dbo schema since it is
 		 * owned by db_owner but the correct owner should have been dbo
 		 */
 		if (strcmp(logical_schema_name, "dbo") == 0)
-			nsp_owner = get_role_oid(dbo_name, false);
+			nsp_owner = dbo_oid;
 		else
 			nsp_owner = nsptup->nspowner;
 
@@ -5773,7 +5775,7 @@ pltsql_get_object_owner(Oid namespaceId, Oid ownerId)
 			Oid 	schema_db_id = get_dbid_from_physical_schema_name(NameStr(nsptup->nspname), false);
 
 			if (schema_db_id == get_cur_db_id() &&
-				has_privs_of_role(GetUserId(), db_owner))
+				has_privs_of_role(user_oid, db_owner) && user_oid != dbo_oid)
 				ownerId = nsp_owner;
 		}
 

@@ -3982,7 +3982,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 													queryEnv, dest, qc);
 							else
-								standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
+								call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 														queryEnv, dest, qc);
 						}
 					}

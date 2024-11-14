@@ -1900,7 +1900,7 @@ check_alter_role_stmt(GrantRoleStmt *stmt)
 	/*
 	 * Members of db_owner role can ALTER ANY ROLE
 	 */
-	if (has_privs_of_role(GetSessionUserId(), db_owner))
+	if (has_privs_of_role(GetUserId(), db_owner))
 		return;
 
 	/*

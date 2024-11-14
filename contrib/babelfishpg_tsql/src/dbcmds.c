@@ -776,7 +776,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 	int                save_sec_context;
 	bool               is_set_userid = false;
 	Oid                save_userid;
-	Oid                prev_current_user_id;
+	Oid                prev_session_user_id;
 
 	if (IS_BBF_BUILT_IN_DB(dbname))
 	{
@@ -820,7 +820,7 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 				 errmsg("Cannot drop database \"%s\" because it is currently in use", dbname)));
 
 	/* Set current user to session user for dropping permissions */
-	prev_current_user_id = GetSessionUserId();
+	prev_session_user_id = GetSessionUserId();
 	prev_current_user = GetUserNameFromId(GetUserId(), false);
 
 	bbf_set_current_user("sysadmin");
@@ -835,11 +835,11 @@ drop_bbf_db(const char *dbname, bool missing_ok, bool force_drop)
 
 		db_owner_role = get_db_owner_name(dbname);
 		db_owner_oid = get_role_oid(db_owner_role, false);
-		
+
 		/* Check if login has required privilege to drop the database */
 		/* If current login's associated user in database is member of db_owner role, allow it to drop the database */
-		if (!has_privs_of_role(prev_current_user_id, db_owner_oid) &&
-			(!(has_privs_of_role(roleid, get_sysadmin_oid()) 
+		if (!has_privs_of_role(prev_session_user_id, db_owner_oid) &&
+			(!(has_privs_of_role(roleid, get_sysadmin_oid())
 			|| has_privs_of_role(roleid, get_dbcreator_oid()) || login_is_db_owner)))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
 						   dbname);
