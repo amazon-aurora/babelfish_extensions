@@ -5839,12 +5839,12 @@ is_bbf_db_ddladmin_operation(Oid namespaceId)
 		return false;
 
 	nspname = get_namespace_name(namespaceId);
-	schema_db_id = get_dbid_from_physical_schema_name(nspname, false);
+	schema_db_id = get_dbid_from_physical_schema_name(nspname, true);
 	db_ddladmin = get_db_ddladmin_oid(get_current_pltsql_db_name(), false);
 
 	pfree(nspname);
 
-	if (schema_db_id == get_cur_db_id() &&
+	if (OidIsValid(schema_db_id) && schema_db_id == get_cur_db_id() &&
 		has_privs_of_role(GetUserId(), db_ddladmin))
 		return true;
 

@@ -3825,6 +3825,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 		case T_DropStmt:
 			{
 				DropStmt   *drop_stmt = (DropStmt *) parsetree;
+				bool 	   skip_bbf_catalog_cleanup;
 
 				if (drop_stmt->removeType == OBJECT_TABLE)
 					bbf_drop_handle_partitioned_table(drop_stmt);
@@ -3848,18 +3849,24 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (!is_drop_db_statement)
 					{
-						char	   *guest_schema_name = get_physical_schema_name(cur_db, "guest");
+						char	   *guest_schema_name = get_guest_schema_name(cur_db);
+						char	   *dbo_schema_name = get_dbo_schema_name(cur_db);
 
-						if (strcmp(schemaname, guest_schema_name) == 0)
+						if (strcmp(schemaname, guest_schema_name) == 0 ||
+							strcmp(schemaname, dbo_schema_name) == 0)
 						{
 							ereport(ERROR,
 									(errcode(ERRCODE_INTERNAL_ERROR),
 									 errmsg("Cannot drop the schema \'%s\'", schemaname)));
 						}
+						pfree(guest_schema_name);
+						pfree(dbo_schema_name);
 					}
 
 					bbf_ExecDropStmt(drop_stmt);
-					del_ns_ext_info(schemaname, drop_stmt->missing_ok);
+
+					skip_bbf_catalog_cleanup = drop_stmt->missing_ok && !OidIsValid(get_namespace_oid(schemaname, true));
+
 					if (!is_drop_db_statement)
 					{
 						/*
@@ -3875,6 +3882,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					else
 						standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 												queryEnv, dest, qc);
+
+					/*
+					 * is_bbf_db_ddladmin_operation() checks if the schema being dropped
+					 * belongs to the current logical database. This check only works if we
+					 * drop the babelfish catalog entry after executing the schema drop
+					 */
+					del_ns_ext_info(schemaname, skip_bbf_catalog_cleanup);
+
 					return;
 				}
 				else

@@ -59,3 +59,7 @@ CREATE TYPE babel_5116_type1 FROM sys.varchar(10)
 GO
 CREATE TYPE babel_5116_tabletype1 AS TABLE (id INT)
 GO
+CREATE SCHEMA babel_5116_sch1
+GO
+CREATE SCHEMA babel_5116_sch2 AUTHORIZATION babel_5116_r1
+GO

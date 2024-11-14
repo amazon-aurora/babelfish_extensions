@@ -38,6 +38,10 @@ CREATE TYPE tabletype AS TABLE (id INT)
 GO
 TRUNCATE TABLE babel_5116_t1
 GO
+CREATE SCHEMA babel_5116_sch1
+GO
+CREATE SCHEMA babel_5116_sch1 AUTHORIZATION babel_5116_r1
+GO
 
 -- tsql database=babel_5116_db
 ALTER ROLE db_ddladmin ADD MEMBER babel_5116_l1
@@ -81,6 +85,10 @@ GO
 CREATE TYPE babel_5116_type2 FROM sys.varchar(10)
 GO
 CREATE TYPE babel_5116_tabletype2 AS TABLE (id INT)
+GO
+CREATE SCHEMA babel_5116_sch3
+GO
+CREATE SCHEMA babel_5116_sch4 AUTHORIZATION babel_5116_r1
 GO
 
 /********** ALTER DDLs ARE ALLOWED TO DDLADMIN **********/
@@ -292,6 +300,12 @@ GO
 sp_rename 'babel_5116_db', 'babel_5116_db_new_name', 'DATABASE'
 GO
 
+/********** DROPPING BUILTIN SCHEMAs SHOULD NOT BE ALLOWED **********/
+DROP SCHEMA dbo
+GO
+DROP SCHEMA guest
+GO
+
 /********** DROP DDLs **********/
 DROP TRIGGER babel_5116_trig1_new_name
 GO
@@ -326,6 +340,15 @@ GO
 DROP TYPE babel_5116_tabletype2_new_name
 GO
 DROP TYPE babel_5116_tabletype1_new_name
+GO
+
+DROP SCHEMA babel_5116_sch1
+GO
+DROP SCHEMA babel_5116_sch2
+GO
+DROP SCHEMA babel_5116_sch3
+GO
+DROP SCHEMA babel_5116_sch4
 GO
 
 DROP TABLE babel_5116_pt
