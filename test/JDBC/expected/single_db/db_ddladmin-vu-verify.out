@@ -60,30 +60,6 @@ GO
 
 ~~ERROR (Message: must be owner of table babel_5116_t1)~~
 
-ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
-GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: must be owner of table babel_5116_t1)~~
-
-ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constrfk1 FOREIGN KEY (id_new) REFERENCES babel_5116_t2 (id)
-GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: must be owner of table babel_5116_t1)~~
-
-ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constrfk1
-GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: must be owner of table babel_5116_t1)~~
-
-ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constr2
-GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: must be owner of table babel_5116_t1)~~
-
 CREATE TRIGGER trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
 GO
 ~~ERROR (Code: 33557097)~~
@@ -163,6 +139,204 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for database jdbc_testdb)~~
+
+
+CREATE PARTITION FUNCTION babel_5116_pf1 (datetime)
+AS RANGE RIGHT FOR VALUES 
+(
+    '2023-01-01', 
+    '2024-01-01',
+    '2025-01-01'
+);
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: User does not have permission to perform this action.)~~
+
+
+CREATE PARTITION SCHEME babel_5116_ps
+AS PARTITION babel_5116_pf1 
+ALL TO ([PRIMARY]);
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: User does not have permission to perform this action.)~~
+
+
+
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constrfk1 FOREIGN KEY (id_new) REFERENCES babel_5116_t2 (id)
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constrfk1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER TABLE babel_5116_t1 DROP CONSTRAINT babel_5116_constr2
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+ALTER SEQUENCE babel_5116_s1 MINVALUE 99;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of sequence babel_5116_s1)~~
+
+
+
+ALTER FUNCTION babel_5116_f1() RETURNS INT AS BEGIN RETURN 2 END
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+ALTER FUNCTION babel_5116_tvf1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '2' AS col
+);
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+ALTER FUNCTION babel_5116_mtvf1()
+RETURNS @result TABLE([Id] int) AS
+BEGIN
+    INSERT INTO @result VALUES (2) RETURN
+END
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+ALTER FUNCTION babel_5116_tvf1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '2' AS col
+);
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+ALTER PROC babel_5116_p1 AS SELECT 2
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+
+
+ENABLE TRIGGER babel_5116_trig1 ON babel_5116_t1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+DISABLE TRIGGER babel_5116_trig1 ON babel_5116_t1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+
+
+DROP LOGIN babel_5116_l1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot drop the login 'babel_5116_l1', because it does not exist or you do not have permission.)~~
+
+DROP USER babel_5116_l1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot drop the user 'babel_5116_l1', because it does not exist or you do not have permission.)~~
+
+DROP ROLE babel_5116_r1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot drop the role 'babel_5116_r1', because it does not exist or you do not have permission.)~~
+
+DROP VIEW babel_5116_v1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of view babel_5116_v1)~~
+
+DROP SEQUENCE babel_5116_s1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of sequence babel_5116_s1)~~
+
+DROP TRIGGER babel_5116_trig
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of relation babel_5116_t1)~~
+
+DROP INDEX babel_5116_idx1 ON babel_5116_t1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of index babel_5116_idx1babel_5116_t1e29153c477c95d679c4b63370567552b)~~
+
+DROP TABLE babel_5116_t1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t1)~~
+
+DROP FUNCTION babel_5116_f1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of function babel_5116_f1)~~
+
+DROP FUNCTION babel_5116_tvf1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of function babel_5116_tvf1)~~
+
+DROP FUNCTION babel_5116_mtvf1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of function babel_5116_mtvf1)~~
+
+DROP PROC babel_5116_p1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of procedure babel_5116_p1)~~
+
+DROP TYPE babel_5116_type1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of type babel_5116_type1)~~
+
+DROP TYPE babel_5116_tabletype1
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of type babel_5116_tabletype1)~~
 
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
@@ -462,6 +636,18 @@ GO
 
 ~~ERROR (Message: permission denied for function babel_5116_f2)~~
 
+SELECT * FROM babel_5116_tvf1()
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5116_tvf1)~~
+
+SELECT * FROM babel_5116_mtvf1()
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for function babel_5116_mtvf1)~~
+
 
 /********** GRANT REVOKE IS NOT ALLOWED **********/
 ALTER ROLE babel_5116_r1 ADD MEMBER babel_5116_l2
@@ -544,8 +730,10 @@ babel_5116_trig2                                                 #!#dbo
 babel_5116_tvf1                                                  #!#dbo                 
 babel_5116_tvf2                                                  #!#dbo                 
 babel_5116_f1                                                    #!#master_dbo          
+babel_5116_mtvf1                                                 #!#master_dbo          
 babel_5116_p1                                                    #!#master_dbo          
 babel_5116_trig                                                  #!#master_dbo          
+babel_5116_tvf1                                                  #!#master_dbo          
 ~~END~~
 
 SELECT CAST(typname AS CHAR(65)), CAST(r.rolname AS CHAR(20))
