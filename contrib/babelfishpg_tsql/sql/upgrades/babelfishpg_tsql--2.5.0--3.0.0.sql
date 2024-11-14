@@ -156,7 +156,7 @@ LANGUAGE plpgsql IMMUTABLE;
 CALL sys.babelfish_update_collation_to_default('sys', 'babelfish_authid_user_ext_login_db_idx', 'database_name');
 -- we have to reindex babelfish_authid_user_ext_login_db_idx because given index includes database_name and we have to change its collation
 REINDEX INDEX sys.babelfish_authid_user_ext_login_db_idx;
-REINDEX INDEX sys.babelfish_function_ext_pkey;
+
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
 DROP PROCEDURE sys.babelfish_drop_deprecated_object(varchar, varchar, varchar);
