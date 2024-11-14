@@ -126,6 +126,34 @@ go
 revoke execute on object::dbowner__s3.dbowner__p3 to dbowner__u1
 go
 
+-- Adding a member to db_owner role should not affect other user's privileges
+-- tsql
+use dbowner__main_db
+go
+alter role db_owner drop member dbowner__u1
+go
+grant select on schema::dbowner__s0 to dbowner__u2
+go
+alter role db_owner add member dbowner__u1
+go
+grant execute on schema::dbowner__s0 to dbowner__u2
+go
+
+-- GRANT on dbowner__u2 should allow it to still access objects in schema
+-- tsql user=dbowner__l2 password=123
+use dbowner__main_db
+go
+select * from dbowner__s0.dbowner__t00
+go
+select dbowner__s0.dbowner__f00()
+go
+
+-- tsql
+revoke select on schema::dbowner__s0 to dbowner__u2
+go
+revoke execute on schema::dbowner__s0 to dbowner__u2
+go
+
 -- psql
 select schema_name, object_name, permission, grantee, grantor from sys.babelfish_schema_permissions
 where grantee IN ('dbowner__main_db_guest', 'dbowner__main_db_dbowner__u1', 'dbowner__main_db_dbowner__u2') order by permission;
@@ -487,6 +515,12 @@ go
 drop function dbowner__s3.dbowner__f3
 go
 drop procedure dbowner__s3.dbowner__p3
+go
+drop table dbowner__s0.dbowner__t00
+go
+drop function dbowner__s0.dbowner__f00
+go
+drop schema dbowner__s0
 go
 drop schema dbowner__s1
 go

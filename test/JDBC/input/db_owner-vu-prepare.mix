@@ -15,6 +15,12 @@ create login dbowner__temp with password = '123'
 go
 create user dbowner__u2 for login dbowner__l2
 go
+create schema dbowner__s0
+go
+create table dbowner__s0.dbowner__t00 (w float)
+go
+create function dbowner__s0.dbowner__f00() returns int as begin return 987 end
+go
 create schema dbowner__s1 authorization dbowner__u1
 go
 create schema dbowner__s2 authorization dbowner__u2
