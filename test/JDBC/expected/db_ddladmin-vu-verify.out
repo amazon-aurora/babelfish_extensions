@@ -5,10 +5,24 @@ GO
 ALTER LOGIN babel_5116_l2 WITH PASSWORD = '12345678'
 GO
 
--- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
+USE babel_5116_db
+GO
+
+ALTER ROLE db_ddladmin ADD MEMBER babel_5116_l1
+GO
+
+-- tsql user=babel_5116_l1 password=12345678 database=master
 -------------------------------------------------------------------
 ---- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS ----
+---- IN BBF DATABASES WHERE IT IS NOT A MEMBER OF DB_DDLADMIN  ----
 -------------------------------------------------------------------
+SELECT IS_ROLEMEMBER('db_ddladmin')
+GO
+~~START~~
+int
+0
+~~END~~
+
 SELECT CURRENT_USER
 GO
 ~~START~~
@@ -38,7 +52,7 @@ CREATE TABLE t (id INT)
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE INDEX babel_5116_idx1 ON babel_5116_t1 (id)
 GO
@@ -74,43 +88,63 @@ CREATE TRIGGER trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE VIEW v AS SELECT * FROM babel_5116_t1
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE SEQUENCE babel_5116_s2 START WITH 1000 INCREMENT BY 1
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE PROCEDURE p AS SELECT 1
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE FUNCTION f() RETURNS INT AS BEGIN RETURN 1 END
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+CREATE FUNCTION tvff1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '1' AS col
+);
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
+
+CREATE FUNCTION mtvf1()
+RETURNS @result TABLE([Id] int) AS
+BEGIN
+    INSERT INTO @result VALUES (1) RETURN
+END
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE TYPE t FROM sys.varchar(10)
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 CREATE TYPE tabletype AS TABLE (id INT)
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: permission denied for schema babel_5116_db_dbo)~~
+~~ERROR (Message: permission denied for schema master_dbo)~~
 
 TRUNCATE TABLE babel_5116_t1
 GO
@@ -130,10 +164,6 @@ GO
 
 ~~ERROR (Message: permission denied for database jdbc_testdb)~~
 
-
--- tsql database=babel_5116_db
-ALTER ROLE db_ddladmin ADD MEMBER babel_5116_l1
-GO
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
 /**********  LOGGED IN USING DDLADMIN **********/
@@ -198,6 +228,18 @@ GO
 CREATE PROCEDURE babel_5116_p2 AS SELECT 1
 GO
 CREATE FUNCTION babel_5116_f2() RETURNS INT AS BEGIN RETURN 1 END
+GO
+CREATE FUNCTION babel_5116_tvf2()
+RETURNS TABLE AS RETURN
+(
+    SELECT '1' AS col
+);
+GO
+CREATE FUNCTION babel_5116_mtvf2()
+RETURNS @result TABLE([Id] int) AS
+BEGIN
+    INSERT INTO @result VALUES (1) RETURN
+END
 GO
 CREATE TYPE babel_5116_type2 FROM sys.varchar(10)
 GO
@@ -493,10 +535,14 @@ GO
 char#!#char
 babel_5116_f1                                                    #!#babel_5116_db_dbo   
 babel_5116_f2                                                    #!#babel_5116_db_dbo   
+babel_5116_mtvf1                                                 #!#babel_5116_db_dbo   
+babel_5116_mtvf2                                                 #!#babel_5116_db_dbo   
 babel_5116_p1                                                    #!#babel_5116_db_dbo   
 babel_5116_p2                                                    #!#babel_5116_db_dbo   
 babel_5116_trig1                                                 #!#babel_5116_db_dbo   
 babel_5116_trig2                                                 #!#babel_5116_db_dbo   
+babel_5116_tvf1                                                  #!#babel_5116_db_dbo   
+babel_5116_tvf2                                                  #!#babel_5116_db_dbo   
 babel_5116_f1                                                    #!#master_dbo          
 babel_5116_p1                                                    #!#master_dbo          
 babel_5116_trig                                                  #!#master_dbo          
@@ -562,6 +608,8 @@ babel_5116_db_db_ddladmin     #!#babel_5116_v1         #!#a
 babel_5116_db_db_ddladmin     #!#babel_5116_v2         #!#a
 babel_5116_db_dbo             #!#babel_5116_f1         #!#o
 babel_5116_db_dbo             #!#babel_5116_f2         #!#o
+babel_5116_db_dbo             #!#babel_5116_mtvf1      #!#o
+babel_5116_db_dbo             #!#babel_5116_mtvf2      #!#o
 babel_5116_db_dbo             #!#babel_5116_p1         #!#o
 babel_5116_db_dbo             #!#babel_5116_p2         #!#o
 babel_5116_db_dbo             #!#babel_5116_pt         #!#o
@@ -574,11 +622,49 @@ babel_5116_db_dbo             #!#babel_5116_tabletype1 #!#o
 babel_5116_db_dbo             #!#babel_5116_tabletype2 #!#o
 babel_5116_db_dbo             #!#babel_5116_trig1      #!#o
 babel_5116_db_dbo             #!#babel_5116_trig2      #!#o
+babel_5116_db_dbo             #!#babel_5116_tvf1       #!#o
+babel_5116_db_dbo             #!#babel_5116_tvf2       #!#o
 babel_5116_db_dbo             #!#babel_5116_type1      #!#o
 babel_5116_db_dbo             #!#babel_5116_type2      #!#o
 babel_5116_db_dbo             #!#babel_5116_v1         #!#o
 babel_5116_db_dbo             #!#babel_5116_v2         #!#o
 ~~END~~
+
+
+/********** ALTER ROUTINES ARE ALLOWED TO DDLADMIN **********/
+ALTER FUNCTION babel_5116_f1() RETURNS INT AS BEGIN RETURN 2 END
+GO
+ALTER FUNCTION babel_5116_f2() RETURNS INT AS BEGIN RETURN 2 END
+GO
+ALTER FUNCTION babel_5116_tvf1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '2' AS col
+);
+GO
+ALTER FUNCTION babel_5116_mtvf1()
+RETURNS @result TABLE([Id] int) AS
+BEGIN
+    INSERT INTO @result VALUES (2) RETURN
+END
+GO
+ALTER FUNCTION babel_5116_tvf2()
+RETURNS TABLE AS RETURN
+(
+    SELECT '2' AS col
+);
+GO
+ALTER FUNCTION babel_5116_mtvf2()
+RETURNS @result TABLE([Id] int) AS
+BEGIN
+    INSERT INTO @result VALUES (2) RETURN
+END
+GO
+
+ALTER PROC babel_5116_p1 AS SELECT 2
+GO
+ALTER PROC babel_5116_p2 AS SELECT 2
+GO
 
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
@@ -606,6 +692,14 @@ GO
 sp_rename 'babel_5116_f2', 'babel_5116_f2_new_name', 'OBJECT'
 GO
 sp_rename 'babel_5116_f1', 'babel_5116_f1_new_name', 'OBJECT'
+GO
+sp_rename 'babel_5116_tvf1', 'babel_5116_tvf1_new_name', 'OBJECT'
+GO
+sp_rename 'babel_5116_tvf2', 'babel_5116_tvf2_new_name', 'OBJECT'
+GO
+sp_rename 'babel_5116_mtvf1', 'babel_5116_mtvf1_new_name', 'OBJECT'
+GO
+sp_rename 'babel_5116_mtvf2', 'babel_5116_mtvf2_new_name', 'OBJECT'
 GO
 sp_rename 'babel_5116_p2', 'babel_5116_p2_new_name', 'OBJECT'
 GO
@@ -673,6 +767,14 @@ GO
 DROP FUNCTION babel_5116_f2_new_name
 GO
 DROP FUNCTION babel_5116_f1_new_name
+GO
+DROP FUNCTION babel_5116_tvf1_new_name
+GO
+DROP FUNCTION babel_5116_tvf2_new_name
+GO
+DROP FUNCTION babel_5116_mtvf1_new_name
+GO
+DROP FUNCTION babel_5116_mtvf2_new_name
 GO
 DROP PROC babel_5116_p2_new_name
 GO
