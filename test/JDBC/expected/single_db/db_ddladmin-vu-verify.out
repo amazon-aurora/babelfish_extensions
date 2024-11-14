@@ -6,9 +6,9 @@ ALTER LOGIN babel_5116_l2 WITH PASSWORD = '12345678'
 GO
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
--- 
--- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS
---
+-------------------------------------------------------------------
+---- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS ----
+-------------------------------------------------------------------
 SELECT CURRENT_USER
 GO
 ~~START~~
@@ -192,6 +192,32 @@ GO
 TRUNCATE TABLE babel_5116_t1
 GO
 TRUNCATE TABLE babel_5116_t2
+GO
+
+
+/**********  SHOULD BE ABLE TO CREATE PARTITION FUNCTIONS, SCHEMES OR TABLES **********/
+CREATE PARTITION FUNCTION babel_5116_pf1 (datetime)
+AS RANGE RIGHT FOR VALUES 
+(
+    '2023-01-01', 
+    '2024-01-01',
+    '2025-01-01'
+);
+GO
+
+CREATE PARTITION SCHEME babel_5116_ps
+AS PARTITION babel_5116_pf1 
+ALL TO ([PRIMARY]);
+GO
+
+CREATE TABLE babel_5116_pt
+(
+    SaleId INT IDENTITY(1,1),
+    SaleDate datetime,
+    Amount decimal(10,2),
+    CustomerId int,
+    ProductId int
+) ON babel_5116_ps(SaleDate);  -- Specify the partitioning column
 GO
 
 /********** DMLs SHOULD STILL BE BLOCKED **********/
@@ -382,6 +408,8 @@ GO
 char#!#char
 babel_5116_idx1babel_5116_t1e29153c477c95d679c4b63370567552b     #!#dbo                 
 babel_5116_idx1babel_5116_t2e29153c477c95d679c4b63370567552b     #!#dbo                 
+babel_5116_pt                                                    #!#dbo                 
+babel_5116_pt_saleid_seq                                         #!#dbo                 
 babel_5116_s1                                                    #!#dbo                 
 babel_5116_s2                                                    #!#dbo                 
 babel_5116_t1                                                    #!#dbo                 
@@ -424,6 +452,7 @@ SELECT CAST(typname AS CHAR(65)), CAST(r.rolname AS CHAR(20))
 GO
 ~~START~~
 char#!#char
+babel_5116_pt                                                    #!#dbo                 
 babel_5116_t1                                                    #!#dbo                 
 babel_5116_t2                                                    #!#dbo                 
 babel_5116_tabletype1                                            #!#dbo                 
@@ -468,6 +497,7 @@ SELECT CAST(r.rolname AS CHAR(30)), CAST(object_name(objid) AS char(22)), deptyp
 GO
 ~~START~~
 char#!#char#!#varchar
+db_ddladmin                   #!#babel_5116_pt         #!#a
 db_ddladmin                   #!#babel_5116_t1         #!#a
 db_ddladmin                   #!#babel_5116_t2         #!#a
 db_ddladmin                   #!#babel_5116_v1         #!#a
@@ -476,6 +506,8 @@ dbo                           #!#babel_5116_f1         #!#o
 dbo                           #!#babel_5116_f2         #!#o
 dbo                           #!#babel_5116_p1         #!#o
 dbo                           #!#babel_5116_p2         #!#o
+dbo                           #!#babel_5116_pt         #!#o
+dbo                           #!#babel_5116_pt_saleid_s#!#o
 dbo                           #!#babel_5116_s1         #!#o
 dbo                           #!#babel_5116_s2         #!#o
 dbo                           #!#babel_5116_t1         #!#o
@@ -581,4 +613,11 @@ GO
 DROP TYPE babel_5116_tabletype2_new_name
 GO
 DROP TYPE babel_5116_tabletype1_new_name
+GO
+
+DROP TABLE babel_5116_pt
+GO
+DROP PARTITION SCHEME babel_5116_ps
+GO
+DROP PARTITION FUNCTION babel_5116_pf1
 GO

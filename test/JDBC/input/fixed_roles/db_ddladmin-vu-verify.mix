@@ -7,9 +7,9 @@ ALTER LOGIN babel_5116_l2 WITH PASSWORD = '12345678'
 GO
 
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
--- 
--- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS
---
+-------------------------------------------------------------------
+---- babel_5116_l1 user SHOULD NOT BE ABLE TO DO ANY DDLS/DMLS ----
+-------------------------------------------------------------------
 SELECT CURRENT_USER
 GO
 CREATE LOGIN l WITH PASSWORD = '12345678'
@@ -107,6 +107,32 @@ GO
 TRUNCATE TABLE babel_5116_t1
 GO
 TRUNCATE TABLE babel_5116_t2
+GO
+
+/**********  SHOULD BE ABLE TO CREATE PARTITION FUNCTIONS, SCHEMES OR TABLES **********/
+
+CREATE PARTITION FUNCTION babel_5116_pf1 (datetime)
+AS RANGE RIGHT FOR VALUES 
+(
+    '2023-01-01', 
+    '2024-01-01',
+    '2025-01-01'
+);
+GO
+
+CREATE PARTITION SCHEME babel_5116_ps
+AS PARTITION babel_5116_pf1 
+ALL TO ([PRIMARY]);
+GO
+
+CREATE TABLE babel_5116_pt
+(
+    SaleId INT IDENTITY(1,1),
+    SaleDate datetime,
+    Amount decimal(10,2),
+    CustomerId int,
+    ProductId int
+) ON babel_5116_ps(SaleDate);  -- Specify the partitioning column
 GO
 
 /********** DMLs SHOULD STILL BE BLOCKED **********/
@@ -300,4 +326,11 @@ GO
 DROP TYPE babel_5116_tabletype2_new_name
 GO
 DROP TYPE babel_5116_tabletype1_new_name
+GO
+
+DROP TABLE babel_5116_pt
+GO
+DROP PARTITION SCHEME babel_5116_ps
+GO
+DROP PARTITION FUNCTION babel_5116_pf1
 GO
