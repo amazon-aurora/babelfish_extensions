@@ -4,6 +4,8 @@ ALTER LOGIN babel_5116_l1 WITH PASSWORD = '12345678'
 GO
 ALTER LOGIN babel_5116_l2 WITH PASSWORD = '12345678'
 GO
+ALTER LOGIN babel_5116_l3 WITH PASSWORD = '12345678'
+GO
 
 USE babel_5116_db
 GO
@@ -163,6 +165,17 @@ GO
 ~~ERROR (Message: User does not have permission to perform this action.)~~
 
 
+ALTER TABLE babel_5116_t3 ADD babel_5116_col_nw INT NULL;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t3)~~
+
+ALTER TABLE babel_5116_t3 DROP babel_5116_col_nw;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of table babel_5116_t3)~~
 
 ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
 GO
@@ -339,6 +352,70 @@ GO
 ~~ERROR (Message: must be owner of type babel_5116_tabletype1)~~
 
 
+/**********  TEMP TABLE AND TABLE VARIABLE SHOULD WORK **********/
+CREATE TABLE #babel_5116_temptbl1(a int, b int);
+GO
+
+ALTER TABLE #babel_5116_temptbl1 ADD c INT;
+GO
+
+DROP TABLE #babel_5116_temptbl1
+GO
+
+DECLARE @babel_5116_tblvar1 table(id int); SELECT * FROM @babel_5116_tblvar1;
+GO
+~~START~~
+int
+~~END~~
+
+
+-- tsql
+/**********  DATABASE DDLs ARE NOT ALLOWED **********/
+USE master
+GO
+ALTER ROLE db_ddladmin ADD MEMBER babel_5116_l1
+GO
+
+-- tsql user=babel_5116_l1 password=12345678 database=master
+SELECT IS_ROLEMEMBER('db_ddladmin')
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+CREATE DATABASE babel_5116_db1;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied to create database)~~
+
+ALTER AUTHORIZATION ON DATABASE::babel_5116_db TO babel_5116_l3;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot find the principal 'babel_5116_l3', because it does not exist or you do not have permission.)~~
+
+ALTER DATABASE babel_5116_db MODIFY NAME = babel_5116_dbx;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: User does not have permission to rename the database 'babel_5116_db', the database does not exist, or the database is not in a state that allows access checks.)~~
+
+DROP DATABASE babel_5116_db;
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: must be owner of database babel_5116_db)~~
+
+
+-- tsql
+USE master
+GO
+ALTER ROLE db_ddladmin DROP MEMBER babel_5116_l1
+GO
+
 -- tsql user=babel_5116_l1 password=12345678 database=babel_5116_db
 /**********  LOGGED IN USING DDLADMIN **********/
 SELECT IS_ROLEMEMBER('db_ddladmin')
@@ -354,7 +431,7 @@ CREATE USER babel_5116_l3
 GO
 ~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: role "babel_5116_l3" does not exist)~~
+~~ERROR (Message: User does not have permission to perform this action.)~~
 
 CREATE ROLE babel_5116_r2
 GO
@@ -385,7 +462,6 @@ GO
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: Cannot drop the role 'babel_5116_r2', because it does not exist or you do not have permission.)~~
-
 
 
 /********** CREATE DDLs ARE ALLOWED TO DDLADMIN **********/
@@ -429,6 +505,10 @@ ALTER TABLE babel_5116_t1 ADD id_new INT
 GO
 ALTER TABLE babel_5116_t2 ADD id_new INT
 GO
+ALTER TABLE babel_5116_t3 ADD babel_5116_col_nw INT NULL;
+GO
+ALTER TABLE babel_5116_t3 DROP babel_5116_col_nw;
+GO
 ALTER TABLE babel_5116_t1 ADD CONSTRAINT babel_5116_constr2 UNIQUE (id)
 GO
 ALTER TABLE babel_5116_t2 ADD CONSTRAINT babel_5116_constr3 UNIQUE (id)
@@ -467,6 +547,23 @@ TRUNCATE TABLE babel_5116_t1
 GO
 TRUNCATE TABLE babel_5116_t2
 GO
+
+/********** TEMP TABLE AND TABLE VARIABLE SHOULD WORK **********/
+CREATE TABLE #babel_5116_temptbl2(a int, b int);
+GO
+
+ALTER TABLE #babel_5116_temptbl2 ADD c INT;
+GO
+
+DROP TABLE #babel_5116_temptbl2
+GO
+
+DECLARE @babel_5116_tblvar2 table(id int); SELECT * FROM @babel_5116_tblvar2;
+GO
+~~START~~
+int
+~~END~~
+
 
 
 /**********  SHOULD BE ABLE TO CREATE PARTITION FUNCTIONS, SCHEMES OR TABLES **********/
@@ -700,6 +797,7 @@ babel_5116_s1                                                    #!#babel_5116_d
 babel_5116_s2                                                    #!#babel_5116_db_dbo   
 babel_5116_t1                                                    #!#babel_5116_db_dbo   
 babel_5116_t2                                                    #!#babel_5116_db_dbo   
+babel_5116_t3                                                    #!#babel_5116_db_dbo   
 babel_5116_tabletype1                                            #!#babel_5116_db_dbo   
 babel_5116_tabletype2                                            #!#babel_5116_db_dbo   
 babel_5116_v1                                                    #!#babel_5116_db_dbo   
@@ -707,6 +805,7 @@ babel_5116_v2                                                    #!#babel_5116_d
 babel_5116_idx1babel_5116_t1e29153c477c95d679c4b63370567552b     #!#master_dbo          
 babel_5116_s1                                                    #!#master_dbo          
 babel_5116_t1                                                    #!#master_dbo          
+babel_5116_t3                                                    #!#master_dbo          
 babel_5116_tabletype1                                            #!#master_dbo          
 babel_5116_v1                                                    #!#master_dbo          
 ~~END~~
@@ -747,6 +846,7 @@ char#!#char
 babel_5116_pt                                                    #!#babel_5116_db_dbo   
 babel_5116_t1                                                    #!#babel_5116_db_dbo   
 babel_5116_t2                                                    #!#babel_5116_db_dbo   
+babel_5116_t3                                                    #!#babel_5116_db_dbo   
 babel_5116_tabletype1                                            #!#babel_5116_db_dbo   
 babel_5116_tabletype2                                            #!#babel_5116_db_dbo   
 babel_5116_type1                                                 #!#babel_5116_db_dbo   
@@ -754,6 +854,7 @@ babel_5116_type2                                                 #!#babel_5116_d
 babel_5116_v1                                                    #!#babel_5116_db_dbo   
 babel_5116_v2                                                    #!#babel_5116_db_dbo   
 babel_5116_t1                                                    #!#master_dbo          
+babel_5116_t3                                                    #!#master_dbo          
 babel_5116_tabletype1                                            #!#master_dbo          
 babel_5116_type1                                                 #!#master_dbo          
 babel_5116_v1                                                    #!#master_dbo          
@@ -792,6 +893,7 @@ char#!#char#!#varchar
 babel_5116_db_db_ddladmin     #!#babel_5116_pt         #!#a
 babel_5116_db_db_ddladmin     #!#babel_5116_t1         #!#a
 babel_5116_db_db_ddladmin     #!#babel_5116_t2         #!#a
+babel_5116_db_db_ddladmin     #!#babel_5116_t3         #!#a
 babel_5116_db_db_ddladmin     #!#babel_5116_v1         #!#a
 babel_5116_db_db_ddladmin     #!#babel_5116_v2         #!#a
 babel_5116_db_dbo             #!#babel_5116_f1         #!#o
@@ -806,6 +908,7 @@ babel_5116_db_dbo             #!#babel_5116_s1         #!#o
 babel_5116_db_dbo             #!#babel_5116_s2         #!#o
 babel_5116_db_dbo             #!#babel_5116_t1         #!#o
 babel_5116_db_dbo             #!#babel_5116_t2         #!#o
+babel_5116_db_dbo             #!#babel_5116_t3         #!#o
 babel_5116_db_dbo             #!#babel_5116_tabletype1 #!#o
 babel_5116_db_dbo             #!#babel_5116_tabletype2 #!#o
 babel_5116_db_dbo             #!#babel_5116_trig1      #!#o
@@ -947,6 +1050,8 @@ GO
 DROP SEQUENCE babel_5116_s2_new_name
 GO
 DROP INDEX babel_5116_idx1 ON babel_5116_t1
+GO
+DROP TABLE babel_5116_t3
 GO
 DROP TABLE babel_5116_t2_new_name
 GO
