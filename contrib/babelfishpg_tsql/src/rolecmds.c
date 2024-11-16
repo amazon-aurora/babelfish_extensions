@@ -2787,7 +2787,7 @@ static List
 	StringInfoData query;
 	List		*stmt_list;
 	Node		*stmt;
-	int			expected_stmts = 6;
+	int			expected_stmts = 7;
 	int			i = 0;
 	int			schemas = 0;
 	const char	*db_owner_role = get_db_owner_role_name(dbname);
@@ -2833,6 +2833,7 @@ static List
 
 	/* Ownership of rest of the objects will be taken care of by REASSIGN OWNED */
 	appendStringInfoString(&query, "REASSIGN OWNED BY dummy TO dummy; ");
+	appendStringInfoString(&query, "DROP OWNED BY dummy CASCADE; ");
 	appendStringInfoString(&query, "DROP ROLE dummy; ");
 
 	expected_stmts += schemas;
@@ -2861,6 +2862,9 @@ static List
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_ReassignOwnedStmt(stmt, rolname_obj, rolname);
+
+	stmt = parsetree_nth_stmt(stmt_list, i++);
+	update_DropOwnedStmt(stmt, list_make1(rolname_obj));
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);
 	update_DropRoleStmt(stmt, rolname_obj);
