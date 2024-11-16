@@ -1611,6 +1611,7 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 		List		*parsetree_list;
 		ListCell	*parsetree_item;
 		Node		*n;
+		int		expected_stmts = 1;
 
 		Oid 	db_owner_id, old_username_id;
 		char	*old_obj_rolname = NULL;
@@ -1635,20 +1636,16 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 			appendStringInfo(&query, "ALTER ROLE dummy RENAME TO dummy; ");
 
 			is_db_owner_member = true;
+			expected_stmts++;
 		}
 
 		parsetree_list = raw_parser(query.data, RAW_PARSE_DEFAULT);
 
-		if (!is_db_owner_member && list_length(parsetree_list) != 1)
+		if (list_length(parsetree_list) != expected_stmts)
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("Expected 1 statement but got %d statements after parsing",
-							list_length(parsetree_list))));
-		else if (is_db_owner_member && list_length(parsetree_list) != 2)
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("Expected 2 statement but got %d statements after parsing",
-							list_length(parsetree_list))));
+					 errmsg("Expected %d statement but got %d statements after parsing",
+							expected_stmts, list_length(parsetree_list))));
 
 		/* Update the dummy statement with real values */
 		n = parsetree_nth_stmt(parsetree_list, 0);
@@ -2676,6 +2673,8 @@ get_obj_role(const char *rolname)
 	appendStringInfoString(&rolname_obj, rolname);
 	appendStringInfoString(&rolname_obj, "_obj");
 
+	truncate_tsql_identifier(rolname_obj.data);
+
 	return rolname_obj.data;
 }
 
@@ -2699,6 +2698,8 @@ static List
 	Relation	rel;
 
 	initStringInfo(&query);
+
+	truncate_tsql_identifier(rolname_obj);
 
 	appendStringInfoString(&query, "CREATE ROLE dummy; ");
 	appendStringInfoString(&query, "GRANT dummy TO dummy; ");
@@ -2969,7 +2970,7 @@ change_object_owner_if_db_owner()
 	if (!user_exists_for_db(cur_db_name, rolname))
 		return;
 
-	if (!is_member_of_role(role_oid, get_role_oid(get_db_owner_name(cur_db_name), true)))
+	if (!is_member_of_role(role_oid, get_role_oid(get_db_owner_name(cur_db_name), false)))
 		return;
 
 	obj_rolname = get_obj_role(rolname);

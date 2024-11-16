@@ -1191,3 +1191,82 @@ dbowner__test_db_dbo
 dbowner__test_db_guest
 ~~END~~
 
+
+-- tsql
+-- CASE 11: Check if long database names and long user names work with db_owner role
+create database dbowner_averyveryveryveryveryveryveryveryveryveryverylongdatabasename -- 70 characters
+go
+use dbowner_averyveryveryveryveryveryveryveryveryveryverylongdatabasename
+go
+create user dbowner_averyveryveryveryveryveryveryveryveryveryverylongusername for login dbowner__temp -- 66 characters
+go
+alter role db_owner add member dbowner_averyveryveryveryveryveryveryveryveryveryverylongusername
+go
+
+-- tsql user=dbowner__temp password='123'
+use dbowner_averyveryveryveryveryveryveryveryveryveryverylongdatabasename
+go
+select is_member('db_owner')
+go
+~~START~~
+int
+1
+~~END~~
+
+create schema db_owner_temp_schema
+go
+create table dbo.temp_tab (a int)
+go
+create table db_owner_temp_schema.temp_tab (a int)
+go
+insert into dbo.temp_tab values (1), (2), (34567)
+go
+~~ROW COUNT: 3~~
+
+insert into db_owner_temp_schema.temp_tab values (1), (2), (34567)
+go
+~~ROW COUNT: 3~~
+
+select * from dbo.temp_tab
+go
+~~START~~
+int
+1
+2
+34567
+~~END~~
+
+select * from db_owner_temp_schema.temp_tab
+go
+~~START~~
+int
+1
+2
+34567
+~~END~~
+
+drop table db_owner_temp_schema.temp_tab
+go
+drop table dbo.temp_tab
+go
+drop schema db_owner_temp_schema
+go
+alter role db_owner drop member dbowner_averyveryveryveryveryveryveryveryveryveryverylongusername
+go
+select is_member('db_owner')
+go
+~~START~~
+int
+0
+~~END~~
+
+use master
+go
+
+-- tsql
+drop user dbowner_averyveryveryveryveryveryveryveryveryveryverylongusername
+go
+use master
+go
+drop database dbowner_averyveryveryveryveryveryveryveryveryveryverylongdatabasename
+go
