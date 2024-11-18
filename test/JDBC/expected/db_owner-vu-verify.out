@@ -1,3 +1,62 @@
+-- psql
+-- Before anything, let's check if internal role linking/delinking worked as expected
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1_obj';
+go
+~~START~~
+name
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+go
+~~START~~
+name
+dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_db_owner
+dbowner__main_db_dbo
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_db_owner';
+go
+~~START~~
+name
+dbowner__main_db_db_datareader
+dbowner__main_db_db_datawriter
+dbowner__main_db_db_accessadmin
+dbowner__main_db_db_securityadmin
+dbowner__main_db_guest
+dbowner__main_db_dbowner__u2
+dbowner__main_db_dbowner__r1
+dbowner__main_db_dbowner__r2
+dbowner__main_db_dbowner__u1_obj
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_dbo';
+go
+~~START~~
+name
+dbowner__main_db_db_owner
+~~END~~
+
+
 -- tsql
 alter login dbowner__l1 with password = '123'
 go
@@ -70,10 +129,36 @@ int
 1
 ~~END~~
 
+insert into dbo.dbowner__t0 values (10), (20), (30)
+go
+~~START~~
+varchar
+New row inserted
+~~END~~
+
+~~ROW COUNT: 3~~
+
 select * from dbo.dbowner__t0
 go
 ~~START~~
 int
+10
+20
+30
+~~END~~
+
+select * from dbo.dbowner__v0
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbo.dbowner__seq0;
+go
+~~START~~
+bigint
+2
 ~~END~~
 
 select dbo.dbowner__f0()
@@ -90,10 +175,36 @@ int
 20
 ~~END~~
 
+insert into dbowner__s1.dbowner__t1 values (11), (21), (31)
+go
+~~START~~
+varchar
+New row inserted
+~~END~~
+
+~~ROW COUNT: 3~~
+
 select * from dbowner__s1.dbowner__t1
 go
 ~~START~~
 int
+11
+21
+31
+~~END~~
+
+select * from dbowner__s1.dbowner__v1
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s1.dbowner__seq1;
+go
+~~START~~
+bigint
+3
 ~~END~~
 
 select dbowner__s1.dbowner__f1()
@@ -110,10 +221,36 @@ int
 21
 ~~END~~
 
+insert into dbowner__s2.dbowner__t2 values (12), (22), (32)
+go
+~~START~~
+varchar
+New row inserted
+~~END~~
+
+~~ROW COUNT: 3~~
+
 select * from dbowner__s2.dbowner__t2
 go
 ~~START~~
 int
+12
+22
+32
+~~END~~
+
+select * from dbowner__s2.dbowner__v2
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s2.dbowner__seq2;
+go
+~~START~~
+bigint
+4
 ~~END~~
 
 select dbowner__s2.dbowner__f2()
@@ -131,18 +268,24 @@ int
 ~~END~~
 
 
--- CASE 2: Able to create objects in its own database
-create table dbowner__s1.dbowner__t11 (a int)
+-- CASE 2: Able to perform DDL on objects in its own database
+create table dbowner__s1.dbowner__t11 (a dbowner__s1.dbowner__typ1)
 go
 create schema dbowner__s3 authorization dbowner__u1
 go
 create schema dbowner__sch_u2 authorization dbowner__u2
 go
-create table dbowner__s3.dbowner__t3 (a int)
+create type dbowner__s3.dbowner__typ3 from int
+go
+create table dbowner__s3.dbowner__t3 (a dbowner__s3.dbowner__typ3)
 go
 create function dbowner__s3.dbowner__f3() returns int as begin return 13 end
 go
 create procedure dbowner__s3.dbowner__p3 as select 23
+go
+create view dbowner__s3.dbowner__v3 as select 230
+go
+create sequence dbowner__s3.dbowner__seq3 as int start with 5 increment by 5;
 go
 alter table dbo.dbowner__t0 add b int
 go
@@ -155,6 +298,292 @@ go
 alter function dbo.dbowner__f0() returns int as begin return 10 end
 go
 alter procedure dbo.dbowner__p0 as select 20
+go
+
+-- BABEL-5417: Trigger gets dropped if we drop a column in table
+create trigger dbo.dbowner__trg0
+on dbo.dbowner__t0
+after insert
+as
+begin
+    select 'New row inserted'
+end
+go
+
+-- Member of db_owner role should be allowed to rename objects
+exec sp_rename 'dbo.dbowner__t0.x', 'x_renamed', 'column'
+go
+exec sp_rename 'dbo.dbowner__typ0', 'dbowner__typ0_renamed', 'userdatatype'
+go
+exec sp_rename 'dbo.dbowner__t0', 'dbowner__t0_renamed', 'object'
+go
+exec sp_rename 'dbo.dbowner__p0', 'dbowner__p0_renamed', 'object'
+go
+exec sp_rename 'dbo.dbowner__f0', 'dbowner__f0_renamed', 'object'
+go
+exec sp_rename 'dbo.dbowner__v0', 'dbowner__v0_renamed', 'object'
+go
+exec sp_rename 'dbowner__trg0', 'dbowner__trg0_renamed', 'object'
+go
+exec sp_rename 'dbo.dbowner__seq0', 'dbowner__seq0_renamed', 'object'
+go
+
+-- psql
+-- Procedure/function owners should be dbowner__main_db_dbo
+SELECT proname,
+       proowner::regrole
+FROM pg_proc
+WHERE pronamespace::regnamespace::text = 'dbowner__main_db_dbo'
+AND proname LIKE 'dbowner__%'
+ORDER BY proname;
+GO
+~~START~~
+name#!#regrole
+dbowner__f0_renamed#!#dbowner__main_db_dbo
+dbowner__p0_renamed#!#dbowner__main_db_dbo
+dbowner__trg0_renamed#!#dbowner__main_db_dbo
+~~END~~
+
+
+-- Object owners should be dbowner__main_db_dbo
+SELECT
+    n.nspname AS schema,
+    c.relname AS table,
+    CASE c.relkind
+        WHEN 'r' THEN 'table'
+        WHEN 'v' THEN 'view'
+        WHEN 'm' THEN 'materialized view'
+        WHEN 'i' THEN 'index'
+        WHEN 'S' THEN 'sequence'
+        WHEN 's' THEN 'special'
+        WHEN 'f' THEN 'foreign table'
+    END AS type,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'dbowner__main_db_dbo'
+AND c.relname LIKE 'dbowner__%'
+AND c.relkind IN ('r', 'v', 'm', 'i', 'S', 's', 'f')
+ORDER BY n.nspname, c.relkind, c.relname;
+GO
+~~START~~
+name#!#name#!#text#!#name
+dbowner__main_db_dbo#!#dbowner__seq0_renamed#!#sequence#!#dbowner__main_db_dbo
+dbowner__main_db_dbo#!#dbowner__idx0dbowner__t09cffe6f70730964de614f2e351e0e1bf#!#index#!#dbowner__main_db_dbo
+dbowner__main_db_dbo#!#dbowner__t0_renamed#!#table#!#dbowner__main_db_dbo
+dbowner__main_db_dbo#!#dbowner__v0_renamed#!#view#!#dbowner__main_db_dbo
+~~END~~
+
+
+-- tsql user=dbowner__l1 password=123
+exec sp_rename 'dbo.dbowner__t0_renamed', 'dbowner__t0', 'object'
+go
+exec sp_rename 'dbo.dbowner__t0.x_renamed', 'x', 'column'
+go
+exec sp_rename 'dbo.dbowner__typ0_renamed', 'dbowner__typ0', 'userdatatype'
+go
+exec sp_rename 'dbo.dbowner__p0_renamed', 'dbowner__p0', 'object'
+go
+exec sp_rename 'dbo.dbowner__f0_renamed', 'dbowner__f0', 'object'
+go
+exec sp_rename 'dbo.dbowner__v0_renamed', 'dbowner__v0', 'object'
+go
+exec sp_rename 'dbowner__trg0_renamed', 'dbowner__trg0', 'object'
+go
+exec sp_rename 'dbo.dbowner__seq0_renamed', 'dbowner__seq0', 'object'
+go
+
+exec sp_rename 'dbowner__s1.dbowner__t1.a', 'a_renamed', 'column'
+go
+exec sp_rename 'dbowner__s1.dbowner__typ1', 'dbowner__typ1_renamed', 'userdatatype'
+go
+exec sp_rename 'dbowner__s1.dbowner__t1', 'dbowner__t1_renamed', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__p1', 'dbowner__p1_renamed', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__f1', 'dbowner__f1_renamed', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__v1', 'dbowner__v1_renamed', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__trg1', 'dbowner__trg1_renamed', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__seq1', 'dbowner__seq1_renamed', 'object'
+go
+
+exec sp_rename 'dbowner__s3.dbowner__t3.a', 'a_renamed', 'column'
+go
+exec sp_rename 'dbowner__s3.dbowner__typ3', 'dbowner__typ3_renamed', 'userdatatype'
+go
+exec sp_rename 'dbowner__s3.dbowner__t3', 'dbowner__t3_renamed', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__p3', 'dbowner__p3_renamed', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__f3', 'dbowner__f3_renamed', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__v3', 'dbowner__v3_renamed', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__seq3', 'dbowner__seq3_renamed', 'object'
+go
+
+-- psql
+-- Procedure/function owners should be dbowner__main_db_dbowner__u1_obj
+SELECT proname,
+       proowner::regrole
+FROM pg_proc
+WHERE pronamespace::regnamespace::text = 'dbowner__main_db_dbowner__s1'
+OR pronamespace::regnamespace::text = 'dbowner__main_db_dbowner__s3'
+ORDER BY proname;
+GO
+~~START~~
+name#!#regrole
+dbowner__f1_renamed#!#dbowner__main_db_dbowner__u1_obj
+dbowner__f3_renamed#!#dbowner__main_db_dbowner__u1_obj
+dbowner__p1_renamed#!#dbowner__main_db_dbowner__u1_obj
+dbowner__p3_renamed#!#dbowner__main_db_dbowner__u1_obj
+dbowner__trg1_renamed#!#dbowner__main_db_dbowner__u1_obj
+~~END~~
+
+
+-- Table owners should be dbowner__main_db_dbowner__u1_obj
+SELECT
+    n.nspname AS schema,
+    c.relname AS table,
+    CASE c.relkind
+        WHEN 'r' THEN 'table'
+        WHEN 'v' THEN 'view'
+        WHEN 'm' THEN 'materialized view'
+        WHEN 'i' THEN 'index'
+        WHEN 'S' THEN 'sequence'
+        WHEN 's' THEN 'special'
+        WHEN 'f' THEN 'foreign table'
+    END AS type,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE (n.nspname = 'dbowner__main_db_dbowner__s1' OR n.nspname = 'dbowner__main_db_dbowner__s3')
+AND c.relkind IN ('r', 'v', 'm', 'i', 'S', 's', 'f')
+ORDER BY n.nspname, c.relkind, c.relname;
+GO
+~~START~~
+name#!#name#!#text#!#name
+dbowner__main_db_dbowner__s1#!#dbowner__seq1_renamed#!#sequence#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__idx1dbowner__t1051d92a6c0688536803636483cfc1e78#!#index#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__t11#!#table#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__t1_renamed#!#table#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__v1_renamed#!#view#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s3#!#dbowner__seq3_renamed#!#sequence#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s3#!#dbowner__t3_renamed#!#table#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s3#!#dbowner__v3_renamed#!#view#!#dbowner__main_db_dbowner__u1_obj
+~~END~~
+
+
+-- tsql user=dbowner__l1 password=123
+exec sp_rename 'dbowner__s1.dbowner__t1_renamed', 'dbowner__t1', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__t1.a_renamed', 'a', 'column'
+go
+exec sp_rename 'dbowner__s1.dbowner__typ1_renamed', 'dbowner__typ1', 'userdatatype'
+go
+exec sp_rename 'dbowner__s1.dbowner__p1_renamed', 'dbowner__p1', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__f1_renamed', 'dbowner__f1', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__v1_renamed', 'dbowner__v1', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__trg1_renamed', 'dbowner__trg1', 'object'
+go
+exec sp_rename 'dbowner__s1.dbowner__seq1_renamed', 'dbowner__seq1', 'object'
+go
+
+exec sp_rename 'dbowner__s3.dbowner__t3_renamed', 'dbowner__t3', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__t3.a_renamed', 'a', 'column'
+go
+exec sp_rename 'dbowner__s3.dbowner__typ3_renamed', 'dbowner__typ3', 'userdatatype'
+go
+exec sp_rename 'dbowner__s3.dbowner__p3_renamed', 'dbowner__p3', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__f3_renamed', 'dbowner__f3', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__v3_renamed', 'dbowner__v3', 'object'
+go
+exec sp_rename 'dbowner__s3.dbowner__seq3_renamed', 'dbowner__seq3', 'object'
+go
+
+exec sp_rename 'dbowner__s2.dbowner__t2.a', 'a_renamed', 'column'
+go
+exec sp_rename 'dbowner__s2.dbowner__typ2', 'dbowner__typ2_renamed', 'userdatatype'
+go
+exec sp_rename 'dbowner__s2.dbowner__t2', 'dbowner__t2_renamed', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__p2', 'dbowner__p2_renamed', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__f2', 'dbowner__f2_renamed', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__v2', 'dbowner__v2_renamed', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__seq2', 'dbowner__seq2_renamed', 'object'
+go
+
+-- psql
+-- Procedure/function owners should be dbowner__main_db_dbowner__u2
+SELECT proname,
+       proowner::regrole
+FROM pg_proc
+WHERE pronamespace::regnamespace::text = 'dbowner__main_db_dbowner__s2'
+ORDER BY proname;
+GO
+~~START~~
+name#!#regrole
+dbowner__f2_renamed#!#dbowner__main_db_dbowner__u2
+dbowner__p2_renamed#!#dbowner__main_db_dbowner__u2
+dbowner__trg2#!#dbowner__main_db_dbowner__u2
+~~END~~
+
+
+-- Table owners should be dbowner__main_db_dbowner__u2
+SELECT
+    n.nspname AS schema,
+    c.relname AS table,
+    CASE c.relkind
+        WHEN 'r' THEN 'table'
+        WHEN 'v' THEN 'view'
+        WHEN 'm' THEN 'materialized view'
+        WHEN 'i' THEN 'index'
+        WHEN 'S' THEN 'sequence'
+        WHEN 's' THEN 'special'
+        WHEN 'f' THEN 'foreign table'
+    END AS type,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'dbowner__main_db_dbowner__s2'
+AND c.relkind IN ('r', 'v', 'm', 'i', 'S', 's', 'f')
+ORDER BY n.nspname, c.relkind, c.relname;
+GO
+~~START~~
+name#!#name#!#text#!#name
+dbowner__main_db_dbowner__s2#!#dbowner__seq2_renamed#!#sequence#!#dbowner__main_db_dbowner__u2
+dbowner__main_db_dbowner__s2#!#dbowner__idx2dbowner__t29e647ba0aded42e8e308d42ed0d51945#!#index#!#dbowner__main_db_dbowner__u2
+dbowner__main_db_dbowner__s2#!#dbowner__t2_renamed#!#table#!#dbowner__main_db_dbowner__u2
+dbowner__main_db_dbowner__s2#!#dbowner__v2_renamed#!#view#!#dbowner__main_db_dbowner__u2
+~~END~~
+
+
+-- tsql user=dbowner__l1 password=123
+exec sp_rename 'dbowner__s2.dbowner__t2_renamed', 'dbowner__t2', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__t2.a_renamed', 'a', 'column'
+go
+exec sp_rename 'dbowner__s2.dbowner__typ2_renamed', 'dbowner__typ2', 'userdatatype'
+go
+exec sp_rename 'dbowner__s2.dbowner__p2_renamed', 'dbowner__p2', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__f2_renamed', 'dbowner__f2', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__v2_renamed', 'dbowner__v2', 'object'
+go
+exec sp_rename 'dbowner__s2.dbowner__seq2_renamed', 'dbowner__seq2', 'object'
 go
 
 -- CASE 3: Able to GRANT/REVOKE on SCHEMA/OBJECT
@@ -241,6 +670,13 @@ select * from dbowner__s0.dbowner__t00
 go
 ~~START~~
 float
+~~END~~
+
+select * from dbowner__s0.dbowner__v00
+go
+~~START~~
+int
+1
 ~~END~~
 
 select dbowner__s0.dbowner__f00()
@@ -416,6 +852,20 @@ go
 
 ~~ERROR (Message: permission denied for table dbowner__t0)~~
 
+select * from dbo.dbowner__v0
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view dbowner__v0)~~
+
+select next value for dbo.dbowner__seq0;
+go
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence dbowner__seq0)~~
+
 select dbo.dbowner__f0()
 go
 ~~ERROR (Code: 33557097)~~
@@ -434,6 +884,20 @@ go
 
 ~~ERROR (Message: permission denied for table dbowner__t1)~~
 
+select * from dbowner__s1.dbowner__v1
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view dbowner__v1)~~
+
+select next value for dbowner__s1.dbowner__seq1;
+go
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence dbowner__seq1)~~
+
 select dbowner__s1.dbowner__f1()
 go
 ~~ERROR (Code: 33557097)~~
@@ -450,6 +914,23 @@ select * from dbowner__s2.dbowner__t2
 go
 ~~START~~
 int
+12
+22
+32
+~~END~~
+
+select * from dbowner__s2.dbowner__v2
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s2.dbowner__seq2;
+go
+~~START~~
+bigint
+8
 ~~END~~
 
 select dbowner__s2.dbowner__f2()
@@ -477,6 +958,20 @@ go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for table dbowner__t3)~~
+
+select * from dbowner__s3.dbowner__v3
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view dbowner__v3)~~
+
+select next value for dbowner__s3.dbowner__seq3;
+go
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence dbowner__seq3)~~
 
 select dbowner__s3.dbowner__f3()
 go
@@ -524,6 +1019,7 @@ dbowner__f1#!#dbowner__main_db_dbowner__u1_obj
 dbowner__f3#!#dbowner__main_db_dbowner__u1_obj
 dbowner__p1#!#dbowner__main_db_dbowner__u1_obj
 dbowner__p3#!#dbowner__main_db_dbowner__u1_obj
+dbowner__trg1#!#dbowner__main_db_dbowner__u1_obj
 ~~END~~
 
 
@@ -549,9 +1045,14 @@ ORDER BY n.nspname, c.relkind, c.relname;
 GO
 ~~START~~
 name#!#name#!#text#!#name
+dbowner__main_db_dbowner__s1#!#dbowner__seq1#!#sequence#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__idx1dbowner__t1051d92a6c0688536803636483cfc1e78#!#index#!#dbowner__main_db_dbowner__u1_obj
 dbowner__main_db_dbowner__s1#!#dbowner__t1#!#table#!#dbowner__main_db_dbowner__u1_obj
 dbowner__main_db_dbowner__s1#!#dbowner__t11#!#table#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s1#!#dbowner__v1#!#view#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s3#!#dbowner__seq3#!#sequence#!#dbowner__main_db_dbowner__u1_obj
 dbowner__main_db_dbowner__s3#!#dbowner__t3#!#table#!#dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__s3#!#dbowner__v3#!#view#!#dbowner__main_db_dbowner__u1_obj
 ~~END~~
 
 
@@ -582,6 +1083,23 @@ select * from dbo.dbowner__t0
 go
 ~~START~~
 int
+10
+20
+30
+~~END~~
+
+select * from dbo.dbowner__v0
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbo.dbowner__seq0;
+go
+~~START~~
+bigint
+4
 ~~END~~
 
 select dbo.dbowner__f0()
@@ -602,6 +1120,23 @@ select * from dbowner__s1.dbowner__t1
 go
 ~~START~~
 int
+11
+21
+31
+~~END~~
+
+select * from dbowner__s1.dbowner__v1
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s1.dbowner__seq1;
+go
+~~START~~
+bigint
+6
 ~~END~~
 
 select dbowner__s1.dbowner__f1()
@@ -622,6 +1157,23 @@ select * from dbowner__s2.dbowner__t2
 go
 ~~START~~
 int
+12
+22
+32
+~~END~~
+
+select * from dbowner__s2.dbowner__v2
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s2.dbowner__seq2;
+go
+~~START~~
+bigint
+12
 ~~END~~
 
 select dbowner__s2.dbowner__f2()
@@ -648,6 +1200,20 @@ select * from dbowner__s3.dbowner__t3
 go
 ~~START~~
 int
+~~END~~
+
+select * from dbowner__s3.dbowner__v3
+go
+~~START~~
+int
+230
+~~END~~
+
+select next value for dbowner__s3.dbowner__seq3;
+go
+~~START~~
+bigint
+5
 ~~END~~
 
 select dbowner__s3.dbowner__f3()
@@ -712,6 +1278,58 @@ sys
 alter role db_owner drop member dbowner__u1
 go
 
+-- psql
+-- Before anything, let's check if internal role linking/delinking got reverted as expected
+SELECT rolname FROM pg_roles WHERE rolname = 'dbowner__main_db_dbowner__u1_obj'; -- "_obj" role should not exist
+go
+~~START~~
+name
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+go
+~~START~~
+name
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_db_owner';
+go
+~~START~~
+name
+dbowner__main_db_db_datareader
+dbowner__main_db_db_datawriter
+dbowner__main_db_db_accessadmin
+dbowner__main_db_db_securityadmin
+dbowner__main_db_guest
+dbowner__main_db_dbowner__u2
+dbowner__main_db_dbowner__r1
+dbowner__main_db_dbowner__r2
+dbowner__main_db_dbowner__u1
+~~END~~
+
+
+SELECT r.rolname AS parent_role
+FROM pg_auth_members m
+JOIN pg_roles r ON (m.roleid = r.oid)
+JOIN pg_roles mr ON (m.member = mr.oid)
+WHERE mr.rolname = 'dbowner__main_db_dbo';
+go
+~~START~~
+name
+dbowner__main_db_db_owner
+~~END~~
+
+
 -- tsql user=dbowner__l1 password=123
 select is_member('db_owner')
 go
@@ -725,6 +1343,20 @@ go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for table dbowner__t0)~~
+
+select * from dbo.dbowner__v0
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view dbowner__v0)~~
+
+select next value for dbo.dbowner__seq0;
+go
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence dbowner__seq0)~~
 
 select dbo.dbowner__f0()
 go
@@ -742,6 +1374,23 @@ select * from dbowner__s1.dbowner__t1
 go
 ~~START~~
 int
+11
+21
+31
+~~END~~
+
+select * from dbowner__s1.dbowner__v1
+go
+~~START~~
+int
+1
+~~END~~
+
+select next value for dbowner__s1.dbowner__seq1;
+go
+~~START~~
+bigint
+9
 ~~END~~
 
 select dbowner__s1.dbowner__f1()
@@ -763,6 +1412,20 @@ go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: permission denied for table dbowner__t2)~~
+
+select * from dbowner__s2.dbowner__v2
+go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for view dbowner__v2)~~
+
+select next value for dbowner__s2.dbowner__seq2;
+go
+~~START~~
+bigint
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for sequence dbowner__seq2)~~
 
 select dbowner__s2.dbowner__f2()
 go
@@ -786,6 +1449,20 @@ select * from dbowner__s3.dbowner__t3
 go
 ~~START~~
 int
+~~END~~
+
+select * from dbowner__s3.dbowner__v3
+go
+~~START~~
+int
+230
+~~END~~
+
+select next value for dbowner__s3.dbowner__seq3;
+go
+~~START~~
+bigint
+10
 ~~END~~
 
 select dbowner__s3.dbowner__f3()
@@ -880,6 +1557,7 @@ dbowner__f1#!#dbowner__main_db_dbowner__u1
 dbowner__f3#!#dbowner__main_db_dbowner__u1
 dbowner__p1#!#dbowner__main_db_dbowner__u1
 dbowner__p3#!#dbowner__main_db_dbowner__u1
+dbowner__trg1#!#dbowner__main_db_dbowner__u1
 ~~END~~
 
 
@@ -905,9 +1583,14 @@ ORDER BY n.nspname, c.relkind, c.relname;
 GO
 ~~START~~
 name#!#name#!#text#!#name
+dbowner__main_db_dbowner__s1#!#dbowner__seq1#!#sequence#!#dbowner__main_db_dbowner__u1
+dbowner__main_db_dbowner__s1#!#dbowner__idx1dbowner__t1051d92a6c0688536803636483cfc1e78#!#index#!#dbowner__main_db_dbowner__u1
 dbowner__main_db_dbowner__s1#!#dbowner__t1#!#table#!#dbowner__main_db_dbowner__u1
 dbowner__main_db_dbowner__s1#!#dbowner__t11#!#table#!#dbowner__main_db_dbowner__u1
+dbowner__main_db_dbowner__s1#!#dbowner__v1#!#view#!#dbowner__main_db_dbowner__u1
+dbowner__main_db_dbowner__s3#!#dbowner__seq3#!#sequence#!#dbowner__main_db_dbowner__u1
 dbowner__main_db_dbowner__s3#!#dbowner__t3#!#table#!#dbowner__main_db_dbowner__u1
+dbowner__main_db_dbowner__s3#!#dbowner__v3#!#view#!#dbowner__main_db_dbowner__u1
 ~~END~~
 
 
@@ -992,11 +1675,21 @@ go
 drop role dbowner__r4
 go
 
+drop index dbowner__idx0 on dbo.dbowner__t0
+go
 drop table dbo.dbowner__t0
 go
 drop function dbo.dbowner__f0
 go
 drop procedure dbo.dbowner__p0
+go
+drop type dbo.dbowner__typ0
+go
+drop view dbo.dbowner__v0
+go
+drop sequence dbo.dbowner__seq0
+go
+drop index dbowner__idx1 on dbowner__s1.dbowner__t1
 go
 drop table dbowner__s1.dbowner__t1
 go
@@ -1004,13 +1697,27 @@ drop function dbowner__s1.dbowner__f1
 go
 drop procedure dbowner__s1.dbowner__p1
 go
+drop table dbowner__s1.dbowner__t11
+go
+drop type dbowner__s1.dbowner__typ1
+go
+drop view dbowner__s1.dbowner__v1
+go
+drop sequence dbowner__s1.dbowner__seq1
+go
+drop index dbowner__idx2 on dbowner__s2.dbowner__t2
+go
 drop table dbowner__s2.dbowner__t2
 go
 drop function dbowner__s2.dbowner__f2
 go
 drop procedure dbowner__s2.dbowner__p2
 go
-drop table dbowner__s1.dbowner__t11
+drop type dbowner__s2.dbowner__typ2
+go
+drop view dbowner__s2.dbowner__v2
+go
+drop sequence dbowner__s2.dbowner__seq2
 go
 drop table dbowner__s3.dbowner__t3
 go
@@ -1018,9 +1725,23 @@ drop function dbowner__s3.dbowner__f3
 go
 drop procedure dbowner__s3.dbowner__p3
 go
+drop type dbowner__s3.dbowner__typ3
+go
+drop view dbowner__s3.dbowner__v3
+go
+drop sequence dbowner__s3.dbowner__seq3
+go
+drop index dbowner__idx00 on dbowner__s0.dbowner__t00
+go
 drop table dbowner__s0.dbowner__t00
 go
 drop function dbowner__s0.dbowner__f00
+go
+drop type dbowner__s0.dbowner__typ00
+go
+drop view dbowner__s0.dbowner__v00
+go
+drop sequence dbowner__s0.dbowner__seq00
 go
 drop schema dbowner__s0
 go
