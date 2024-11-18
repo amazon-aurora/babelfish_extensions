@@ -4,7 +4,8 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1_obj';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1_obj'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
@@ -15,13 +16,14 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
-dbowner__main_db_dbowner__u1_obj
 dbowner__main_db_db_owner
 dbowner__main_db_dbo
+dbowner__main_db_dbowner__u1_obj
 ~~END~~
 
 
@@ -29,19 +31,20 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_db_owner';
+WHERE mr.rolname = 'dbowner__main_db_db_owner'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
+dbowner__main_db_db_accessadmin
 dbowner__main_db_db_datareader
 dbowner__main_db_db_datawriter
-dbowner__main_db_db_accessadmin
 dbowner__main_db_db_securityadmin
-dbowner__main_db_guest
-dbowner__main_db_dbowner__u2
 dbowner__main_db_dbowner__r1
 dbowner__main_db_dbowner__r2
 dbowner__main_db_dbowner__u1_obj
+dbowner__main_db_dbowner__u2
+dbowner__main_db_guest
 ~~END~~
 
 
@@ -49,7 +52,8 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbo';
+WHERE mr.rolname = 'dbowner__main_db_dbo'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
@@ -1287,11 +1291,13 @@ name
 ~~END~~
 
 
+
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
@@ -1302,19 +1308,20 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_db_owner';
+WHERE mr.rolname = 'dbowner__main_db_db_owner'
+ORDER BY r.rolname;
 go
 ~~START~~
 name
+dbowner__main_db_db_accessadmin
 dbowner__main_db_db_datareader
 dbowner__main_db_db_datawriter
-dbowner__main_db_db_accessadmin
 dbowner__main_db_db_securityadmin
-dbowner__main_db_guest
-dbowner__main_db_dbowner__u2
 dbowner__main_db_dbowner__r1
 dbowner__main_db_dbowner__r2
 dbowner__main_db_dbowner__u1
+dbowner__main_db_dbowner__u2
+dbowner__main_db_guest
 ~~END~~
 
 
@@ -1322,7 +1329,8 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbo';
+WHERE mr.rolname = 'dbowner__main_db_dbo'
+ORDER BY r.rolname;
 go
 ~~START~~
 name

@@ -4,28 +4,32 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1_obj';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1_obj'
+ORDER BY r.rolname;
 go
 
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1'
+ORDER BY r.rolname;
 go
 
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_db_owner';
+WHERE mr.rolname = 'dbowner__main_db_db_owner'
+ORDER BY r.rolname;
 go
 
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbo';
+WHERE mr.rolname = 'dbowner__main_db_dbo'
+ORDER BY r.rolname;
 go
 
 -- tsql
@@ -681,21 +685,25 @@ SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbowner__u1';
+WHERE mr.rolname = 'dbowner__main_db_dbowner__u1'
+ORDER BY r.rolname;
+
 go
 
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_db_owner';
+WHERE mr.rolname = 'dbowner__main_db_db_owner'
+ORDER BY r.rolname;
 go
 
 SELECT r.rolname AS parent_role
 FROM pg_auth_members m
 JOIN pg_roles r ON (m.roleid = r.oid)
 JOIN pg_roles mr ON (m.member = mr.oid)
-WHERE mr.rolname = 'dbowner__main_db_dbo';
+WHERE mr.rolname = 'dbowner__main_db_dbo'
+ORDER BY r.rolname;
 go
 
 -- tsql user=dbowner__l1 password=123

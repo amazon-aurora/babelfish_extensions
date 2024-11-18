@@ -3973,18 +3973,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					PG_TRY();
 					{
 						if (is_grantee_role_db_owner(grant_role) && strcmp(queryString, "(ALTER ROLE ADD )") != 0)
-						{
 							exec_alter_dbowner_subcmds(grant_role);
-						}
 						else
-						{
-							if (prev_ProcessUtility)
-								prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
-													queryEnv, dest, qc);
-							else
-								call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
+							call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 														queryEnv, dest, qc);
-						}
 					}
 					PG_FINALLY();
 					{
