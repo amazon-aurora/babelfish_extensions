@@ -39,6 +39,7 @@ name
 dbowner__main_db_db_accessadmin
 dbowner__main_db_db_datareader
 dbowner__main_db_db_datawriter
+dbowner__main_db_db_ddladmin
 dbowner__main_db_db_securityadmin
 dbowner__main_db_dbowner__r1
 dbowner__main_db_dbowner__r2
@@ -780,6 +781,7 @@ varchar
 db_accessadmin
 db_datareader
 db_datawriter
+db_ddladmin
 db_owner
 db_securityadmin
 dbo
@@ -826,6 +828,7 @@ varchar
 db_accessadmin
 db_datareader
 db_datawriter
+db_ddladmin
 db_owner
 db_securityadmin
 dbo
@@ -997,6 +1000,7 @@ varchar
 db_accessadmin
 db_datareader
 db_datawriter
+db_ddladmin
 db_owner
 db_securityadmin
 dbo
@@ -1264,6 +1268,7 @@ varchar
 db_accessadmin
 db_datareader
 db_datawriter
+db_ddladmin
 db_owner
 db_securityadmin
 dbo
@@ -1316,6 +1321,7 @@ name
 dbowner__main_db_db_accessadmin
 dbowner__main_db_db_datareader
 dbowner__main_db_db_datawriter
+dbowner__main_db_db_ddladmin
 dbowner__main_db_db_securityadmin
 dbowner__main_db_dbowner__r1
 dbowner__main_db_dbowner__r2
@@ -1885,6 +1891,7 @@ name
 dbowner__test_db_db_accessadmin
 dbowner__test_db_db_datareader
 dbowner__test_db_db_datawriter
+dbowner__test_db_db_ddladmin
 dbowner__test_db_db_owner
 dbowner__test_db_db_securityadmin
 dbowner__test_db_dbo
@@ -1914,6 +1921,7 @@ name
 dbowner__test_db_db_accessadmin
 dbowner__test_db_db_datareader
 dbowner__test_db_db_datawriter
+dbowner__test_db_db_ddladmin
 dbowner__test_db_db_owner
 dbowner__test_db_db_securityadmin
 dbowner__test_db_dbo

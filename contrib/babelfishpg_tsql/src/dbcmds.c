@@ -343,16 +343,18 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	foreach(elem, db_users)
 	{
 		char	   *user_name = (char *) lfirst(elem);
-		char 	   *original_user_name = get_authid_user_ext_original_name(user_name, dbname);
+		char 	   *original_user_name = get_authid_user_ext_original_name(user_name, dbname, true);
 
-		if (!IS_FIXED_DB_PRINCIPAL(original_user_name))
+		/* If original_user_name is NULL, it means it is an internal role so we will drop it */
+		if (original_user_name == NULL || !IS_FIXED_DB_PRINCIPAL(original_user_name))
 		{
 			appendStringInfo(&query, "DROP OWNED BY dummy CASCADE; ");
 			appendStringInfo(&query, "DROP ROLE dummy; ");
 			expected_stmts += 2;
 		}
 
-		pfree(original_user_name);
+		if (original_user_name)
+			pfree(original_user_name);
 	}
 	appendStringInfo(&query, "DROP OWNED BY dummylist CASCADE; ");
 
@@ -392,9 +394,9 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 	foreach(elem, db_users)
 	{
 		char	   *user_name = (char *) lfirst(elem);
-		char 	   *original_user_name = get_authid_user_ext_original_name(user_name, dbname);
+		char 	   *original_user_name = get_authid_user_ext_original_name(user_name, dbname, true);
 
-		if (!IS_FIXED_DB_PRINCIPAL(original_user_name))
+		if (original_user_name == NULL || !IS_FIXED_DB_PRINCIPAL(original_user_name))
 		{
 			stmt = parsetree_nth_stmt(stmt_list, i++);
 			update_DropOwnedStmt(stmt, list_make1(user_name));
@@ -403,7 +405,8 @@ gen_dropdb_subcmds(const char *dbname, List *db_users)
 			update_DropRoleStmt(stmt, user_name);
 		}
 
-		pfree(original_user_name);
+		if (original_user_name)
+			pfree(original_user_name);
 	}
 
 	stmt = parsetree_nth_stmt(stmt_list, i++);

@@ -2613,7 +2613,7 @@ void
 throw_error_for_fixed_db_role(char *rolname, char *dbname)
 {
 	if (rolname != NULL &&
-		IS_FIXED_DB_PRINCIPAL(get_authid_user_ext_original_name(rolname, dbname)))
+		IS_FIXED_DB_PRINCIPAL(get_authid_user_ext_original_name(rolname, dbname, false)))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("Cannot grant, deny or revoke permissions to or from special roles.")));

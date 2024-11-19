@@ -913,7 +913,7 @@ get_authid_user_ext_idx_oid(void)
 
 /* Returns palloc'd original name given the physical name of the db principal */
 char *
-get_authid_user_ext_original_name(const char *physical_role_name, const char *db_name)
+get_authid_user_ext_original_name(const char *physical_role_name, const char *db_name, bool suppress_error)
 {
 	char*    	orig_username = NULL;
 	bool    	isnull;
@@ -946,7 +946,7 @@ get_authid_user_ext_original_name(const char *physical_role_name, const char *db
 		ReleaseSysCache(tuple);
 	}
 
-	if (orig_username == NULL)
+	if (orig_username == NULL && !suppress_error)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("Could not find original name for db principal %s in database %s", physical_role_name, db_name)));

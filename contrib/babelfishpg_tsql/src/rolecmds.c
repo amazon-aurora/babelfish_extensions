@@ -1882,7 +1882,7 @@ check_alter_role_stmt(GrantRoleStmt *stmt)
 	granted_name = granted_spec->rolename;
 	granted = get_role_oid(granted_name, false);
 
-	original_user_name = get_authid_user_ext_original_name(granted_name, db_name);
+	original_user_name = get_authid_user_ext_original_name(granted_name, db_name, false);
 	Assert(original_user_name);
 
 	db_owner = get_db_owner_oid(db_name, false);
