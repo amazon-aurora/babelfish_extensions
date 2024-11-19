@@ -3734,9 +3734,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					else if (rolspec && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 					{
 						const char *db_name = get_current_pltsql_db_name();
-						Oid        db_accessadmin = get_db_accessadmin_oid(db_name, false);
-						Oid        db_securityadmin = get_db_securityadmin_oid(db_name, false);
-						Oid        db_owner = get_db_owner_oid(db_name, false);
 
 						owner_oid = get_rolespec_oid(rolspec, true);
 
@@ -3746,15 +3743,16 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						* to current user and later alter schema owner using bbf_role_admin
 						*/
 						if (!member_can_set_role(GetUserId(), owner_oid) &&
-							(has_privs_of_role(GetUserId(), db_accessadmin) ||
-							has_privs_of_role(GetUserId(), db_securityadmin)) &&
+							(has_privs_of_role(GetUserId(), get_db_accessadmin_oid(db_name, false)) ||
+							has_privs_of_role(GetUserId(), get_db_securityadmin_oid(db_name, false)) ||
+							has_privs_of_role(GetUserId(), get_db_ddladmin_oid(db_name, false))) &&
 							get_db_principal_kind(owner_oid, db_name))
 						{
 							create_schema->authrole = NULL;
 							alter_owner = true;
 						}
 
-						if (has_privs_of_role(owner_oid, db_owner) && owner_oid != get_role_oid(get_dbo_role_name(db_name), false))
+						if (has_privs_of_role(owner_oid, get_db_owner_oid(db_name, false)) && owner_oid != get_role_oid(get_dbo_role_name(db_name), false))
 						{
 							const char* new_owner = get_obj_role(get_rolespec_name(rolspec));
 							create_schema->authrole = make_rolespec_node(new_owner);
@@ -3811,6 +3809,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						{
 							SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 							AlterSchemaOwner_oid(get_namespace_oid(create_schema->schemaname, false), owner_oid);
+							CommandCounterIncrement();
 						}
 						PG_FINALLY();
 						{
@@ -3821,10 +3820,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					/* Execute subcommands for database roles.*/
 					if (strcmp(queryString, CREATE_GUEST_SCHEMAS_DURING_UPGRADE) != 0)
 					{
-						if (rolspec)
-							exec_database_roles_subcmds(create_schema->schemaname, rolspec->rolename);
-						else
-							exec_database_roles_subcmds(create_schema->schemaname, NULL);
+						exec_database_roles_subcmds(create_schema->schemaname);
 					}
 
 					/* Grant ALL schema privileges to the user.*/
@@ -3868,18 +3864,22 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					if (!is_drop_db_statement)
 					{
-						char	   *guest_schema_name = get_physical_schema_name(cur_db, "guest");
+						char	   *guest_schema_name = get_guest_schema_name(cur_db);
+						char	   *dbo_schema_name = get_dbo_schema_name(cur_db);
 
-						if (strcmp(schemaname, guest_schema_name) == 0)
+						if (strcmp(schemaname, guest_schema_name) == 0 ||
+							strcmp(schemaname, dbo_schema_name) == 0)
 						{
 							ereport(ERROR,
 									(errcode(ERRCODE_INTERNAL_ERROR),
 									 errmsg("Cannot drop the schema \'%s\'", schemaname)));
 						}
+						pfree(guest_schema_name);
+						pfree(dbo_schema_name);
 					}
 
 					bbf_ExecDropStmt(drop_stmt);
-					del_ns_ext_info(schemaname, drop_stmt->missing_ok);
+
 					if (!is_drop_db_statement)
 					{
 						/*
@@ -3895,6 +3895,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					else
 						standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 												queryEnv, dest, qc);
+
+					/*
+					 * is_bbf_db_ddladmin_operation() checks if the schema being dropped
+					 * belongs to the current logical database. This check only works if we
+					 * drop the babelfish catalog entry after executing the schema drop
+					 */
+					del_ns_ext_info(schemaname, drop_stmt->missing_ok);
+
 					return;
 				}
 				else
@@ -4245,7 +4253,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				 */
 
 				/* Ignore when GRANT statement has no specific named object. */
-				if (sql_dialect != SQL_DIALECT_TSQL || grant->targtype != ACL_TARGET_OBJECT)
+				if (sql_dialect != SQL_DIALECT_TSQL || grant->targtype != ACL_TARGET_OBJECT || strcmp(INTERNAL_REVOKE_ALL_ON_ROUTINE, queryString) == 0)
 					break;
 				Assert(list_length(grant->objects) == 1);
 				if (grant->objtype == OBJECT_SCHEMA)
@@ -4381,19 +4389,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					/* If ALL PRIVILEGES is granted/revoked. */
 					if (list_length(grant->privileges) == 0)
 					{
-						/*
-						 * Case: When ALL PRIVILEGES is revoked internally during create function.
-						 * pstmt->stmt_len = 0 means it is an implicit REVOKE statement issued at the time of create function/procedure.
-						 * For more details, please refer revoke_func_permission_from_public().
-						 * If schema entry exists in the catalog, implicitly grant permission on the new object to the user.
-						 */
-						if ((pstmt->stmt_len == 0) && privilege_exists_in_bbf_schema_permissions(logicalschema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, NULL))
-						{
-							call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
-							exec_internal_grant_on_function(logicalschema, funcname, obj_type);
-							return;
-						}
-
 						if (grant->is_grant)
 						{
 							foreach(lc, grant->grantees)
@@ -5700,15 +5695,30 @@ pltsql_validator(PG_FUNCTION_ARGS)
 
 	MemoryContext oldMemoryContext = CurrentMemoryContext;
 	int			saved_dialect = sql_dialect;
-
-	if (!CheckFunctionValidatorAccess(fcinfo->flinfo->fn_oid, funcoid))
-		PG_RETURN_VOID();
+	int 		save_sec_context;
+	Oid 		save_userid;
 
 	/* Get the new function's pg_proc entry */
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcoid));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
+
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	PG_TRY();
+	{
+		if (GetUserId() != proc->proowner && IS_TDS_CONN() &&
+			has_privs_of_role(GetUserId(), get_db_ddladmin_oid(get_current_pltsql_db_name(), false)))
+			SetUserIdAndSecContext(proc->proowner, save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+		if (!CheckFunctionValidatorAccess(fcinfo->flinfo->fn_oid, funcoid))
+			PG_RETURN_VOID();
+	}
+	PG_FINALLY();
+	{
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+	}
+	PG_END_TRY();
 
 	prokind = proc->prokind;
 
