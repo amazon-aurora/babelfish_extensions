@@ -507,6 +507,7 @@ InstallExtendedHooks(void)
 	pltsql_get_object_identity_event_trigger_hook = pltsql_get_object_identity_event_trigger;
 
 	pltsql_get_object_owner_hook = pltsql_get_object_owner;
+
 	is_bbf_db_ddladmin_operation_hook = is_bbf_db_ddladmin_operation;
 }
 
