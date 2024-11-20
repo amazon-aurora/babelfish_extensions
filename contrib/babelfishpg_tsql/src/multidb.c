@@ -256,7 +256,7 @@ rewrite_object_refs(Node *stmt)
 				physical_principal_name = get_physical_user_name(db_name, principal_name, false, true);
 
 				/* Forbidden ALTER ROLE db_owner ADD/DROP MEMBER if MEMBER is a T-SQL database role */
-				if ((strcmp(role_name, "db_owner") == 0) && get_db_principal_kind(get_role_oid(physical_principal_name, false), db_name) == BBF_ROLE)
+				if ((strcmp(role_name, DB_OWNER) == 0) && get_db_principal_kind(get_role_oid(physical_principal_name, false), db_name) == BBF_ROLE)
 				{
 					if (grant_role->is_grant)
 						ereport(ERROR,
@@ -1383,6 +1383,17 @@ char *
 get_dbo_role_name(const char *dbname)
 {
 	return get_dbo_role_name_by_mode(dbname, get_migration_mode());
+}
+
+
+Oid
+get_dbo_oid(const char *dbname, bool missing_ok)
+{
+	char *dbo_name = get_dbo_role_name(dbname);
+	Oid  dbo_oid = get_role_oid(dbo_name, missing_ok);
+	pfree(dbo_name);
+
+	return dbo_oid;
 }
 
 char *

@@ -45,7 +45,6 @@
 #define NOT_FOUND -1
 
 Oid sys_babelfish_db_seq_oid = InvalidOid;
-bool is_create_bbf_builtin_dbs = false;
 
 static Oid get_sys_babelfish_db_seq_oid(void);
 static List *gen_createdb_subcmds(const char *dbname,
@@ -976,8 +975,6 @@ create_builtin_dbs(PG_FUNCTION_ARGS)
 
 	PG_TRY();
 	{
-		is_create_bbf_builtin_dbs = true;
-
 		set_config_option("babelfishpg_tsql.sql_dialect", tsql_dialect,
 						  GUC_CONTEXT_CONFIG,
 						  PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
@@ -990,8 +987,6 @@ create_builtin_dbs(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-		is_create_bbf_builtin_dbs = false;
-
 		set_config_option("babelfishpg_tsql.sql_dialect", sql_dialect_value_old,
 						  GUC_CONTEXT_CONFIG,
 						  PGC_S_SESSION, GUC_ACTION_SAVE, true, 0, false);
@@ -999,9 +994,6 @@ create_builtin_dbs(PG_FUNCTION_ARGS)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	is_create_bbf_builtin_dbs = false;
-
 	PG_RETURN_INT32(0);
 }
 

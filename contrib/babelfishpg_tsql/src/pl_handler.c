@@ -3076,7 +3076,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * our babelfish catalog. These roles are meant to be internal
 							 * and not be visible to customer from Babelfish endpoint.
 							 */
-							if (strcmp(queryString, "(ALTER ROLE ADD )") != 0)
+							if (strcmp(queryString, INTERNAL_ALTER_ROLE) != 0)
 								create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
 						}
 
@@ -3752,7 +3752,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							alter_owner = true;
 						}
 
-						if (has_privs_of_role(owner_oid, get_db_owner_oid(db_name, false)) && owner_oid != get_role_oid(get_dbo_role_name(db_name), false))
+						if (has_privs_of_role(owner_oid, get_db_owner_oid(db_name, false)) && owner_oid != get_dbo_oid(db_name, false))
 						{
 							const char* new_owner = get_obj_role(get_rolespec_name(rolspec));
 							create_schema->authrole = make_rolespec_node(new_owner);
@@ -3980,7 +3980,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					SetUserIdAndSecContext(get_bbf_role_admin_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
 					PG_TRY();
 					{
-						if (is_grantee_role_db_owner(grant_role) && strcmp(queryString, "(ALTER ROLE ADD )") != 0)
+						if (is_grantee_role_db_owner(grant_role) && strcmp(queryString, INTERNAL_ALTER_ROLE) != 0)
 							exec_alter_dbowner_subcmds(grant_role);
 						else
 							call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,

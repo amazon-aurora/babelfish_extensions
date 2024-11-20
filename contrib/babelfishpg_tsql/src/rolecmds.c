@@ -2913,7 +2913,7 @@ exec_alter_dbowner_subcmds(GrantRoleStmt *stmt)
 
 		/* do this step */
 		ProcessUtility(wrapper,
-					"(ALTER ROLE ADD )",
+					INTERNAL_ALTER_ROLE,
 					false,
 					PROCESS_UTILITY_SUBCOMMAND,
 					NULL,
@@ -2953,17 +2953,14 @@ change_object_owner_if_db_owner()
 	PlannedStmt 	*wrapper;
 
 	/* TSQL specific behavior */
-	if (sql_dialect != SQL_DIALECT_TSQL || (MyProcPort && !MyProcPort->is_tds_conn))
+	if (sql_dialect != SQL_DIALECT_TSQL || !IS_TDS_CONN())
 		return;
 
 	cur_db_name = get_cur_db_name();
-	dbo_id = get_role_oid(get_dbo_role_name(cur_db_name), true);
+	dbo_id = get_dbo_oid(cur_db_name, true);
 
-	/*
-	 * Don't change object owner if current user is
-	 * dbo or we are creating system databases
-	 */
-	if (role_oid == dbo_id || dbo_id == InvalidOid || is_create_bbf_builtin_dbs)
+	/* Don't change object owner if current user is dbo */
+	if (role_oid == dbo_id || dbo_id == InvalidOid)
 		return;
 
 	rolname = GetUserNameFromId(role_oid, true);
@@ -2974,7 +2971,7 @@ change_object_owner_if_db_owner()
 	if (!user_exists_for_db(cur_db_name, rolname))
 		return;
 
-	if (!is_member_of_role(role_oid, get_role_oid(get_db_owner_name(cur_db_name), false)))
+	if (!is_member_of_role(role_oid, get_db_owner_oid(cur_db_name, false)))
 		return;
 
 	obj_rolname = get_obj_role(rolname);
@@ -3068,7 +3065,7 @@ drop_db_owner_related_roles(Oid roleid, const char* rolname)
 	Oid	db_owner_id;
 	char	*obj_rolname = NULL;
 
-	db_owner_id = get_role_oid(get_db_owner_name(get_cur_db_name()), false);
+	db_owner_id = get_db_owner_oid(get_cur_db_name(), false);
 
 	if (is_member_of_role(roleid, db_owner_id) && (roleid != InvalidOid))
 	{
@@ -3112,8 +3109,6 @@ drop_db_owner_related_roles(Oid roleid, const char* rolname)
 					   NULL);
 
 		pfree(query.data);
-
-		if (obj_rolname)
-			pfree(obj_rolname);
+		pfree(obj_rolname);
 	}
 }
