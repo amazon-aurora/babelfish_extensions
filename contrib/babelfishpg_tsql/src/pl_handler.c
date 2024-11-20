@@ -3765,7 +3765,6 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						const char *db_name = get_current_pltsql_db_name();
 
 						owner_oid = get_rolespec_oid(rolspec, true);
-
 						/*
 						* db_accessadmin members can create schema with owner being any db principal
 						* If it does not have the pg permission then handle it here. We will set owner
