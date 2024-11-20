@@ -373,8 +373,7 @@ bool IsPltsqlToastClassHook(Form_pg_class pg_class_tup)
 void pltsql_drop_relation_refcnt_hook(Relation relation)
 {
 	int expected_refcnt = 0;
-	if (sql_dialect != SQL_DIALECT_TSQL ||
-		!RelationIsBBFTableVariable(relation))
+	if (!IsTsqlTableVariable(relation))
 		return;
 
 	expected_refcnt = relation->rd_isnailed ? 2 : 1;
@@ -972,14 +971,15 @@ get_authid_user_ext_physical_name(const char *db_name, const char *login)
 
 	login_name = (NameData *) palloc0(NAMEDATALEN);
 	snprintf(login_name->data, NAMEDATALEN, "%s", login);
+	
 	ScanKeyInit(&key[0],
-				Anum_bbf_authid_user_ext_login_name,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				NameGetDatum(login_name));
+			Anum_bbf_authid_user_ext_login_name,
+			BTEqualStrategyNumber, F_NAMEEQ,
+			NameGetDatum(login_name));
 	ScanKeyInit(&key[1],
-				Anum_bbf_authid_user_ext_database_name,
-				BTEqualStrategyNumber, F_TEXTEQ,
-				CStringGetTextDatum(db_name));
+			Anum_bbf_authid_user_ext_database_name,
+			BTEqualStrategyNumber, F_TEXTEQ,
+			CStringGetTextDatum(db_name));
 
 	scan = table_beginscan_catalog(bbf_authid_user_ext_rel, 2, key);
 
@@ -1114,6 +1114,28 @@ get_authid_user_ext_db_users(const char *db_name, const char *dbo_name, Oid db_o
 	return db_users_list;
 }
 
+/* Checks if the user is enabled on a given database. */
+static bool
+user_has_dbaccess(const char *user)
+{
+	HeapTuple	tuple;
+	bool		has_access = false;
+	tuple = SearchSysCache1(AUTHIDUSEREXTROLENAME, CStringGetDatum(user));
+
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isnull = true;
+		int	user_can_connect = 0;
+		Datum	datum = SysCacheGetAttr(AUTHIDUSEREXTROLENAME, tuple, Anum_bbf_authid_user_ext_user_can_connect, &isnull);
+		Assert(!isnull);
+		user_can_connect = DatumGetInt32(datum);
+		if (user_can_connect == 1)
+			has_access = true;
+		ReleaseSysCache(tuple);
+	}
+	return has_access;
+}
+
 /*
  * Checks if there exists any user for respective database and login,
  * if there is not any then use dbo or guest user.
@@ -1130,6 +1152,9 @@ get_user_for_database(const char *db_name)
 	login = GetUserNameFromId(GetSessionUserId(), false);
 	user = get_authid_user_ext_physical_name(db_name, login);
 	login_is_db_owner = 0 == strncmp(login, get_owner_of_db(db_name), NAMEDATALEN);
+
+	if (user && !user_has_dbaccess(user) && !guest_has_dbaccess((char *) db_name))
+		user = NULL;
 
 	if (!user)
 	{
@@ -3178,7 +3203,7 @@ create_guest_role_for_db(const char *dbname)
 	if (list_length(logins) > 0)
 	{
 		stmt = parsetree_nth_stmt(res, i++);
-		update_GrantRoleStmt(stmt, list_make1(make_accesspriv_node(guest)), logins);
+		update_GrantRoleStmt(stmt, list_make1(make_accesspriv_node(guest)), logins, NULL);
 	}
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);

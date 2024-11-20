@@ -1083,7 +1083,7 @@ update_DropStmt(Node *n, const char *object)
 }
 
 void
-update_GrantRoleStmt(Node *n, List *privs, List *roles)
+update_GrantRoleStmt(Node *n, List *privs, List *roles, const char *grantor)
 {
 	GrantRoleStmt *stmt = (GrantRoleStmt *) n;
 
@@ -1092,6 +1092,11 @@ update_GrantRoleStmt(Node *n, List *privs, List *roles)
 
 	stmt->granted_roles = privs;
 	stmt->grantee_roles = roles;
+
+	if (grantor && stmt->grantor)
+	{
+		stmt->grantor->rolename = pstrdup(grantor);
+	}
 }
 
 void
