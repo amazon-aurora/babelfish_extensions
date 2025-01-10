@@ -435,6 +435,23 @@ public class JDBCTempTable {
         }
     }
 
+    private static int getCheckpointerPid(BufferedWriter bw) throws Exception {
+        Connection c = DriverManager.getConnection(connectionString);
+        JDBCCrossDialect cx = new JDBCCrossDialect(c);
+        Connection psql = cx.getPsqlConnection("-- psql", bw);
+        Statement s = psql.createStatement();
+        
+        ResultSet rs = s.executeQuery("SELECT pid FROM pg_stat_activity WHERE backend_type='checkpointer'");
+        rs.next();
+        int checkpointer_pid = rs.getInt("pid");
+
+        rs.close();
+        s.close();
+        psql.close();
+        c.close();
+        return checkpointer_pid;
+    }
+
     /* 
      * Test for BABEL-5547. 
      * 
@@ -469,8 +486,15 @@ public class JDBCTempTable {
         rs = s.executeQuery("SELECT pg_backend_pid()");
         rs.next();
         int backend_pid = rs.getInt("pg_backend_pid");
+        rs.close();
 
-        /* 3. Try to clean up the connections. */
+        int old_checkpointer_pid = getCheckpointerPid(bw);
+
+        /* 
+         * 3. Try to clean up the connections. If the server crashes, this may result in an error, which works as well, but if the client manages to recover, we will also 
+         * do the check in 4. Explicitly call pg_terminate_backend to ensure that cleanup happens immediately.
+         */
+        rs = s_psql.executeQuery("SELECT pg_terminate_backend(" + Integer.toString(backend_pid) + ")");
         rs.close();
         s.close();
         c.close();
@@ -478,15 +502,13 @@ public class JDBCTempTable {
         /* 
          * 4. We closed the original sqlcmd connection in step 3. If the backend isn't closed for some reason, that means that BABEL-5547 has occurred.
          * 
-         * This is a bit of a roundabout way of checking, as the actual repro involves closing the connection and checking for a server crash.
-         * However, because of the way that JDBC handles connections, it's not possible to reproduce the segfault itself while this test is running.
+         * This is a bit of a roundabout way of checking, but we just check to see if the checkpointer PID has changed. 
          */
-        rs = s_psql.executeQuery("SELECT * FROM pg_stat_activity WHERE pid=" + Integer.toString(backend_pid));
-        if (rs.next())
+        int new_checkpointer_pid = getCheckpointerPid(bw);
+        if (old_checkpointer_pid != new_checkpointer_pid)
         {
-            bw.write("A connection was leaked.");
+            bw.write("Checkpointer pid changed, meaning server crashed.");
         }
-        rs.close();
 
         /* 5. Finally, clean up dangling entries in pg_attrdef. */
         s_psql.executeUpdate("DELETE FROM pg_attrdef WHERE oid = 12742060");
