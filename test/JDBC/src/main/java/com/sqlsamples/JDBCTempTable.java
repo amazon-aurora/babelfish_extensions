@@ -8,9 +8,23 @@ import java.sql.*;
 import org.junit.jupiter.api.*;
 import java.util.concurrent.ThreadLocalRandom;
 
+import javax.naming.spi.DirStateFactory.Result;
+
 import static com.sqlsamples.Config.*;
 import static com.sqlsamples.Statistics.curr_exec_time;
 
+/*
+ * This file contains tests for temp tables that need special connection handling, checks against
+ * specific OID usage, or other cases that can't be handled via typical JDBC tests.
+ * 
+ * To run only these tests locally, add the line `temp_table_jdbc` in the jdbc_schedule file.
+ * 
+ * Note that the .out file of these tests is a blank file. We can trigger a failed test by writing any
+ * errors to the output file via bw.write(). The reasoning behind this is that 1. all of the tests here 
+ * don't have simple outputs that can be compared 1:1, since things like table names and OIDs can change
+ * constantly, and 2. so that we can still run within the existing JDBC test framework without writing out
+ * a whole separate module to return passing/failing tests.
+ */
 public class JDBCTempTable {
     public static boolean toRun = false;
 
@@ -36,6 +50,7 @@ public class JDBCTempTable {
             }
             concurrency_test(bw);
             test_trigger_on_temp_table(bw, logger);
+            testDanglingEntryCrash(bw, logger);
         } catch (Exception e) {
             try {
                 bw.write(e.getMessage());
@@ -127,6 +142,9 @@ public class JDBCTempTable {
             throw new Exception("Tablename not found in sys.babelfish_get_enr_list");
         }
         String reloid = rs.getString("reloid");
+
+        rs.close();
+        s.close();
 
         return Integer.parseInt(reloid);
     }
@@ -415,6 +433,68 @@ public class JDBCTempTable {
                 return;
             }
         }
+    }
+
+    /* 
+     * Test for BABEL-5547. 
+     * 
+     * 1. Create table and grab OID.
+     * 2. Artificially create dangling entries in pg_attrdef from psql endpoint.
+     * 3. Try to close the connections. 
+     * 4. If the backend still remains, then we have encountered an issue. If not, then we're good. 
+     * 5. Clean up remaining resources.
+     */
+    private static void testDanglingEntryCrash(BufferedWriter bw, Logger logger) throws Exception {
+        Connection c = DriverManager.getConnection(connectionString);
+        Statement s = c.createStatement();
+        ResultSet rs;
+
+        /* 1. Create a table via tsql connection, and calculate the OID of the index. */
+        int table_oid = create_table_and_report_oid(c, "CREATE TABLE #dangling_entry_table(c1 int, c2 VARCHAR(4000))", "#dangling_entry_table");
+        rs = s.executeQuery("SELECT * FROM sys.babelfish_get_enr_list() WHERE RELNAME = '#pg_toast_" + Integer.toString(table_oid) + "_index'");
+        if (!rs.next()) {
+            throw new Exception("Index not found in sys.babelfish_get_enr_list");
+        }
+        String index_oid = rs.getString("reloid");
+
+        /* 2. Create the dangling entries in psql. */
+        Connection c2 = DriverManager.getConnection(connectionString);
+        JDBCCrossDialect cx = new JDBCCrossDialect(c2);
+        Connection psql = cx.getPsqlConnection("-- psql", bw, logger);
+        Statement s_psql = psql.createStatement();
+        s_psql.executeUpdate("INSERT INTO pg_attrdef SELECT 12742060, " + index_oid + ", 6, adbin from pg_attrdef WHERE adbin like '%FUNCEXPR%' FETCH FIRST ROW ONLY;");
+        s_psql.executeUpdate("INSERT INTO pg_depend VALUES (2604, 12742060, 0, 1259, " + index_oid + ", 6, 'a');");
+
+        /* The backend will not close properly if there is a crash, so grab the backend pid now. */
+        rs = s.executeQuery("SELECT pg_backend_pid()");
+        rs.next();
+        int backend_pid = rs.getInt("pg_backend_pid");
+
+        /* 3. Try to clean up the connections. */
+        rs.close();
+        s.close();
+        c.close();
+
+        /* 
+         * 4. We closed the original sqlcmd connection in step 3. If the backend isn't closed for some reason, that means that BABEL-5547 has occurred.
+         * 
+         * This is a bit of a roundabout way of checking, as the actual repro involves closing the connection and checking for a server crash.
+         * However, because of the way that JDBC handles connections, it's not possible to reproduce the segfault itself while this test is running.
+         */
+        rs = s_psql.executeQuery("SELECT * FROM pg_stat_activity WHERE pid=" + Integer.toString(backend_pid));
+        if (rs.next())
+        {
+            bw.write("A connection was leaked.");
+        }
+        rs.close();
+
+        /* 5. Finally, clean up dangling entries in pg_attrdef. */
+        s_psql.executeUpdate("DELETE FROM pg_attrdef WHERE oid = 12742060");
+        s_psql.executeUpdate("DELETE FROM pg_depend WHERE objid = 12742060");
+
+        s_psql.close();
+        psql.close();
+        c2.close();
     }
 }
 
