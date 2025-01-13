@@ -411,9 +411,6 @@ int
 -- terminate-tsql-conn user=securityadmin_login1 password=123
 
 -- psql
-CREATE EXTENSION IF NOT EXISTS tds_fdw;
-GO
-
 -- securityadmin should not have membership in database guest role
 SELECT roleid::regrole, member::regrole FROM pg_auth_members WHERE member = 'securityadmin'::regrole;
 go

@@ -93,3 +93,7 @@ go
 
 use master
 go
+
+-- psql
+CREATE EXTENSION IF NOT EXISTS tds_fdw;
+GO
