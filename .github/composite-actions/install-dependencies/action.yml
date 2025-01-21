@@ -1,7 +1,84 @@
 name: 'Install Dependencies'
+
 runs:
   using: "composite"
   steps:
+    - name: Set up test environment
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/tests
+        cat > $GITHUB_WORKSPACE/tests/mirror_test.sh << 'EOF'
+        #!/usr/bin/env bash
+        
+        # Test helper functions
+        assert_success() {
+          if [ $? -eq 0 ]; then
+            echo "✓ $1"
+            return 0
+          else
+            echo "✗ $1"
+            return 1
+          fi
+        }
+        
+        assert_contains() {
+          if [[ "$1" == *"$2"* ]]; then
+            echo "✓ Output contains expected value: $2"
+            return 0
+          else
+            echo "✗ Expected output to contain '$2', got: $1"
+            return 1
+          fi
+        }
+
+        # Test cases
+        test_mirror_selection() {
+          echo "Testing mirror selection logic..."
+          
+          # Test speed-based selection
+          export MOCK_SCENARIO="all_working"
+          local output
+          output=$($GITHUB_WORKSPACE/.github/scripts/choose_install_mirror test_mode)
+          echo "Debug - Full output: $output"
+          assert_success "Mirror selection should succeed"
+          
+          # Extract just the picked mirror line
+          picked_mirror=$(echo "$output" | grep "Picked" | cut -d"'" -f2)
+          echo "Debug - Picked mirror: $picked_mirror"
+          
+          assert_contains "$picked_mirror" "us-east-1.ec2.archive.ubuntu.com" "Should select fastest mirror"
+          
+          # Test when primary mirror is down
+          export MOCK_SCENARIO="some_working"
+          output=$($GITHUB_WORKSPACE/.github/scripts/choose_install_mirror test_mode)
+          picked_mirror=$(echo "$output" | grep "Picked" | cut -d"'" -f2)
+          assert_contains "$picked_mirror" "us-east-1.ec2.archive.ubuntu.com" "Should select working mirror when primary is down"
+        }
+
+        test_fallback_mechanism() {
+          echo "Testing fallback mechanism..."
+          
+          # Test when no mirrors are working
+          export MOCK_SCENARIO="none_working"
+          local output
+          output=$($GITHUB_WORKSPACE/.github/scripts/choose_install_mirror test_mode)
+          picked_mirror=$(echo "$output" | grep "Picked" | cut -d"'" -f2)
+          assert_contains "$picked_mirror" "mirrors.ubuntu.com/mirrors.txt" "Should use fallback mirror"
+        }
+
+        # Run tests
+        echo "Running mirror selection tests..."
+        test_mirror_selection
+        test_fallback_mechanism
+        EOF
+        
+        chmod +x $GITHUB_WORKSPACE/tests/mirror_test.sh
+      shell: bash
+
+    - name: Test mirror selection
+      run: |
+        $GITHUB_WORKSPACE/tests/mirror_test.sh
+      shell: bash
+
     - name: Install Dependencies
       run: |
         $GITHUB_WORKSPACE/.github/scripts/choose_install_mirror

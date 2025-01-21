@@ -1,31 +1,99 @@
 #!/usr/bin/env bash
 
+if [ "$1" = "test_mode" ]; then
+    # Override curl for test mode
+    curl() {
+        case "$MOCK_SCENARIO" in
+            "all_working")
+                case "$*" in
+                    *"speed_download"*)
+                        case "$*" in
+                            *"azure.archive.ubuntu.com"*) echo "1000.0" ;;
+                            *"us-east-1.ec2.archive.ubuntu.com"*) echo "2000.0" ;;
+                            *"us-east-2.ec2.archive.ubuntu.com"*) echo "1500.0" ;;
+                            *) echo "500.0" ;;
+                        esac
+                        ;;
+                    *)
+                        echo "Last-Modified: Thu, 01 Jan 2024 00:00:00 GMT"
+                        return 0
+                        ;;
+                esac
+                ;;
+            "some_working")
+                case "$*" in
+                    *"azure.archive.ubuntu.com"*) return 1 ;;
+                    *"us-east-1.ec2.archive.ubuntu.com"*)
+                        if [[ "$*" == *"speed_download"* ]]; then
+                            echo "2000.0"
+                        else
+                            echo "Last-Modified: Thu, 01 Jan 2024 00:00:00 GMT"
+                        fi
+                        return 0
+                        ;;
+                    *) return 1 ;;
+                esac
+                ;;
+            "none_working")
+                return 1
+                ;;
+            *)
+                # Use original curl if no scenario set
+                command curl "$@"
+                ;;
+        esac
+    }
+fi
+
 set -e
 
 echo "Choosing fastest up-to-date ubuntu mirror based on download speed..."
+
+# Function to check mirror availability
+check_mirror() {
+    local mirror=$1
+    for i in {1..3}; do
+        if curl -m 5 -sI "${mirror}dists/$(lsb_release -c | cut -f2)-security/Contents-$(dpkg --print-architecture).gz" &>/dev/null; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 UBUNTU_MIRROR=$({
 # choose mirrors that are up-to-date by checking the Last-Modified header for
 {
-    # consider Azure's Ubuntu mirror
-    echo http://azure.archive.ubuntu.com/ubuntu/
-    # also consider AWS's Ubuntu mirror
-    echo http://us-east-1.ec2.archive.ubuntu.com/ubuntu/
-    echo http://us-east-2.ec2.archive.ubuntu.com/ubuntu/
-    echo http://us-west-1.ec2.archive.ubuntu.com/ubuntu/
-    echo http://us-west-2.ec2.archive.ubuntu.com/ubuntu/
-    echo http://ap-southeast-1.ec2.archive.ubuntu.com/ubuntu/
-    echo http://ap-south-1.ec2.archive.ubuntu.com/ubuntu/
-    echo http://ap-south-2.ec2.archive.ubuntu.com/ubuntu/
-    echo http://eu-central-1.ec2.archive.ubuntu.com/ubuntu/
-    echo http://eu-west-2.ec2.archive.ubuntu.com/ubuntu/
-
-} | xargs -I {} sh -c 'echo "$(curl -m 5 -sI {}dists/$(lsb_release -c | cut -f2)-security/Contents-$(dpkg --print-architecture).gz|sed s/\\r\$//|grep Last-Modified|awk -F": " "{ print \$2 }" | LANG=C date -f- -u +%s)" "{}"' | sort -rg | awk '{ if (NR==1) TS=$1; if ($1 == TS) print $2 }'
+    for mirror in \
+        "http://azure.archive.ubuntu.com/ubuntu/" \
+        "http://us-east-1.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://us-east-2.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://us-west-1.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://us-west-2.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://ap-southeast-1.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://ap-south-1.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://ap-south-2.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://eu-central-1.ec2.archive.ubuntu.com/ubuntu/" \
+        "http://eu-west-2.ec2.archive.ubuntu.com/ubuntu/"
+    do
+        if check_mirror "$mirror"; then
+            # Get timestamp for available mirrors
+            echo "$(curl -m 5 -sI "${mirror}dists/$(lsb_release -c | cut -f2)-security/Contents-$(dpkg --print-architecture).gz" | \
+                 sed 's/\r$//' | \
+                 grep Last-Modified | \
+                 awk -F": " '{ print $2 }' | \
+                 LANG=C date -f- -u +%s) $mirror"
+        fi
+    done
+} | sort -rg | awk '{ if (NR==1) TS=$1; if ($1 == TS) print $2 }'
 } | xargs -I {} sh -c 'echo `curl -r 0-102400 -m 5 -s -w %{speed_download} -o /dev/null {}ls-lR.gz` {}' \
-|sort -g -r |head -1| awk '{ print $2  }')
+  | sort -g -r | head -1 | awk '{ print $2 }')
+
 if [ -z "$UBUNTU_MIRROR" ]; then
     # fallback to full mirrors list
     UBUNTU_MIRROR="mirror://mirrors.ubuntu.com/mirrors.txt"
 fi
+
 OLD_MIRROR=$(cat /etc/apt/sources.list | grep '^deb ' | head -1 | awk '{ print $2 }')
 
 #add retries and timeout for apt
