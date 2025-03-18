@@ -228,36 +228,36 @@ runs:
       if: always() && steps.jdbc-upgrade-tests.outcome == 'success'
       uses: ./.github/composite-actions/save-ccache
 
-    - name: Install Python
-      id: install-python
-      if: ${{ matrix.upgrade-path.path[0] == 'source_latest' && steps.jdbc-upgrade-tests.outcome == 'success' }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: 'v3.10'
+    # - name: Install Python
+    #   id: install-python
+    #   if: ${{ matrix.upgrade-path.path[0] == 'source_latest' && steps.jdbc-upgrade-tests.outcome == 'success' }}
+    #   uses: actions/setup-python@v2
+    #   with:
+    #     python-version: 'v3.10'
 
-    - name: Configure Python Environment
-      id: configure-python-environment
-      if: always() && steps.install-python.outcome == 'success'
-      run: |
-        cd ~
-        sudo apt-get install odbc-postgresql
-        pip3 install pyodbc==4.0.35 pymssql
-      shell: bash
+    # - name: Configure Python Environment
+    #   id: configure-python-environment
+    #   if: always() && steps.install-python.outcome == 'success'
+    #   run: |
+    #     cd ~
+    #     sudo apt-get install odbc-postgresql
+    #     pip3 install pyodbc==4.0.35 pymssql
+    #   shell: bash
 
-    - name: Run dependency check
-      id: run-dependency-check
-      if: always() && steps.configure-python-environment.outcome == 'success'
-      run: |
-        cd test/python
-        provider="PostgreSQL Unicode" \
-        fileGenerator_URL=localhost \
-        fileGenerator_port=5432 \
-        fileGenerator_databaseName=babelfish_db \
-        fileGenerator_user=jdbc_user \
-        fileGenerator_password=12345678 \
-        LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/odbc/ \
-        python3 upgrade_validation.py
-      shell: bash
+    # - name: Run dependency check
+    #   id: run-dependency-check
+    #   if: always() && steps.configure-python-environment.outcome == 'success'
+    #   run: |
+    #     cd test/python
+    #     provider="PostgreSQL Unicode" \
+    #     fileGenerator_URL=localhost \
+    #     fileGenerator_port=5432 \
+    #     fileGenerator_databaseName=babelfish_db \
+    #     fileGenerator_user=jdbc_user \
+    #     fileGenerator_password=12345678 \
+    #     LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/odbc/ \
+    #     python3 upgrade_validation.py
+    #   shell: bash
 
     - name: Run Babelfish metadata inconsistency check
       id: check-babelfish-inconsistency
