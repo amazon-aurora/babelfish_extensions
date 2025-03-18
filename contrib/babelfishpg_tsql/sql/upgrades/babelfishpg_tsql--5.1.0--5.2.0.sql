@@ -803,6 +803,78 @@ WHERE FALSE;
 GRANT SELECT ON sys.sql_logins TO PUBLIC;
 
 
+CREATE OR REPLACE FUNCTION sys.babelfish_try_conv_to_varbinary(IN typmod INTEGER,
+                                                               IN arg anyelement,
+                                                               IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+DECLARE result sys.varbinary;
+BEGIN
+    IF pg_typeof(arg) IN ('text'::regtype, 'sys.ntext'::regtype, 'sys.nvarchar'::regtype, 'sys.bpchar'::regtype, 'sys.nchar'::regtype) THEN
+        RETURN sys.babelfish_conv_string_to_varbinary(arg, p_style);
+    ELSE
+        IF typmod = -1 THEN
+            RETURN CAST(arg as sys.varbinary);
+        ELSE
+            EXECUTE format('SELECT CAST($1 as sys.varbinary(%s))', typmod - 4) INTO result USING arg;
+            RETURN result;
+        END IF;
+    END IF;
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE; 
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_helper_to_varbinary(IN typmod INTEGER,
+                                                                  IN arg sys.VARCHAR,
+                                                                  IN try BOOL,
+                                                                  IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+BEGIN
+    IF try THEN
+        RETURN sys.babelfish_try_conv_string_to_varbinary(arg, p_style);
+    ELSE
+        RETURN sys.babelfish_conv_string_to_varbinary(arg, p_style);
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION sys.babelfish_conv_helper_to_varbinary(IN typmod INTEGER,
+                                                                  IN arg anyelement,
+                                                                  IN try BOOL,
+                                                                  IN p_style NUMERIC DEFAULT 0)
+RETURNS sys.varbinary
+AS
+$BODY$
+DECLARE result sys.varbinary;
+BEGIN
+    IF try THEN
+        RETURN sys.babelfish_try_conv_to_varbinary(typmod, arg, p_style);
+    ELSE
+        IF pg_typeof(arg) IN ('text'::regtype, 'sys.ntext'::regtype, 'sys.nvarchar'::regtype, 'sys.bpchar'::regtype, 'sys.nchar'::regtype) THEN
+            RETURN sys.babelfish_conv_string_to_varbinary(arg, p_style);
+        ELSE
+            IF typmod = -1 THEN
+                RETURN CAST(arg as sys.varbinary);
+            ELSE
+                EXECUTE format('SELECT CAST($1 as sys.varbinary(%s))', typmod - 4) INTO result USING arg;
+                RETURN result;
+            END IF;
+        END IF;
+    END IF;
+END;
+$BODY$
+LANGUAGE plpgsql
+IMMUTABLE; 
+
 -- After upgrade, always run analyze for all babelfish catalogs.
 CALL sys.analyze_babelfish_catalogs();
 -- Reset search_path to not affect any subsequent scripts
