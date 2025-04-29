@@ -196,6 +196,7 @@ PG_FUNCTION_INFO_V1(datepart_internal_real);
 PG_FUNCTION_INFO_V1(datepart_internal_money);
 PG_FUNCTION_INFO_V1(datepart_internal_smallmoney);
 PG_FUNCTION_INFO_V1(replace_special_chars_fts);
+PG_FUNCTION_INFO_V1(isnumeric);
 
 void	   *string_to_tsql_varchar(const char *input_str);
 void	   *get_servername_internal(void);
@@ -2148,6 +2149,86 @@ search_partition(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT32(result);
 }
+
+/*
+ * isnumeric()
+ *	Returns 1 if the input value is numeric or can be 
+ *	converted to a numeric value, and 0 otherwise.
+
+ *	It directly returns 1 for known numeric types (including TSQL types).
+ *	For other types, attempts conversion to numeric and money.
+ */
+Datum
+isnumeric(PG_FUNCTION_ARGS)
+{
+	Oid	argtypeid;
+	Oid	typoutput;
+	bool	typisvarlena;
+	char	*value_str;
+	Oid *arg_types ;
+	Oid function_oid;
+	
+	arg_types = (Oid *) palloc(2 * sizeof(Oid));
+	arg_types[0] = TEXTOID;
+	arg_types[1] = TEXTOID;
+
+	function_oid = GetSysCacheOid3(PROCNAMEARGSNSP, Anum_pg_proc_oid,
+		CStringGetDatum("pg_input_is_valid"),
+		PointerGetDatum(buildoidvector(arg_types, 2)),
+		ObjectIdGetDatum(get_namespace_oid("pg_catalog", false)));;
+	
+
+	if (PG_ARGISNULL(0))
+		PG_RETURN_INT32(0);
+
+	argtypeid = get_fn_expr_argtype(fcinfo->flinfo, 0);
+
+	/* Sanity check. */
+	if (!OidIsValid(argtypeid))
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("could not determine input data type")));
+
+	/* 
+	 * If function is called through anyelement function variant,
+	 * then check for known numeric types first.
+	 */
+	if (argtypeid != TEXTOID)
+	{
+		/* Fast path: return 1 for known numeric types. */
+		if ((*common_utility_plugin_ptr->is_tsql_tinyint_datatype) (argtypeid) ||
+			(*common_utility_plugin_ptr->is_tsql_money_datatype) (argtypeid) ||
+			(*common_utility_plugin_ptr->is_tsql_smallmoney_datatype) (argtypeid) ||
+			(*common_utility_plugin_ptr->is_tsql_decimal_datatype) (argtypeid) ||
+			(*common_utility_plugin_ptr->is_tsql_fixeddecimal_datatype) (argtypeid) ||
+			(argtypeid == FLOAT4OID) || (argtypeid == FLOAT8OID) || (argtypeid == NUMERICOID) ||
+			(argtypeid == INT2OID) || (argtypeid == INT4OID) || (argtypeid == INT8OID))
+			PG_RETURN_INT32(1);
+	}
+
+	if (argtypeid == TEXTOID) /* Convert text to C string. */
+	{
+		value_str = text_to_cstring(PG_GETARG_TEXT_P(0));
+	}
+	else /* Convert other types to C string. */
+	{
+		/* Get output function info for the input type. */
+		getTypeOutputInfo(argtypeid, &typoutput, &typisvarlena);
+
+		/* Convert input to string representation. */
+		value_str = OidOutputFunctionCall(typoutput, PG_GETARG_DATUM(0));
+	}
+
+	if (DatumGetBool(OidFunctionCall2(function_oid, CStringGetTextDatum(value_str), CStringGetTextDatum("numeric"))))
+		PG_RETURN_INT32(1); 
+
+	if (DatumGetBool(OidFunctionCall2(function_oid, CStringGetTextDatum(value_str), CStringGetTextDatum("money"))))
+		PG_RETURN_INT32(1); 
+
+	// pfree(value_str);
+	PG_RETURN_INT32(0);
+}
+
 
 /*
  * object_id
