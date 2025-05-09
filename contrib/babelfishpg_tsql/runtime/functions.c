@@ -2153,21 +2153,21 @@ search_partition(PG_FUNCTION_ARGS)
 /*
  * Structure to cache metadata needed in isnumeric().
  */
-typedef struct IsNumericIOData
-{
-	/* For numeric type */
-	FmgrInfo	numeric_inputproc;
-	Oid		numeric_typiofunc;
-	Oid		numeric_typioparam;
-	int32		numeric_typmod;
+// typedef struct IsNumericIOData
+// {
+// 	/* For numeric type */
+// 	FmgrInfo	numeric_inputproc;
+// 	Oid		numeric_typiofunc;
+// 	Oid		numeric_typioparam;
+// 	int32		numeric_typmod;
 	
-	/* For money type */
-	FmgrInfo	money_inputproc;
-	Oid		money_typoid;
-	Oid		money_typiofunc;
-	Oid		money_typioparam;
-	int32		money_typmod;
-} IsNumericIOData;
+// 	/* For money type */
+// 	FmgrInfo	money_inputproc;
+// 	Oid		money_typoid;
+// 	Oid		money_typiofunc;
+// 	Oid		money_typioparam;
+// 	int32		money_typmod;
+// } IsNumericIOData;
 
 /*
  * isnumeric()
@@ -2186,7 +2186,15 @@ isnumeric(PG_FUNCTION_ARGS)
 	Datum		converted;
 	ErrorSaveContext numeric_escontext = {T_ErrorSaveContext};
 	ErrorSaveContext money_escontext = {T_ErrorSaveContext};
-	IsNumericIOData *my_extra;
+	FmgrInfo	numeric_inputproc;
+	Oid		numeric_typiofunc;
+	Oid		numeric_typioparam;
+	
+	/* For money type */
+	FmgrInfo	money_inputproc;
+	// Oid		money_typoid;
+	Oid		money_typiofunc;
+	Oid		money_typioparam;
 
 
 	if (PG_ARGISNULL(0))
@@ -2214,36 +2222,36 @@ isnumeric(PG_FUNCTION_ARGS)
 			PG_RETURN_INT32(1);
 	}
 
-	/* Get or initialize the cached data. */
-	my_extra = (IsNumericIOData *) fcinfo->flinfo->fn_extra;
-	if (my_extra == NULL)
-	{
-		fcinfo->flinfo->fn_extra = MemoryContextAlloc(fcinfo->flinfo->fn_mcxt,
-								sizeof(IsNumericIOData));
-		my_extra = (IsNumericIOData *) fcinfo->flinfo->fn_extra;
-		my_extra->money_typoid = InvalidOid;
-	}
+	// /* Get or initialize the cached data. */
+	// my_extra = (IsNumericIOData *) fcinfo->flinfo->fn_extra;
+	// if (my_extra == NULL)
+	// {
+	// 	fcinfo->flinfo->fn_extra = MemoryContextAlloc(fcinfo->flinfo->fn_mcxt,
+	// 							sizeof(IsNumericIOData));
+	// 	my_extra = (IsNumericIOData *) fcinfo->flinfo->fn_extra;
+	// 	my_extra->money_typoid = InvalidOid;
+	// }
 
 	/* Initialize the cached information for the first time. */
-	if (my_extra->money_typoid == InvalidOid)
-	{
+	// if (my_extra->money_typoid == InvalidOid)
+	// {
 		/* Setup for money type. */
-		my_extra->money_typoid = (*common_utility_plugin_ptr->get_tsql_datatype_oid)("money");
-		getTypeInputInfo(my_extra->money_typoid,
-						&my_extra->money_typiofunc,
-						&my_extra->money_typioparam);
-		fmgr_info_cxt(my_extra->money_typiofunc,
-					  &my_extra->money_inputproc,
+		// my_extra->money_typoid = (*common_utility_plugin_ptr->get_tsql_datatype_oid)("money");
+		getTypeInputInfo((*common_utility_plugin_ptr->get_tsql_datatype_oid)("money"),
+						&money_typiofunc,
+						&money_typioparam);
+		fmgr_info_cxt(money_typiofunc,
+					  &money_inputproc,
 					  fcinfo->flinfo->fn_mcxt);
 		
 		/* Setup for numeric type. */
 		getTypeInputInfo(NUMERICOID,
-					&my_extra->numeric_typiofunc,
-					&my_extra->numeric_typioparam);
-		fmgr_info_cxt(my_extra->numeric_typiofunc,
-					&my_extra->numeric_inputproc,
+					&numeric_typiofunc,
+					&numeric_typioparam);
+		fmgr_info_cxt(numeric_typiofunc,
+					&numeric_inputproc,
 					fcinfo->flinfo->fn_mcxt);
-	}
+	// }
 
 	/* Get the string representation from input datum. */
 	if (argtypeid == TEXTOID)
@@ -2259,20 +2267,20 @@ isnumeric(PG_FUNCTION_ARGS)
 	}
 
 	/* Try to perform the conversion to numeric. */
-	result = InputFunctionCallSafe(&my_extra->numeric_inputproc,
+	result = InputFunctionCallSafe(&numeric_inputproc,
 								 value_str,
-								 my_extra->numeric_typioparam,
-								 my_extra->numeric_typmod,
+								 numeric_typioparam,
+								 -1,
 								 (Node *) &numeric_escontext,
 								 &converted);
 
 	/* If conversion to numeric fails, try to perform the conversion to money. */
 	if (!result)
 	{
-		result = InputFunctionCallSafe(&my_extra->money_inputproc,
+		result = InputFunctionCallSafe(&money_inputproc,
 									 value_str,
-									 my_extra->money_typioparam,
-									 my_extra->money_typmod,
+									 money_typioparam,
+									 -1,
 									 (Node *) &money_escontext,
 									 &converted);
 	}
