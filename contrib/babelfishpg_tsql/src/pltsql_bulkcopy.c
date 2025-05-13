@@ -26,6 +26,7 @@
 #include "commands/sequence.h"
 #include "commands/copy.h"
 #include "executor/executor.h"
+#include "executor/execPartition.h"
 #include "executor/nodeModifyTable.h"
 #include "executor/tuptable.h"
 #include "optimizer/optimizer.h"
@@ -582,16 +583,21 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 	int64		processed = 0;
 	int		   *defmap = cstate->defmap;
 	ExprState **defexprs = cstate->defexprs;
+	TupleTableSlot *singleslot = NULL;
+	ResultRelInfo *prevResultRelInfo = NULL;
+	BulkInsertState bistate = NULL;
+	ModifyTableState *mtstate;
 
 	Assert(cstate->rel);
 	Assert(list_length(cstate->range_table) == 1);
 
 	/*
-	 * The target must be a plain, or foreign relation, or have
+	 * The target must be a plain, foreign, or partitioned relation, or have
 	 * an INSTEAD OF INSERT row trigger.
 	 */
 	if (cstate->rel->rd_rel->relkind != RELKIND_RELATION &&
 		cstate->rel->rd_rel->relkind != RELKIND_FOREIGN_TABLE &&
+		cstate->rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE &&
 		!(cstate->rel->trigdesc &&
 		  cstate->rel->trigdesc->trig_insert_instead_row))
 	{
@@ -610,15 +616,37 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("cannot bulk copy to sequence \"%s\"",
 							RelationGetRelationName(cstate->rel))));
-		else if (cstate->rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("Bulk Copy to partitioned-table is not yet supported in Babelfish.")));
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("cannot bulk copy to non-table relation \"%s\"",
 							RelationGetRelationName(cstate->rel))));
+	}
+
+	/*
+	 * Set up a ModifyTableState so we can let FDW(s) init themselves for
+	 * foreign-table result relation(s).
+	 */
+	mtstate = makeNode(ModifyTableState);
+	mtstate->ps.plan = NULL;
+	mtstate->ps.state = cstate->estate;
+	mtstate->operation = CMD_INSERT;
+	mtstate->mt_nrels = 1;
+	mtstate->resultRelInfo = cstate->resultRelInfo;
+	mtstate->rootResultRelInfo = cstate->resultRelInfo;
+	
+	/*
+	 * If not using batch mode (which allocates slots as needed) set up a
+	 * tuple slot too. When inserting into a partitioned table, we also need
+	 * one, even if we might batch insert, to read the tuple in the root
+	 * partition's form.
+	 */
+	if (cstate->rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+	{
+		singleslot = table_slot_create(cstate->resultRelInfo->ri_RelationDesc,
+									   &cstate->estate->es_tupleTable);
+		/* TODO: Can we utilize cstate->bistate */
+		bistate = GetBulkInsertState();
 	}
 
 	econtext = GetPerTupleExprContext(cstate->estate);
@@ -632,6 +660,7 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 	for (;;)
 	{
 		TupleTableSlot *myslot;
+		TupleTableSlot *batchslot;
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -641,9 +670,19 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 		 */
 		ResetPerTupleExprContext(cstate->estate);
 
-		Assert(cstate->resultRelInfo == cstate->target_resultRelInfo);
+		/* select slot to (initially) load row into */
+		if (cstate->proute)
+		{
+			myslot = singleslot;
+			Assert(myslot != NULL);
+		}
+		else
+		{
 
-		myslot = CopyMultiInsertInfoNextFreeSlot(&cstate->multiInsertInfo, cstate->resultRelInfo);
+			Assert(cstate->resultRelInfo == cstate->target_resultRelInfo);
+
+			myslot = CopyMultiInsertInfoNextFreeSlot(&cstate->multiInsertInfo, cstate->resultRelInfo);
+		}
 
 		/*
 		 * Switch to per-tuple context before building the TupleTableSlot,
@@ -768,6 +807,126 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 
 		MemoryContextSwitchTo(oldcontext);
 
+		/* Determine the partition to insert the tuple into */
+		if (cstate->proute)
+		{
+			TupleConversionMap *map;
+
+			/*
+			* Attempt to find a partition suitable for this tuple.
+			* ExecFindPartition() will raise an error if none can be found or
+			* if the found partition is not suitable for INSERTs.
+			*/
+			cstate->resultRelInfo = ExecFindPartition(mtstate, cstate->target_resultRelInfo,
+												cstate->proute, myslot, cstate->estate);
+
+			if (prevResultRelInfo != cstate->resultRelInfo)
+			{
+				/* Determine which triggers exist on this partition */
+				// has_before_insert_row_trig = (cstate->resultRelInfo->ri_TrigDesc &&
+				// 								cstate->resultRelInfo->ri_TrigDesc->trig_insert_before_row);
+
+				// has_instead_insert_row_trig = (cstate->resultRelInfo->ri_TrigDesc &&
+				// 								cstate->resultRelInfo->ri_TrigDesc->trig_insert_instead_row);
+
+				/*
+				* Disable multi-inserts when the partition has BEFORE/INSTEAD
+				* OF triggers, or if the partition is a foreign table that
+				* can't use batching.
+				*/
+				// leafpart_use_multi_insert = insertMethod == CIM_MULTI_CONDITIONAL &&
+				// 	!has_before_insert_row_trig &&
+				// 	!has_instead_insert_row_trig &&
+				// 	(resultRelInfo->ri_FdwRoutine == NULL ||
+				// 	 resultRelInfo->ri_BatchSize > 1);
+
+				/* Set the multi-insert buffer to use for this partition. */
+				// if (leafpart_use_multi_insert)
+				// {
+					if (cstate->resultRelInfo->ri_CopyMultiInsertBuffer == NULL)
+						CopyMultiInsertInfoSetupBuffer(&cstate->multiInsertInfo,
+														cstate->resultRelInfo);
+				// }
+				// else if (insertMethod == CIM_MULTI_CONDITIONAL &&
+				// 			!CopyMultiInsertInfoIsEmpty(&multiInsertInfo))
+				// {
+				// 	/*
+				// 		* Flush pending inserts if this partition can't use
+				// 		* batching, so rows are visible to triggers etc.
+				// 		*/
+				// 	CopyMultiInsertInfoFlush(&multiInsertInfo,
+				// 								cstate->resultRelInfo,
+				// 								&processed);
+				// }
+
+				if (bistate != NULL)
+					ReleaseBulkInsertStatePin(bistate);
+				prevResultRelInfo = cstate->resultRelInfo;
+			}
+
+			/*
+			* If we're capturing transition tuples, we might need to convert
+			* from the partition rowtype to root rowtype. But if there are no
+			* BEFORE triggers on the partition that could change the tuple,
+			* we can just remember the original unconverted tuple to avoid a
+			* needless round trip conversion.
+			*/
+			// if (cstate->transition_capture != NULL)
+			// 	cstate->transition_capture->tcs_original_insert_tuple =
+			// 		!has_before_insert_row_trig ? myslot : NULL;
+
+			/*
+			* We might need to convert from the root rowtype to the partition
+			* rowtype.
+			*/
+			map = ExecGetRootToChildMap(cstate->resultRelInfo, cstate->estate);
+			// if (insertMethod == CIM_SINGLE || !leafpart_use_multi_insert)
+			// {
+			// 	/* non batch insert */
+			// 	if (map != NULL)
+			// 	{
+			// 		TupleTableSlot *new_slot;
+
+			// 		new_slot = resultRelInfo->ri_PartitionTupleSlot;
+			// 		myslot = execute_attr_map_slot(map->attrMap, myslot, new_slot);
+			// 	}
+			// }
+			// else
+			// {
+				/*
+					* Prepare to queue up tuple for later batch insert into
+					* current partition.
+					*/
+				// TupleTableSlot *batchslot;
+
+				/* no other path available for partitioned table */
+				// Assert(insertMethod == CIM_MULTI_CONDITIONAL);
+
+				batchslot = CopyMultiInsertInfoNextFreeSlot(&cstate->multiInsertInfo,
+															cstate->resultRelInfo);
+
+				if (map != NULL)
+					myslot = execute_attr_map_slot(map->attrMap, myslot,
+													batchslot);
+				else
+				{
+					/*
+					 * This looks more expensive than it is (Believe me, I
+					 * optimized it away. Twice.). The input is in virtual
+					 * form, and we'll materialize the slot below - for most
+					 * slot types the copy performs the work materialization
+					 * would later require anyway.
+					 */
+					ExecCopySlot(batchslot, myslot);
+					myslot = batchslot;
+				}
+			// }
+
+			/* ensure that triggers etc see the right relation  */
+			myslot->tts_tableOid = RelationGetRelid(cstate->resultRelInfo->ri_RelationDesc);
+		}
+		
+
 		/* Compute stored generated columns */
 		if (cstate->resultRelInfo->ri_RelationDesc->rd_att->constr &&
 			cstate->resultRelInfo->ri_RelationDesc->rd_att->constr->has_generated_stored)
@@ -779,6 +938,17 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 		 */
 		if (insert_bulk_check_constraints && cstate->resultRelInfo->ri_RelationDesc->rd_att->constr)
 			ExecConstraints(cstate->resultRelInfo, myslot, cstate->estate);
+		
+		/*
+		* Also check the tuple against the partition constraint, if
+		* there is one; except that if we got here via tuple-routing,
+		* we don't need to if there's no BR trigger defined on the
+		* partition.
+		* TODO: Do we need this?
+		*/
+		if (cstate->resultRelInfo->ri_RelationDesc->rd_rel->relispartition &&
+			(cstate->proute == NULL))
+			ExecPartitionCheck(cstate->resultRelInfo, myslot, cstate->estate, true);
 
 		/*
 		 * The slot previously might point into the per-tuple context. For
@@ -808,7 +978,14 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 	/* Done, clean up. */
 	error_context_stack = errcallback.previous;
 
+	if (bistate != NULL)
+		FreeBulkInsertState(bistate);
+
 	MemoryContextSwitchTo(oldcontext);
+
+	/* Close all the partitioned tables, leaf partitions, and their indices */
+	if (cstate->proute)
+		ExecCleanupTupleRouting(mtstate, cstate->proute);
 
 	return processed;
 }
@@ -1005,6 +1182,13 @@ BeginBulkCopy(Relation rel,
 
 	/* Verify the named relation is a valid target for INSERT. */
 	CheckValidResultRel(cstate->resultRelInfo, CMD_INSERT, NIL);
+
+	/*
+	 * If the named relation is a partitioned table, initialize state for
+	 * tuple routing.
+	 */
+	if (cstate->rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		cstate->proute = ExecSetupPartitionTupleRouting(cstate->estate, cstate->rel);
 
 	CopyMultiInsertInfoInit(&cstate->multiInsertInfo, cstate->resultRelInfo, cstate,
 							cstate->estate, cstate->mycid, ti_options);

@@ -1,0 +1,188 @@
+# Setup partition function and scheme
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+
+# int partitioned table test
+CREATE TABLE sourceTable(c1 int, c2 CHAR(1024))
+CREATE TABLE destinationPartitionedTable(c1 int, c2 CHAR(1024)) ON IntPartitionScheme(c1)
+INSERT INTO sourceTable VALUES (-100, 'Partition 1 - Negative')
+INSERT INTO sourceTable VALUES (250, 'Partition 2 - 0 to 500')
+INSERT INTO sourceTable VALUES (750, 'Partition 3 - 500 to 1000')
+INSERT INTO sourceTable VALUES (1500, 'Partition 4 - Above 1000')
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+
+# varchar partitioned table test
+CREATE PARTITION FUNCTION CharPartitionFunction (varchar(10)) AS RANGE RIGHT FOR VALUES ('D', 'M', 'T')
+CREATE PARTITION SCHEME CharPartitionScheme AS PARTITION CharPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 varchar(10), c2 CHAR(1024))
+CREATE TABLE destinationPartitionedTable(c1 varchar(10), c2 CHAR(1024)) ON CharPartitionScheme(c1)
+INSERT INTO sourceTable VALUES ('Apple', 'Partition 1 - Before D')
+INSERT INTO sourceTable VALUES ('Grape', 'Partition 2 - D to M')
+INSERT INTO sourceTable VALUES ('Orange', 'Partition 3 - M to T')
+INSERT INTO sourceTable VALUES ('Watermelon', 'Partition 4 - After T')
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME CharPartitionScheme
+DROP PARTITION FUNCTION CharPartitionFunction
+
+# date partitioned table test
+CREATE PARTITION FUNCTION DatePartitionFunction (date) AS RANGE RIGHT FOR VALUES ('2022-01-01', '2023-01-01', '2024-01-01')
+CREATE PARTITION SCHEME DatePartitionScheme AS PARTITION DatePartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 date, c2 CHAR(1024))
+CREATE TABLE destinationPartitionedTable(c1 date, c2 CHAR(1024)) ON DatePartitionScheme(c1)
+INSERT INTO sourceTable VALUES ('2021-06-15', 'Partition 1 - Before 2022')
+INSERT INTO sourceTable VALUES ('2022-06-15', 'Partition 2 - 2022')
+INSERT INTO sourceTable VALUES ('2023-06-15', 'Partition 3 - 2023')
+INSERT INTO sourceTable VALUES ('2024-06-15', 'Partition 4 - After 2024')
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME DatePartitionScheme
+DROP PARTITION FUNCTION DatePartitionFunction
+
+# Multiple column table with one partition column
+CREATE PARTITION FUNCTION MultiColPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME MultiColPartitionScheme AS PARTITION MultiColPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int, c2 varchar(50), c3 date, c4 decimal(10,2))
+CREATE TABLE destinationPartitionedTable(c1 int, c2 varchar(50), c3 date, c4 decimal(10,2)) ON MultiColPartitionScheme(c1)
+INSERT INTO sourceTable VALUES (-100, 'Negative Range', '2021-01-01', 123.45)
+INSERT INTO sourceTable VALUES (250, '0-500 Range', '2022-01-01', 250.50)
+INSERT INTO sourceTable VALUES (750, '500-1000 Range', '2023-01-01', 750.75)
+INSERT INTO sourceTable VALUES (1500, 'Above 1000', '2024-01-01', 1500.15)
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value', NULL, NULL)
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME MultiColPartitionScheme
+DROP PARTITION FUNCTION MultiColPartitionFunction
+
+# Large data volume test with partitioned table
+CREATE PARTITION FUNCTION LargeDataPartitionFunction (int) AS RANGE RIGHT FOR VALUES (100, 200, 300, 400, 500)
+CREATE PARTITION SCHEME LargeDataPartitionScheme AS PARTITION LargeDataPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int, c2 CHAR(100))
+CREATE TABLE destinationPartitionedTable(c1 int, c2 CHAR(100)) ON LargeDataPartitionScheme(c1)
+INSERT INTO sourceTable SELECT n, 'Data for partition ' + CAST((CASE 
+    WHEN n < 100 THEN 1
+    WHEN n < 200 THEN 2
+    WHEN n < 300 THEN 3
+    WHEN n < 400 THEN 4
+    WHEN n < 500 THEN 5
+    ELSE 6
+END) AS VARCHAR(10)) FROM (SELECT TOP 600 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values t1 CROSS JOIN master.dbo.spt_values t2) t
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT COUNT(*) FROM sourceTable
+SELECT COUNT(*) FROM destinationPartitionedTable
+SELECT COUNT(*) FROM sourceTable WHERE c1 < 100
+SELECT COUNT(*) FROM destinationPartitionedTable WHERE c1 < 100
+SELECT COUNT(*) FROM sourceTable WHERE c1 >= 100 AND c1 < 200
+SELECT COUNT(*) FROM destinationPartitionedTable WHERE c1 >= 100 AND c1 < 200
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME LargeDataPartitionScheme
+DROP PARTITION FUNCTION LargeDataPartitionFunction
+
+# Identity column in partitioned table
+CREATE PARTITION FUNCTION IdentityPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IdentityPartitionScheme AS PARTITION IdentityPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int IDENTITY(1,1), c2 int, c3 CHAR(100))
+CREATE TABLE destinationPartitionedTable(c1 int IDENTITY(1,1), c2 int, c3 CHAR(100)) ON IdentityPartitionScheme(c2)
+INSERT INTO sourceTable(c2, c3) VALUES (-100, 'Partition 1 - Negative')
+INSERT INTO sourceTable(c2, c3) VALUES (250, 'Partition 2 - 0 to 500')
+INSERT INTO sourceTable(c2, c3) VALUES (750, 'Partition 3 - 500 to 1000')
+INSERT INTO sourceTable(c2, c3) VALUES (1500, 'Partition 4 - Above 1000')
+INSERT INTO sourceTable(c2, c3) VALUES (NULL, 'NULL partition value')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+SELECT IDENT_CURRENT('sourceTable')
+SELECT IDENT_CURRENT('destinationPartitionedTable')
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME IdentityPartitionScheme
+DROP PARTITION FUNCTION IdentityPartitionFunction
+
+# Check constraints with partitioned table
+CREATE PARTITION FUNCTION ConstraintPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME ConstraintPartitionScheme AS PARTITION ConstraintPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int, c2 varchar(50))
+CREATE TABLE destinationPartitionedTable(c1 int, c2 varchar(50) CHECK (LEN(c2) > 5)) ON ConstraintPartitionScheme(c1)
+INSERT INTO sourceTable VALUES (-100, 'Long enough string')
+INSERT INTO sourceTable VALUES (250, 'Another valid string')
+INSERT INTO sourceTable VALUES (750, 'Valid for constraint')
+INSERT INTO sourceTable VALUES (1500, 'This works too')
+INSERT INTO sourceTable VALUES (2000, 'Short')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+-- Now try with -h "CHECK_CONSTRAINTS" to ignore constraints
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp -h "CHECK_CONSTRAINTS"#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME ConstraintPartitionScheme
+DROP PARTITION FUNCTION ConstraintPartitionFunction
+
+# Primary key with partitioned table
+CREATE PARTITION FUNCTION PKPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME PKPartitionScheme AS PARTITION PKPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int, c2 CHAR(1024))
+CREATE TABLE destinationPartitionedTable(c1 int PRIMARY KEY, c2 CHAR(1024)) ON PKPartitionScheme(c1)
+INSERT INTO sourceTable VALUES (-100, 'Partition 1 - Negative')
+INSERT INTO sourceTable VALUES (250, 'Partition 2 - 0 to 500')
+INSERT INTO sourceTable VALUES (750, 'Partition 3 - 500 to 1000')
+INSERT INTO sourceTable VALUES (1500, 'Partition 4 - Above 1000')
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value')
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME PKPartitionScheme
+DROP PARTITION FUNCTION PKPartitionFunction
+
+# Different data types in partitioned table
+CREATE PARTITION FUNCTION DiffTypesPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME DiffTypesPartitionScheme AS PARTITION DiffTypesPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE sourceTable(c1 int, c2 varchar(50), c3 datetime, c4 bit)
+CREATE TABLE destinationPartitionedTable(c1 int, c2 varchar(50), c3 datetime, c4 bit) ON DiffTypesPartitionScheme(c1)
+INSERT INTO sourceTable VALUES (-100, 'Text for negative', '2021-01-01', 1)
+INSERT INTO sourceTable VALUES (250, 'Text for 0-500', '2022-02-02', 0)
+INSERT INTO sourceTable VALUES (750, 'Text for 500-1000', '2023-03-03', 1)
+INSERT INTO sourceTable VALUES (1500, 'Text for 1000+', '2024-04-04', 0)
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition key', NULL, NULL)
+bcp#!#out#!#bcp_source#!#sourceTable
+bcp#!#in#!#bcp_source#!#destinationPartitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM destinationPartitionedTable ORDER BY c1
+DROP TABLE sourceTable
+DROP TABLE destinationPartitionedTable
+DROP PARTITION SCHEME DiffTypesPartitionScheme
+DROP PARTITION FUNCTION DiffTypesPartitionFunction
+
+# Cleanup final partition function and scheme
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction

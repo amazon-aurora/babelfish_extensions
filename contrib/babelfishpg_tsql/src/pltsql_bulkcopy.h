@@ -1,4 +1,5 @@
 #include "access/heapam.h"
+#include "executor/execPartition.h"
 
 typedef struct BulkCopyStateData *BulkCopyState;
 
@@ -33,6 +34,7 @@ typedef struct BulkCopyStateData
 	CopyMultiInsertInfo multiInsertInfo;
 	ResultRelInfo *resultRelInfo;
 	ResultRelInfo *target_resultRelInfo;
+	PartitionTupleRouting *proute;
 
 	/* these are just for error messages, see BulkCopyErrorCallback */
 	const char *cur_relname;	/* table name for error messages */

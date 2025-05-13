@@ -1,0 +1,184 @@
+# Basic insertbulk test with regular source table and int partitioned destination table
+CREATE TABLE sourceTable(c1 int, c2 CHAR(1024))
+INSERT INTO sourceTable SELECT generate_series(1, 1000, 1), 'Foo'
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int, c2 CHAR(1024)) ON IntPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+Select count(*) from sourceTable
+select count(*) from partitionedTable
+select $PARTITION.IntPartitionFunction(c1) as partition_number, count(*) from partitionedTable group by $PARTITION.IntPartitionFunction(c1) order by partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with different data types - float partitioned table
+CREATE TABLE sourceTable(c1 float, c2 varchar(100))
+INSERT INTO sourceTable VALUES (1.5, 'test1'), (250.75, 'test2'), (750.25, 'test3'), (1200.5, 'test4')
+CREATE PARTITION FUNCTION FloatPartitionFunction (float) AS RANGE RIGHT FOR VALUES (0.0, 500.0, 1000.0)
+CREATE PARTITION SCHEME FloatPartitionScheme AS PARTITION FloatPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 float, c2 varchar(100)) ON FloatPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+Select * from sourceTable order by c1
+select * from partitionedTable order by c1
+select $PARTITION.FloatPartitionFunction(c1) as partition_number, count(*) from partitionedTable group by $PARTITION.FloatPartitionFunction(c1) order by partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME FloatPartitionScheme
+DROP PARTITION FUNCTION FloatPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with date data type in partitioned table
+CREATE TABLE sourceTable(c1 date, c2 varchar(100))
+INSERT INTO sourceTable VALUES ('2023-01-01', 'Jan'), ('2023-05-15', 'May'), ('2023-08-20', 'Aug'), ('2023-12-25', 'Dec')
+CREATE PARTITION FUNCTION DatePartitionFunction (date) AS RANGE RIGHT FOR VALUES ('2023-04-01', '2023-08-01', '2023-12-01')
+CREATE PARTITION SCHEME DatePartitionScheme AS PARTITION DatePartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 date, c2 varchar(100)) ON DatePartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+Select * from sourceTable order by c1
+select * from partitionedTable order by c1
+select $PARTITION.DatePartitionFunction(c1) as partition_number, count(*) from partitionedTable group by $PARTITION.DatePartitionFunction(c1) order by partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME DatePartitionScheme
+DROP PARTITION FUNCTION DatePartitionFunction
+DROP TABLE sourceTable
+
+# identity test with regular source table and partitioned destination table
+Create table sourceTable(a int identity, b int)
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(a int identity, b int) ON IntPartitionScheme(a)
+insert into sourceTable values (1)
+insert into sourceTable values (2)
+insertbulk#!#sourceTable#!#partitionedTable
+Select * from sourceTable
+Select * from partitionedTable
+Select Ident_CURRENT('sourceTable')
+Select Ident_CURRENT('partitionedTable')
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+drop table sourceTable
+
+# identity test with keepIdentity and partitioned destination table
+Create table sourceTable(a int identity, b int)
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(a int identity, b int) ON IntPartitionScheme(a)
+insert into sourceTable values (1)
+insert into sourceTable values (2)
+ set IDENTITY_INSERT partitionedTable ON
+traninsertbulk#!#sourceTable#!#partitionedTable#!#keepIdentity
+Select * from sourceTable
+Select * from partitionedTable
+Select Ident_CURRENT('sourceTable')
+Select Ident_CURRENT('partitionedTable')
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+drop table sourceTable
+
+# Testing with check constraint on partitioned destination table
+CREATE TABLE sourceTable (a int)
+INSERT INTO sourceTable SELECT generate_series(1, 1000, 1)
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(a int CHECK (a < 750)) ON IntPartitionScheme(a)
+insertbulk#!#sourceTable#!#partitionedTable
+Select count(*) from sourceTable
+select count(*) from partitionedTable
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with primary key on partitioned destination table
+CREATE TABLE sourceTable(c1 int, c2 varchar(100))
+INSERT INTO sourceTable VALUES (1, 'test1'), (250, 'test2'), (750, 'test3'), (1200, 'test4')
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int PRIMARY KEY, c2 varchar(100)) ON IntPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+Select * from sourceTable order by c1
+select * from partitionedTable order by c1
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with duplicate values and primary key on partitioned destination table
+CREATE TABLE sourceTable(c1 int, c2 varchar(100))
+INSERT INTO sourceTable VALUES (1, 'test1'), (1, 'duplicate'), (250, 'test2'), (750, 'test3')
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int PRIMARY KEY, c2 varchar(100)) ON IntPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+Select * from sourceTable order by c1
+select * from partitionedTable order by c1
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with default values on partitioned destination table
+CREATE TABLE sourceTable(c1 int, c2 varchar(100))
+INSERT INTO sourceTable VALUES (NULL, 'test1'), (250, NULL), (750, 'test3')
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int DEFAULT 500, c2 varchar(100) DEFAULT 'default') ON IntPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM partitionedTable ORDER BY c1
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with large number of rows across partitions
+CREATE TABLE sourceTable(c1 int, c2 varchar(10))
+INSERT INTO sourceTable SELECT n, 'Row-' + CAST(n AS varchar(10)) FROM (SELECT generate_series(1, 2000, 1) AS n) t
+CREATE PARTITION FUNCTION IntPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000, 1500, 2000)
+CREATE PARTITION SCHEME IntPartitionScheme AS PARTITION IntPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int, c2 varchar(10)) ON IntPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+SELECT COUNT(*) FROM sourceTable
+SELECT COUNT(*) FROM partitionedTable
+SELECT $PARTITION.IntPartitionFunction(c1) as partition_number, COUNT(*) FROM partitionedTable GROUP BY $PARTITION.IntPartitionFunction(c1) ORDER BY partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME IntPartitionScheme
+DROP PARTITION FUNCTION IntPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with varchar partitioned table
+CREATE TABLE sourceTable(c1 varchar(10), c2 varchar(100))
+INSERT INTO sourceTable VALUES ('Apple', 'Fruit A'), ('Grape', 'Fruit G'), ('Orange', 'Fruit O'), ('Watermelon', 'Fruit W'), (NULL, 'No fruit')
+CREATE PARTITION FUNCTION CharPartitionFunction (varchar(10)) AS RANGE RIGHT FOR VALUES ('D', 'M', 'T')
+CREATE PARTITION SCHEME CharPartitionScheme AS PARTITION CharPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 varchar(10), c2 varchar(100)) ON CharPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM partitionedTable ORDER BY c1
+SELECT $PARTITION.CharPartitionFunction(c1) as partition_number, COUNT(*) FROM partitionedTable GROUP BY $PARTITION.CharPartitionFunction(c1) ORDER BY partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME CharPartitionScheme
+DROP PARTITION FUNCTION CharPartitionFunction
+DROP TABLE sourceTable
+
+# Testing with multiple column table with one partition column
+CREATE TABLE sourceTable(c1 int, c2 varchar(50), c3 date, c4 decimal(10,2))
+INSERT INTO sourceTable VALUES (-100, 'Negative Range', '2021-01-01', 123.45)
+INSERT INTO sourceTable VALUES (250, '0-500 Range', '2022-01-01', 250.50)
+INSERT INTO sourceTable VALUES (750, '500-1000 Range', '2023-01-01', 750.75)
+INSERT INTO sourceTable VALUES (1500, 'Above 1000', '2024-01-01', 1500.15)
+INSERT INTO sourceTable VALUES (NULL, 'NULL partition value', NULL, NULL)
+CREATE PARTITION FUNCTION MultiColPartitionFunction (int) AS RANGE RIGHT FOR VALUES (0, 500, 1000)
+CREATE PARTITION SCHEME MultiColPartitionScheme AS PARTITION MultiColPartitionFunction ALL TO ([PRIMARY])
+CREATE TABLE partitionedTable(c1 int, c2 varchar(50), c3 date, c4 decimal(10,2)) ON MultiColPartitionScheme(c1)
+insertbulk#!#sourceTable#!#partitionedTable
+SELECT * FROM sourceTable ORDER BY c1
+SELECT * FROM partitionedTable ORDER BY c1
+SELECT $PARTITION.MultiColPartitionFunction(c1) as partition_number, COUNT(*) FROM partitionedTable GROUP BY $PARTITION.MultiColPartitionFunction(c1) ORDER BY partition_number
+DROP TABLE partitionedTable
+DROP PARTITION SCHEME MultiColPartitionScheme
+DROP PARTITION FUNCTION MultiColPartitionFunction
+DROP TABLE sourceTable
