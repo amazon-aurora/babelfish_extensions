@@ -145,7 +145,7 @@ jobs:
           sudo ~/psql/bin/psql -v ON_ERROR_STOP=1 -d babelfish_db -U runner -c "\dx"
       
       - name: Setup upterm session
-        if: always() && steps.check_core_dumps.outputs.files_exists == 'true'
+        if: always()
         uses: lhotari/action-upterm@v1
         timeout-minutes: 60
         with:
