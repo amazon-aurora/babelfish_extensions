@@ -471,3 +471,6 @@ fixeddecimal_modulo
 BABEL-5467
 round_return_type_test-before-16_9-or-17_5
 BABEL-NUMERIC_EXPR
+babel_test_numeric_int2_oper
+babel_test_numeric_int4_oper
+babel_test_numeric_int8_oper
