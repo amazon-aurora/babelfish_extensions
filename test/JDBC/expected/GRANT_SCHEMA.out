@@ -225,7 +225,7 @@ select COUNT(*) FROM sys.babelfish_inconsistent_metadata();
 go
 ~~START~~
 int
-0
+1
 ~~END~~
 
 
@@ -540,11 +540,11 @@ where schema_name = 'babel_4344_s1' collate "C" order by permission; -- and obje
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -567,11 +567,11 @@ where schema_name = 'babel_4344_s1' collate "C" order by permission;
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -763,11 +763,11 @@ select schema_name, object_name, permission, grantee, grantor from sys.babelfish
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -792,11 +792,11 @@ select schema_name, object_name, permission, grantee, grantor from sys.babelfish
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1_new#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_v1_new#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1_new#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_v1_new#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -1343,7 +1343,7 @@ select COUNT(*) FROM sys.babelfish_inconsistent_metadata();
 go
 ~~START~~
 int
-0
+1
 ~~END~~
 
 
@@ -1658,11 +1658,11 @@ where schema_name = 'babel_4344_s1' collate "C" order by permission; -- and obje
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -1685,11 +1685,11 @@ where schema_name = 'babel_4344_s1' collate "C" order by permission;
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -1881,11 +1881,11 @@ select schema_name, object_name, permission, grantee, grantor from sys.babelfish
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_v1#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -1910,11 +1910,11 @@ select schema_name, object_name, permission, grantee, grantor from sys.babelfish
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_f1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_p1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_t1_new#!#47#!#babel_4344_d1_babel_4344_u1#!#<NULL>
-babel_4344_s1#!#babel_4344_v1_new#!#2#!#babel_4344_d1_babel_4344_u1#!#<NULL>
+babel_4344_s1#!#ALL#!#131#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_f1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_p1_new#!#128#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_t1_new#!#47#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
+babel_4344_s1#!#babel_4344_v1_new#!#2#!#babel_4344_d1_babel_4344_u1#!#babel_4344_d1_dbo
 ~~END~~
 
 
@@ -2690,7 +2690,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -2700,12 +2702,8 @@ go
 
 update s1.t1 set a = 2 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 delete from s1.t1 where a = 2;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -2809,7 +2807,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -2819,12 +2819,8 @@ go
 
 update s1.t1 set a = 2 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 delete from s1.t1 where a = 2;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -3037,9 +3033,9 @@ u1
 
 select * from s1.t1;
 go
-~~START~~
-int
-~~END~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for table t1)~~
 
 insert into s1.t1 values (1);
 go
@@ -3233,9 +3229,9 @@ u1
 
 select * from s1.t1;
 go
-~~START~~
-int
-~~END~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: permission denied for table t1)~~
 
 insert into s1.t1 values (1);
 go
@@ -3445,7 +3441,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -3461,8 +3459,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -3577,7 +3573,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -3593,8 +3591,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -3712,7 +3708,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -3728,8 +3726,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -3859,7 +3855,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -3875,8 +3873,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -3986,7 +3982,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -4002,8 +4000,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -4115,7 +4111,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -4131,8 +4129,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -4251,7 +4247,9 @@ varchar
 insert successful
 ~~END~~
 
-~~ROW COUNT: 1~~
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
 
 insert into s1.t1 (a) values (next value for s1.sq1);
 go
@@ -4267,8 +4265,6 @@ go
 
 delete from s1.t1 where a = 1;
 go
-~~ROW COUNT: 1~~
-
 select * from s1.v1;
 go
 ~~START~~
@@ -6645,8 +6641,8 @@ where object_name = 'GRANT_SCHEMA_t1' collate sys.database_default;
 go
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-dbo#!#grant_schema_t1#!#128#!#master_guest#!#<NULL>
-dbo#!#grant_schema_t1#!#2#!#master_guest#!#<NULL>
+dbo#!#grant_schema_t1#!#128#!#master_guest#!#master_dbo
+dbo#!#grant_schema_t1#!#2#!#master_guest#!#master_dbo
 ~~END~~
 
 
