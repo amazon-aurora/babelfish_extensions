@@ -65,6 +65,7 @@
 #include "storage/sinvaladt.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -204,6 +205,9 @@ static bool bbf_check_rowcount_hook(int es_processed);
 
 extern bool called_from_tsql_insert_exec();
 extern bool called_for_tsql_itvf_func();
+static bool update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *grantees, 
+    List *col_privs, Oid object_oid, const char *grantor, 
+    bool grant_option, const char *obj_owner_name, ObjectType objtype);
 static void is_function_pg_stat_valid(FunctionCallInfo fcinfo,
 									  PgStat_FunctionCallUsage *fcu,
 									  char prokind, bool finalize);
@@ -323,6 +327,7 @@ static pltsql_is_partitioned_table_reloptions_allowed_hook_type prev_pltsql_is_p
 static ExecFuncProc_AclCheck_hook_type prev_ExecFuncProc_AclCheck_hook = NULL;
 static bbf_execute_grantstmt_as_dbsecadmin_hook_type prev_bbf_execute_grantstmt_as_dbsecadmin_hook = NULL;
 static bbf_check_member_has_direct_priv_to_grant_role_hook_type prev_bbf_check_member_has_direct_priv_to_grant_role_hook = NULL;
+static update_bbf_schema_permissions_catalog_hook_type prev_update_bbf_schema_permissions_catalog_hook = NULL;
 static validateCachedPlanSearchPath_hook_type prev_validateCachedPlanSearchPath_hook = NULL;
 ExecInitParallelPlan_hook_type prev_ExecInitParallelPlan_hook = NULL;
 ParallelQueryMain_hook_type prev_ParallelQueryMain_hook = NULL;
@@ -556,6 +561,9 @@ InstallExtendedHooks(void)
 
 	prev_bbf_check_member_has_direct_priv_to_grant_role_hook = bbf_check_member_has_direct_priv_to_grant_role_hook;
 	bbf_check_member_has_direct_priv_to_grant_role_hook = bbf_check_member_has_direct_priv_to_grant_role;
+
+	prev_update_bbf_schema_permissions_catalog_hook = update_bbf_schema_permissions_catalog_hook;
+	update_bbf_schema_permissions_catalog_hook = update_bbf_schema_permissions_catalog;
 	
 	pltsql_get_object_identity_event_trigger_hook = pltsql_get_object_identity_event_trigger;
 
@@ -650,6 +658,7 @@ UninstallExtendedHooks(void)
 	ExecFuncProc_AclCheck_hook = prev_ExecFuncProc_AclCheck_hook;
 	bbf_execute_grantstmt_as_dbsecadmin_hook = prev_bbf_execute_grantstmt_as_dbsecadmin_hook;
 	bbf_check_member_has_direct_priv_to_grant_role_hook = prev_bbf_check_member_has_direct_priv_to_grant_role_hook;
+	update_bbf_schema_permissions_catalog_hook = prev_update_bbf_schema_permissions_catalog_hook;
 	validateCachedPlanSearchPath_hook = prev_validateCachedPlanSearchPath_hook;
 
 	bbf_InitializeParallelDSM_hook = NULL;
@@ -6123,6 +6132,358 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 	return;
 }
 
+
+/* The following hook aims to add/remove entries into BBF schema permissions */
+static bool
+update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *grantees,
+    List *col_privs, Oid object_oid, const char *grantor, 
+    bool grant_option, const char *obj_owner_name, ObjectType objtype)
+{
+	Oid 		save_userid;
+	int 		save_sec_context;
+	bool 		only_object_grants = true;
+	char *dbname = get_cur_db_name();
+	Oid sch_id = InvalidOid;
+	const char *logical_schema = NULL;
+	GetUserIdAndSecContext(&save_userid, &save_sec_context);
+	/* Return if it is an internal grant or column privillege */
+	if (!IS_TDS_CONN() || sql_dialect != SQL_DIALECT_TSQL || save_sec_context == 1 || (list_length(col_privs) != 0))
+		return true;
+
+    if (objtype == OBJECT_TABLE)
+    {
+        ListCell   *lc;
+		const char *schema_name = NULL;
+		const char *object_name = get_rel_name(object_oid);
+		const char *grantee = NULL;
+		HeapTuple tuple;
+		Form_pg_class classForm;
+		tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(object_oid));
+		if (!HeapTupleIsValid(tuple))
+			elog(ERROR, "cache lookup failed for relation %u", object_oid);
+		classForm = (Form_pg_class) GETSTRUCT(tuple);
+		sch_id = classForm->relnamespace;
+		ReleaseSysCache(tuple);
+		schema_name = get_namespace_name(sch_id);
+		logical_schema = get_logical_schema_name(schema_name, false);
+
+		/* Handles "grant all" query i.e. all the privilleges on an object */
+        if (privileges == 16511)
+			privileges = ALL_PERMISSIONS_ON_RELATION;
+		if (is_grant)
+		{
+			foreach(lc, grantees)
+			{
+				Oid grantee_oid = lfirst_oid(lc);
+				int old_priv_normal_grant = 0;
+				int old_priv_grant_with_option = 0;
+				if (grantee_oid == ACL_ID_PUBLIC)
+					grantee = PUBLIC_ROLE_NAME;
+				else
+					grantee = GetUserNameFromId(grantee_oid, false);
+				
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, OBJ_RELATION, grantor, false))
+				{
+					old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, false);
+				}
+
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true))
+				{
+					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true);
+				}
+				if (grantee &&
+					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
+							errmsg("Cannot GRANT privileges to the entity owner or the grantor themselves")));
+				}
+
+				/* Special database roles should throw an error. */
+				if(strcmp(grantee, PUBLIC_ROLE_NAME) != 0)
+				{	
+					throw_error_for_fixed_db_role((char *) grantee, dbname);
+				}
+				
+				/* For grant with grant_option, first check if the privilege was already there in normal grants i.e. without options */
+				if(grant_option)
+				{
+					int common_permission = old_priv_normal_grant & privileges;
+					/* indicates all the permissions being granted are already present in normal grants */
+					if(common_permission==old_priv_normal_grant) 
+					{
+						// Remove all entries from normal grants
+						update_privileges_of_object(logical_schema, object_name, old_priv_normal_grant, grantee, OBJ_RELATION, false, grantor, false);
+					}
+					/* indicates few the permissions being granted are already present in normal grants */
+					else if(common_permission!=0)
+					{
+						// Remove common_permission entries from normal grants
+						update_privileges_of_object(logical_schema, object_name, common_permission, grantee, OBJ_RELATION, false, grantor, false);
+					}
+					else{
+						/*
+						 *  If common_permissions is NULL, indicates no permissions being granted are present in normal grants.
+						 */
+					}
+				}
+				/* For normal grant, first check if the privilege was already there in grant with options */
+				else
+				{
+					int common_permission = old_priv_grant_with_option & privileges;
+					if(common_permission!=0)
+					{
+						/* There are a few common privilleges already there in grant with option privillege. We need to grant the other permissions. */
+						privileges = privileges^common_permission;
+
+						/* If privileges to be granted are 0, indicates all the privileges are already present in grant with option, so skip the execution */
+						if(privileges==0)
+							return true;
+					}
+				}
+				/* The privilleges are filtered now add the remaining privilleges */
+				if(grant_option)
+				{
+					add_or_update_object_in_bbf_schema(logical_schema, object_name, privileges, grantee, OBJ_RELATION, true, NULL, grantor, true);
+				}
+				else{
+					add_or_update_object_in_bbf_schema(logical_schema, object_name, privileges, grantee, OBJ_RELATION, true, NULL, grantor, false);
+				}
+			}
+		}
+		else
+		{
+			/* While revoking check if schema-level grant exists, if yes remove entries from bbf_schema_permissions but 
+			* skip engine side execution, hence only_object_grants is set as false. 
+			*/
+	
+
+			foreach(lc, grantees)
+			{
+				Oid grantee_oid = lfirst_oid(lc);
+				int old_priv_normal_grant = 0;
+				int old_priv_grant_with_option = 0;
+				int priv_from_normal_grant = 0;
+				int priv_from_grant_option = 0;
+				if (grantee_oid == ACL_ID_PUBLIC)
+					grantee = PUBLIC_ROLE_NAME;
+				else
+					grantee = GetUserNameFromId(grantee_oid, false);
+
+				if (privilege_exists_in_bbf_schema_permissions(logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_SCHEMA, grantor, false))
+					only_object_grants =  false;
+
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, OBJ_RELATION, grantor, false))
+				{
+					old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, false);
+				}
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true))
+				{
+					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true);
+				}
+				if (grantee &&
+					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
+							errmsg("Cannot REVOKE privileges to the entity owner or the grantor themselves")));
+				}
+
+				/* Special database roles should throw an error. */
+				if(strcmp(grantee, PUBLIC_ROLE_NAME) != 0)
+				{	
+					throw_error_for_fixed_db_role((char *) grantee, dbname);
+				}
+
+				/* Permissions to be revoked from normal grant and grant with option row */
+				priv_from_normal_grant = old_priv_normal_grant & privileges; 
+				priv_from_grant_option = old_priv_grant_with_option & privileges;
+				if(priv_from_normal_grant)
+				{
+					update_privileges_of_object(logical_schema, object_name, priv_from_normal_grant, grantee, OBJ_RELATION, false, grantor, false);
+				}
+				if(priv_from_grant_option)
+				{
+					update_privileges_of_object(logical_schema, object_name, priv_from_grant_option, grantee, OBJ_RELATION, false, grantor, true);
+				}
+			}
+		}
+    }
+    else if ((objtype == OBJECT_PROCEDURE) || (objtype == OBJECT_FUNCTION))
+    {
+        ListCell   *lc;
+		const char *grantee = NULL;
+		const char *schema_name = NULL;
+		const char *object_name = get_func_name(object_oid);
+		const char *func_args = NULL;
+		const char *object_type;
+		HeapTuple tuple;
+		Form_pg_class classForm;
+		tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_oid));
+		if (!HeapTupleIsValid(tuple))
+			elog(ERROR, "cache lookup failed for relation %u", object_oid);
+		classForm = (Form_pg_class) GETSTRUCT(tuple);
+		sch_id = classForm->relnamespace;
+		ReleaseSysCache(tuple);
+		schema_name = get_namespace_name(sch_id);
+		logical_schema = get_logical_schema_name(schema_name, false);
+
+		if (OidIsValid(object_oid))
+			func_args = gen_func_arg_list(object_oid);
+		if(objtype==OBJECT_PROCEDURE)
+			object_type = OBJ_PROCEDURE;
+		else
+			object_type = OBJ_FUNCTION;
+
+		/* Handles "grant all" query i.e. all the privilleges on an object */
+        if (privileges == 16511)
+			privileges = ALL_PERMISSIONS_ON_FUNCTION;        
+		if (is_grant)
+		{
+			foreach(lc, grantees)
+			{
+				Oid grantee_oid = lfirst_oid(lc);
+				int old_priv_normal_grant = 0;
+				int old_priv_grant_with_option = 0;
+				if (grantee_oid == ACL_ID_PUBLIC)
+					grantee = PUBLIC_ROLE_NAME;
+				else
+					grantee = GetUserNameFromId(grantee_oid, false);
+
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, false))
+				{
+					old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, false);
+				}
+
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, true))
+				{
+					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
+				}
+				if (grantee &&
+					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
+							errmsg("Cannot GRANT privileges to the entity owner or the grantor themselves")));
+				}
+
+				/* Special database roles should throw an error. */
+				if(strcmp(grantee, PUBLIC_ROLE_NAME) != 0)
+				{	
+					throw_error_for_fixed_db_role((char *) grantee, dbname);
+				}
+
+				/* For grant with grant_option, first check if the privilege was already there in normal grants i.e. without options */
+				if(grant_option)
+				{
+					int common_permission = old_priv_normal_grant & privileges;
+					/* indicates all the permissions being granted are already present in normal grants */
+					if(common_permission==old_priv_normal_grant)
+					{
+						// Remove all entries from normal grants
+						update_privileges_of_object(logical_schema, object_name, old_priv_normal_grant, grantee, object_type, false, grantor, false);
+					}
+					/* indicates few the permissions being granted are already present in normal grants */
+					else if(common_permission!=0)
+					{
+						// Remove common_permission entries from normal grants
+						update_privileges_of_object(logical_schema, object_name, common_permission, grantee, object_type, false, grantor, false);
+					}
+					else{
+						/*
+						 *  If common_permissions is NULL, indicates no permissions being granted are present in normal grants.
+						 */
+					}
+				}
+				/* For normal grant, first check if the privilege was already there in grant with options */
+				else
+				{
+					int common_permission = old_priv_grant_with_option & privileges;
+					if(common_permission!=0)
+					{
+						/* There are a few common privilleges already there in grant with option privillege. We need to grant the other permissions. */
+						privileges = privileges^common_permission;
+
+						/* If privileges to be granted are 0, indicates all the privileges are already present in grant with option, so skip the execution */
+						if(privileges==0)
+							return true;
+					}
+				}
+				/* The privilleges are filtered now add the remaining privilleges */
+				if(grant_option)
+				{
+					add_or_update_object_in_bbf_schema(logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, true);
+				}
+				else{
+					add_or_update_object_in_bbf_schema(logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, false);
+				}
+			}
+		}
+		else
+		{
+			/* While revoking check if schema-level grant exists, if yes remove entries from bbf_schema_permissions but 
+			* skip engine side execution, hence only_object_grants is set as false. 
+			*/
+
+			foreach(lc, grantees)
+			{
+				Oid grantee_oid = lfirst_oid(lc);
+				int old_priv_normal_grant = 0;
+				int old_priv_grant_with_option = 0;
+				int priv_from_normal_grant = 0;
+				int priv_from_grant_option = 0;
+				if (grantee_oid == ACL_ID_PUBLIC)
+					grantee = PUBLIC_ROLE_NAME;
+				else
+					grantee = GetUserNameFromId(grantee_oid, false);
+
+				if (privilege_exists_in_bbf_schema_permissions(logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_SCHEMA, grantor, false))
+					only_object_grants = false;
+				
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, false))
+				{
+					old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, false);
+				}
+				/* Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option */
+				if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, true))
+				{
+					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
+				}
+				if (grantee &&
+					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
+							errmsg("Cannot REVOKE privileges to the entity owner or the grantor themselves")));
+				}
+				/* Special database roles should throw an error. */
+				if(strcmp(grantee, PUBLIC_ROLE_NAME) != 0)
+				{	
+					throw_error_for_fixed_db_role((char *) grantee, dbname);
+				}
+				/* Permissions to be revoked from normal grant and grant with option row */
+				priv_from_normal_grant = old_priv_normal_grant & privileges;
+				priv_from_grant_option = old_priv_grant_with_option & privileges;
+				if(priv_from_normal_grant)
+				{
+					update_privileges_of_object(logical_schema, object_name, priv_from_normal_grant, grantee, object_type, false, grantor, false);
+				}
+				if(priv_from_grant_option)
+				{
+					update_privileges_of_object(logical_schema, object_name, priv_from_grant_option, grantee, object_type, false, grantor, true);
+				}
+			}
+		}
+    }
+	return only_object_grants;
+}
 
 /*
  * Objects are always owned by current user in postgres but in babelfish

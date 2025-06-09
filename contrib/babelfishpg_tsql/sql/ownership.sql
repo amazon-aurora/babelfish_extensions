@@ -26,7 +26,7 @@ CREATE TABLE sys.babelfish_schema_permissions (
   object_type CHAR(1) NOT NULL COLLATE sys.database_default,
   function_args TEXT COLLATE "C",
   grantor sys.NVARCHAR(128) COLLATE sys.database_default,
-  PRIMARY KEY(dbid, schema_name, object_name, grantee, object_type)
+  PRIMARY KEY(dbid, schema_name, object_name, permission, grantee, object_type, grantor)
 );
 
 -- BABELFISH_FUNCTION_EXT

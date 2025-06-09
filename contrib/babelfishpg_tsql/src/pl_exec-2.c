@@ -3895,6 +3895,9 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	Oid		schemaOid;
 	char		*user = GetUserNameFromId(GetUserId(), false);
 	const char	*db_owner = get_owner_of_db(dbname);
+	const char *grantor;
+	HeapTuple	tup;
+	Form_pg_namespace nspForm;
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3913,6 +3916,20 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 					(errcode(ERRCODE_UNDEFINED_SCHEMA),
 					 errmsg("An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \"\" or [] are not allowed. Change the alias to a valid name.")));
 	}
+
+	tup = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaOid));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for namespace %u", schemaOid);
+
+	nspForm = (Form_pg_namespace) GETSTRUCT(tup);
+	// grantor for schema-level grants will be schema owner 
+	grantor = GetUserNameFromId(nspForm->nspowner, false);
+	if (strcmp(schema_name, psprintf("%s_dbo", dbname)) == 0 && strcmp(grantor, psprintf("%s_db_owner", dbname)) == 0)
+	{
+		grantor = psprintf("%s_dbo", dbname);
+	}
+
+	ReleaseSysCache(tup);
 
 	foreach(lc, stmt->grantees)
 	{
@@ -3974,20 +3991,20 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		if (stmt->is_grant)
 		{
 			/* For GRANT statement, add or update privileges in the catalog. */
-			add_or_update_object_in_bbf_schema(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL);
+			add_or_update_object_in_bbf_schema(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL, grantor, false);
 		}
 		else
 		{
 			/* For REVOKE statement, update privileges in the catalog. */
-			if (privilege_exists_in_bbf_schema_permissions(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rolname, OBJ_SCHEMA))
+			if (privilege_exists_in_bbf_schema_permissions(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rolname, OBJ_SCHEMA, grantor, false))
 			{
 				/* If any object in the schema has the OBJECT level permission. Then, internally grant that permission back. */
 				for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
 				{
 					if (stmt->privileges & permissions[i])
-						grant_perms_to_objects_in_schema(stmt->schema_name, permissions[i], rolname);
+						grant_perms_to_objects_in_schema(stmt->schema_name, permissions[i], rolname, grantor);
 				}
-				update_privileges_of_object(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false);
+				update_privileges_of_object(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false, grantor, false);
 			}
 		}
 		pfree(rolname);

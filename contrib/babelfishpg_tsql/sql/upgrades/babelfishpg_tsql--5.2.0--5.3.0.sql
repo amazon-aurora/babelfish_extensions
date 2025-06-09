@@ -208,6 +208,13 @@ RETURNS INTEGER AS
 'babelfishpg_tsql', 'isnumeric'
 LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+-- Babelfish catalog tables are marked system tables and postgres does not normally allow modification on
+-- system tables so need to temporarily set allow_system_table_mods to update the primary key of babelfish_function_ext.
+SET allow_system_table_mods = ON;
+ALTER TABLE sys.babelfish_schema_permissions DROP CONSTRAINT babelfish_schema_permissions_pkey;
+ALTER TABLE sys.babelfish_schema_permissions ADD CONSTRAINT babelfish_schema_permissions_pkey PRIMARY KEY(dbid, schema_name, object_name, permission, grantee, object_type, grantor);
+RESET allow_system_table_mods;
+
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
 DROP PROCEDURE sys.babelfish_drop_deprecated_object(varchar, varchar, varchar);

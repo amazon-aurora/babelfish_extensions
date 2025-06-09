@@ -1928,6 +1928,7 @@ static Datum get_function_nspname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_function_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_perms_schema_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_perms_grantee_name(HeapTuple tuple, TupleDesc dsc);
+static Datum get_perms_grantor_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_server_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_partition_function_dbname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_partition_scheme_dbname(HeapTuple tuple, TupleDesc dsc);
@@ -1941,6 +1942,7 @@ static bool is_singledb_exists_userdb(void);
 
 /* Rule validation function declaration */
 static bool check_exist(void *arg, HeapTuple tuple);
+static bool is_database_level_permission(void *arg, HeapTuple tuple);
 static bool check_rules(Rule rules[], size_t num_rules, HeapTuple tuple, TupleDesc dsc,
 						Tuplestorestate *res_tupstore, TupleDesc res_tupdesc);
 static bool check_must_match_rules(Rule rules[], size_t num_rules, Oid catalog_oid,
@@ -1958,7 +1960,6 @@ static void rename_view_update_bbf_catalog(RenameStmt *stmt);
 static void rename_procfunc_update_bbf_catalog(RenameStmt *stmt);
 static void rename_object_update_bbf_schema_permission_catalog(RenameStmt *stmt, int rename_type);
 
-static int get_privilege_of_object(const char *schema_name, const char *object_name, const char *grantee, const char *object_type);
 
 /*****************************************
  * 			Catalog Extra Info
@@ -2082,9 +2083,11 @@ Rule		must_match_rules_function[] =
 Rule		must_match_rules_schema_permission[] =
 {
 	{"<schema_name> in babelfish_schema_permissions must also exist in babelfish_namespace_ext",
-	"babelfish_namespace_ext", "nspname", NULL, get_perms_schema_name, NULL, check_exist, NULL},
+	"babelfish_namespace_ext", "nspname", NULL, get_perms_schema_name, NULL, is_database_level_permission, NULL},
 	{"<grantee> in babelfish_schema_permissions must also exist in pg_authid",
-	"pg_authid", "rolname", NULL, get_perms_grantee_name, NULL, check_exist, NULL}
+	"pg_authid", "rolname", NULL, get_perms_grantee_name, NULL, is_database_level_permission, NULL},
+	{"<grantor> in babelfish_schema_permissions must also exist in pg_authid",
+	"pg_authid", "rolname", NULL, get_perms_grantor_name, NULL, is_database_level_permission, NULL}
 };
 
 /* babelfish_server_options */
@@ -2586,6 +2589,17 @@ get_perms_grantee_name(HeapTuple tuple, TupleDesc dsc)
 }
 
 static Datum
+get_perms_grantor_name(HeapTuple tuple, TupleDesc dsc)
+{
+	bool		isNull;
+	Datum		grantor_datum = heap_getattr(tuple, Anum_bbf_schema_perms_grantor, dsc, &isNull);
+	char *grantor_name = pstrdup(TextDatumGetCString(grantor_datum));
+	truncate_identifier(grantor_name, strlen(grantor_name), false);
+
+	return CStringGetDatum(grantor_name);
+}
+
+static Datum
 get_server_name(HeapTuple tuple, TupleDesc dsc)
 {
 	Form_bbf_servers_def	srv_def = ((Form_bbf_servers_def) GETSTRUCT(tuple));
@@ -2814,6 +2828,28 @@ check_exist(void *arg, HeapTuple tuple)
 	return found;
 }
 
+static bool 
+is_database_level_permission(void *arg, HeapTuple tuple)
+{
+	Rule	   *rule;
+	TupleDesc dsc;
+	bool		object_type_is_null;
+	const char *object_type_str; 
+	Datum		object_type; 
+	rule = (Rule *) arg;
+	dsc = rule->tupdesc;
+	object_type = heap_getattr(tuple, Anum_bbf_schema_perms_object_type, dsc, &object_type_is_null);
+	object_type_str= TextDatumGetCString(object_type);
+	if (object_type_is_null)
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+					errmsg("schema name should not be null in babelfish_schema_permissions catalog")));
+
+	if (strcmp(object_type_str, "d") == 0)
+		return true;
+	return check_exist(arg, tuple);
+}
+
 /*****************************************
  * 			Helper functions
  *****************************************/
@@ -2960,6 +2996,8 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 	Datum		new_record_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
 	bool		new_record_nulls_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
 	bool		new_record_repl_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
+	const char *grantee = psprintf("%s_%s", db_name, user_name);
+	const char *grantor = psprintf("%s_dbo", db_name);
 
 	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
 										 RowExclusiveLock);
@@ -2994,9 +3032,23 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 	 * case of REVOKE
 	 */
 	if (is_grant)
+	{
 		new_record_user_ext[USER_EXT_USER_CAN_CONNECT] = Int32GetDatum(1);
+		/* Add entry to bbf_schema_permissions when CONNECT privilege is granted */
+		if(!privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
+		{
+			add_entry_to_bbf_schema_perms("ALL", "ALL", 2048, grantee, "d", NULL , grantor, false);
+		}
+	}
 	else
+	{
 		new_record_user_ext[USER_EXT_USER_CAN_CONNECT] = Int32GetDatum(0);
+		/* Remove entry from bbf_schema_permissions when CONNECT privilege is revoked */
+		if(!privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
+		{
+			remove_entry_from_bbf_schema_perms("ALL", "ALL", grantee, "d", grantor, false);
+		}
+	}
 
 	new_record_repl_user_ext[USER_EXT_USER_CAN_CONNECT] = true;
 
@@ -3646,7 +3698,9 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 				int permission,
 				const char *grantee,
 				const char *object_type,
-				const char *func_args)
+				const char *func_args,
+				const char *grantor,
+				bool grant_option)
 {
 	Relation	bbf_schema_rel;
 	TupleDesc	bbf_schema_dsc;
@@ -3654,9 +3708,10 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	Datum		new_record_bbf_schema[BBF_SCHEMA_PERMS_NUM_OF_COLS];
 	bool		new_record_nulls_bbf_schema[BBF_SCHEMA_PERMS_NUM_OF_COLS];
 	int16	dbid = get_cur_db_id();
+	int new_permission = 0;
 
 	/* Immediately return, if grantee is NULL or PUBLIC. */
-	if ((grantee == NULL) || (strcmp(grantee, PUBLIC_ROLE_NAME) == 0))
+	if (grantee == NULL || permission==0)
 		return;
 
 	/* Fetch the relation */
@@ -3671,14 +3726,21 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	new_record_bbf_schema[Anum_bbf_schema_perms_dbid - 1] = Int16GetDatum(dbid);
 	new_record_bbf_schema[Anum_bbf_schema_perms_schema_name - 1] = CStringGetTextDatum(pstrdup(schema_name));
 	new_record_bbf_schema[Anum_bbf_schema_perms_object_name - 1] = CStringGetTextDatum(pstrdup(object_name));
-	new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(permission);
+	if(grant_option)
+	{
+		new_permission = permission | 256;
+		new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(new_permission);
+	}
+	else{
+		new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(permission);
+	}
 	new_record_bbf_schema[Anum_bbf_schema_perms_grantee - 1] = CStringGetTextDatum(pstrdup(grantee));
 	new_record_bbf_schema[Anum_bbf_schema_perms_object_type - 1] = CStringGetTextDatum(pstrdup(object_type));
 	if (func_args)
 		new_record_bbf_schema[Anum_bbf_schema_perms_function_args - 1] = CStringGetTextDatum(func_args);
 	else
 		new_record_nulls_bbf_schema[Anum_bbf_schema_perms_function_args - 1] = true;
-	new_record_nulls_bbf_schema[Anum_bbf_schema_perms_grantor - 1] = true;
+	new_record_bbf_schema[Anum_bbf_schema_perms_grantor - 1] = CStringGetTextDatum(pstrdup(grantor));
 
 	tuple_bbf_schema = heap_form_tuple(bbf_schema_dsc,
 									new_record_bbf_schema,
@@ -3703,13 +3765,15 @@ update_privileges_of_object(const char *schema_name,
 				int new_permission,
 				const char *grantee,
 				const char *object_type,
-				bool is_grant)
+				bool is_grant,
+				const char *grantor,
+				bool grant_option)
 {
 	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
 	TupleDesc	bbf_schema_dsc;
 	HeapTuple	new_tuple;
-	ScanKeyData scanKey[5];
+	ScanKeyData scanKey[6];
 	SysScanDesc scan;
 	int16	dbid = get_cur_db_id();
 	int old_permission = 0;
@@ -3723,11 +3787,11 @@ update_privileges_of_object(const char *schema_name,
 		return;
 
 	/* Immediately return, if grantee is NULL or PUBLIC. */
-	if ((grantee == NULL) || (strcmp(grantee, PUBLIC_ROLE_NAME) == 0))
+	if (grantee == NULL)
 		return;
 
 	/* Get existing privilege of an object. */
-	old_permission = get_privilege_of_object(schema_name, object_name, grantee, object_type);
+	old_permission = get_privilege_of_object(schema_name, object_name, grantee, object_type, grantor, grant_option);
 
 	if (is_grant)
 	{
@@ -3743,10 +3807,9 @@ update_privileges_of_object(const char *schema_name,
 		 */
 		current_permission = old_permission & ~new_permission;
 	}
-
-	if (current_permission == 0)
+	if ((!grant_option && current_permission == 0) || (grant_option && current_permission == 256))
 	{
-		remove_entry_from_bbf_schema_perms(schema_name, object_name, grantee, object_type);
+		remove_entry_from_bbf_schema_perms(schema_name, object_name, grantee, object_type, grantor, grant_option);
 		return;
 	}
 
@@ -3782,31 +3845,52 @@ update_privileges_of_object(const char *schema_name,
 				tsql_get_database_or_server_collation_oid_internal(false),
 				F_TEXTEQ,
 				CStringGetTextDatum(grantee));
+	ScanKeyEntryInitialize(&scanKey[5], 0,
+				Anum_bbf_schema_perms_grantor,
+				BTEqualStrategyNumber,
+				InvalidOid,
+				tsql_get_database_or_server_collation_oid_internal(false),
+				F_TEXTEQ,
+				CStringGetTextDatum(grantor));
 
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
-				false, NULL, 5, scanKey);
+				false, NULL, 6, scanKey);
 
-	tuple_bbf_schema = systable_getnext(scan);
-	if (HeapTupleIsValid(tuple_bbf_schema))
-	{
-		bbf_schema_dsc = RelationGetDescr(bbf_schema_rel);
-		/* Build a tuple to insert */
-		MemSet(new_record_bbf_schema, 0, sizeof(new_record_bbf_schema));
-		MemSet(new_record_nulls_bbf_schema, false, sizeof(new_record_nulls_bbf_schema));
-		MemSet(new_record_repl_bbf_schema, false, sizeof(new_record_repl_bbf_schema));
+	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+    {
+		Datum datum;
+        bool isnull;
+        int permission_val;
 
-		new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(current_permission);
-		new_record_repl_bbf_schema[Anum_bbf_schema_perms_permission - 1] = true;
+        datum = heap_getattr(tuple_bbf_schema, Anum_bbf_schema_perms_permission, RelationGetDescr(bbf_schema_rel), &isnull);
 
-		new_tuple = heap_modify_tuple(tuple_bbf_schema,
-									bbf_schema_dsc,
-									new_record_bbf_schema,
-									new_record_nulls_bbf_schema,
-									new_record_repl_bbf_schema);
+        if (isnull)
+            continue;
+		permission_val = DatumGetInt32(datum);
 
-		CatalogTupleUpdate(bbf_schema_rel, &new_tuple->t_self, new_tuple);
-		heap_freetuple(new_tuple);
+        if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
+        {
+
+			bbf_schema_dsc = RelationGetDescr(bbf_schema_rel);
+			/* Build a tuple to insert */
+			MemSet(new_record_bbf_schema, 0, sizeof(new_record_bbf_schema));
+			MemSet(new_record_nulls_bbf_schema, false, sizeof(new_record_nulls_bbf_schema));
+			MemSet(new_record_repl_bbf_schema, false, sizeof(new_record_repl_bbf_schema));
+
+			new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(current_permission);
+			new_record_repl_bbf_schema[Anum_bbf_schema_perms_permission - 1] = true;
+
+			new_tuple = heap_modify_tuple(tuple_bbf_schema,
+										bbf_schema_dsc,
+										new_record_bbf_schema,
+										new_record_nulls_bbf_schema,
+										new_record_repl_bbf_schema);
+
+			CatalogTupleUpdate(bbf_schema_rel, &new_tuple->t_self, new_tuple);
+			heap_freetuple(new_tuple);
+			break;
+		}
 	}
 
 	systable_endscan(scan);
@@ -3823,7 +3907,9 @@ bool
 privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 							const char *object_name,
 							const char *grantee,
-							const char *object_type)
+							const char *object_type,
+							const char *grantor,
+							bool grant_option)
 {
 	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
@@ -3837,10 +3923,7 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 
 	if (grantee != NULL)
 	{
-		ScanKeyData	scanKey[5];
-		/* Immediately return false, if grantee is PUBLIC. */
-		if (strcmp(grantee, PUBLIC_ROLE_NAME) == 0)
-			return false;
+		ScanKeyData	scanKey[6];
 
 		bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
 										AccessShareLock);
@@ -3876,13 +3959,20 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 					tsql_get_database_or_server_collation_oid_internal(false),
 					F_TEXTEQ,
 					CStringGetTextDatum(object_type));
+		ScanKeyEntryInitialize(&scanKey[5], 0,
+					Anum_bbf_schema_perms_grantor,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(grantor));
 		scan = systable_beginscan(bbf_schema_rel,
 					get_bbf_schema_perms_idx_oid(),
-					true, NULL, 5, scanKey);
+					true, NULL, 6, scanKey);
 	}
 	else
 	{
-		ScanKeyData	scanKey[4];
+		ScanKeyData	scanKey[5];
 		bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
 										AccessShareLock);
 		ScanKeyInit(&scanKey[0],
@@ -3910,15 +4000,40 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 					tsql_get_database_or_server_collation_oid_internal(false),
 					F_TEXTEQ,
 					CStringGetTextDatum(object_type));
+		ScanKeyEntryInitialize(&scanKey[4], 0,
+					Anum_bbf_schema_perms_grantor,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(grantor));
 
 		scan = systable_beginscan(bbf_schema_rel,
 					get_bbf_schema_perms_idx_oid(),
-					true, NULL, 4, scanKey);
+					true, NULL, 5, scanKey);
 	}
 
-	tuple_bbf_schema = systable_getnext(scan);
-	if (HeapTupleIsValid(tuple_bbf_schema))
-		catalog_entry_exists = true;
+	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	{
+		Datum datum;
+		bool isnull;
+		int permission_val;
+
+		datum = heap_getattr(tuple_bbf_schema,
+							Anum_bbf_schema_perms_permission,
+							RelationGetDescr(bbf_schema_rel),
+							&isnull);
+		if (isnull)
+			continue;
+
+		permission_val = DatumGetInt32(datum);
+
+		if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
+		{
+			catalog_entry_exists = true;
+			break;
+		}
+	}
 
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, AccessShareLock);
@@ -3928,15 +4043,17 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 /*
  * Get the value of permission column from BABELFISH_SCHEMA_PERMISSIONS table.
  */
-static int
+int
 get_privilege_of_object(const char *schema_name,
 					const char *object_name,
 					const char *grantee,
-					const char *object_type)
+					const char *object_type, 
+					const char *grantor,
+					bool grant_option)
 {
 	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
-	ScanKeyData	scanKey[5];
+	ScanKeyData	scanKey[6];
 	SysScanDesc	scan;
 	int16	dbid = get_cur_db_id();
 	int permission = 0;
@@ -3975,18 +4092,37 @@ get_privilege_of_object(const char *schema_name,
 				tsql_get_database_or_server_collation_oid_internal(false),
 				F_TEXTEQ,
 				CStringGetTextDatum(object_type));
+	ScanKeyEntryInitialize(&scanKey[5], 0,
+				Anum_bbf_schema_perms_grantor,
+				BTEqualStrategyNumber,
+				InvalidOid,
+				tsql_get_database_or_server_collation_oid_internal(false),
+				F_TEXTEQ,
+				CStringGetTextDatum(grantor));
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
-				true, NULL, 5, scanKey);
-	tuple_bbf_schema = systable_getnext(scan);
+				true, NULL, 6, scanKey);
+	// tuple_bbf_schema = systable_getnext(scan);
 
-	if (HeapTupleIsValid(tuple_bbf_schema))
+	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
 	{
 		Datum datum;
 		bool isnull;
+		int current_perm;
+
 		datum = heap_getattr(tuple_bbf_schema, Anum_bbf_schema_perms_permission, RelationGetDescr(bbf_schema_rel), &isnull);
-		permission = DatumGetInt32(datum);
+		if (isnull)
+			continue;
+
+		current_perm = DatumGetInt32(datum);
+
+		if ((grant_option && (current_perm & 256)) || (!grant_option && !(current_perm & 256)))
+		{
+			permission = current_perm;
+			break;
+		}
 	}
+
 
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, AccessShareLock);
@@ -4000,11 +4136,13 @@ void
 remove_entry_from_bbf_schema_perms(const char *schema_name,
 				  const char *object_name,
 				  const char *grantee,
-				  const char *object_type)
+				  const char *object_type,
+				  const char *grantor,
+				  bool grant_option)
 {
 	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
-	ScanKeyData scanKey[5];
+	ScanKeyData scanKey[6];
 	SysScanDesc scan;
 	int16	dbid = get_cur_db_id();
 
@@ -4013,7 +4151,7 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 		return;
 
 	/* Immediately return, if grantee is NULL or PUBLIC. */
-	if ((grantee == NULL) || (strcmp(grantee, PUBLIC_ROLE_NAME) == 0))
+	if ((grantee == NULL))
 		return;
 
 	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
@@ -4050,14 +4188,36 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 				tsql_get_database_or_server_collation_oid_internal(false),
 				F_TEXTEQ,
 				CStringGetTextDatum(object_type));
+	ScanKeyEntryInitialize(&scanKey[5], 0,  // New scan key for grantor
+				Anum_bbf_schema_perms_grantor,
+				BTEqualStrategyNumber,
+				InvalidOid,
+				tsql_get_database_or_server_collation_oid_internal(false),
+				F_TEXTEQ,
+				CStringGetTextDatum(grantor));
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
-				true, NULL, 5, scanKey);
+				true, NULL, 6, scanKey);
 
-	tuple_bbf_schema = systable_getnext(scan);
+	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	{
+		bool		isnull;
+		Datum		permission_datum = heap_getattr(tuple_bbf_schema,
+									Anum_bbf_schema_perms_permission,
+									RelationGetDescr(bbf_schema_rel),
+									&isnull);
+		int permission_val = DatumGetInt32(permission_datum);
 
-	if (HeapTupleIsValid(tuple_bbf_schema))
-		CatalogTupleDelete(bbf_schema_rel, &tuple_bbf_schema->t_self);
+		if (isnull)
+			continue;
+
+		// Check the 256 bit according to grant_option and delete matching tuple
+		if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
+		{
+			CatalogTupleDelete(bbf_schema_rel, &tuple_bbf_schema->t_self);
+			break;  // Delete only one matching tuple and exit
+		}
+	}
 
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, RowExclusiveLock);
@@ -4074,12 +4234,14 @@ add_or_update_object_in_bbf_schema(const char *schema_name,
 				const char *grantee,
 				const char *object_type,
 				bool is_grant,
-				const char *func_args)
+				const char *func_args,
+				const char *grantor,
+				bool grant_option)
 {
-	if (!privilege_exists_in_bbf_schema_permissions(schema_name, object_name, grantee, object_type))
-		add_entry_to_bbf_schema_perms(schema_name, object_name, new_permission, grantee, object_type, func_args);
+	if (!privilege_exists_in_bbf_schema_permissions(schema_name, object_name, grantee, object_type, grantor, grant_option))
+		add_entry_to_bbf_schema_perms(schema_name, object_name, new_permission, grantee, object_type, func_args,grantor, grant_option);
 	else
-		update_privileges_of_object(schema_name, object_name, new_permission, grantee, object_type, is_grant);
+		update_privileges_of_object(schema_name, object_name, new_permission, grantee, object_type, is_grant, grantor, grant_option);
 }
 
 /*
@@ -4202,13 +4364,14 @@ drop_bbf_schema_permission_entries(int16 dbid)
 void
 grant_perms_to_objects_in_schema(const char *schema_name,
 				  int permission,
-				  const char *grantee)
+				  const char *grantee,
+				  const char *grantor)
 {
 	SysScanDesc scan;
 	Relation	bbf_schema_rel;
 	TupleDesc	dsc;
 	HeapTuple	tuple_bbf_schema;
-	ScanKeyData scanKey[3];
+	ScanKeyData scanKey[4];
 	int16		dbid = get_cur_db_id();
 	const char *db_name = get_cur_db_name();
 
@@ -4234,9 +4397,16 @@ grant_perms_to_objects_in_schema(const char *schema_name,
 				tsql_get_database_or_server_collation_oid_internal(false),
 				F_TEXTEQ,
 				CStringGetTextDatum(grantee));
+	ScanKeyEntryInitialize(&scanKey[3], 0,
+				Anum_bbf_schema_perms_grantor,
+				BTEqualStrategyNumber,
+				InvalidOid,
+				tsql_get_database_or_server_collation_oid_internal(false),
+				F_TEXTEQ,
+				CStringGetTextDatum(grantor));
 
 	scan = systable_beginscan(bbf_schema_rel, get_bbf_schema_perms_idx_oid(),
-							true, NULL, 3, scanKey);
+							true, NULL, 4, scanKey);
 	tuple_bbf_schema = systable_getnext(scan);
 
 	while (HeapTupleIsValid(tuple_bbf_schema))
