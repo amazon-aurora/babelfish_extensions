@@ -128,19 +128,27 @@ GO
 
 GRANT ALL ON #temp_5 TO role_a
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot find the object "#temp_5", because it does not exist or you do not have permission.)~~
+
 
 DROP ROLE role_a
 GO
-~~ERROR (Code: 33557097)~~
-
-~~ERROR (Message: role "master_role_a" cannot be dropped because some objects depend on it)~~
-
 
 REVOKE ALL ON #temp_5 FROM role_a
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: User or role "role_a" does not exist)~~
+
 
 DROP TABLE #temp_5
 GO
 
 DROP ROLE role_a
 GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot drop the role 'role_a', because it does not exist or you do not have permission.)~~
+

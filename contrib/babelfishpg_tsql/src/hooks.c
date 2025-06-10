@@ -6234,6 +6234,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	int 		save_sec_context;
 	bool 		only_object_grants = true;
 	char *dbname = get_cur_db_name();
+	const char *current_user = GetUserNameFromId(GetUserId(), false);
 	Oid sch_id = InvalidOid;
 	const char *logical_schema = NULL;
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
@@ -6256,7 +6257,16 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		sch_id = classForm->relnamespace;
 		ReleaseSysCache(tuple);
 		schema_name = get_namespace_name(sch_id);
-		logical_schema = get_logical_schema_name(schema_name, false);
+		if (isTempNamespace(sch_id))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_GRANT_OPERATION),
+		 			errmsg("Cannot find the object \"%s\", because it does not exist or you do not have permission.", object_name)));
+		}
+		if(schema_name!=NULL)
+			logical_schema = get_logical_schema_name(schema_name, false);
+		else 
+			logical_schema = get_authid_user_ext_schema_name(dbname, current_user);
 
 		/* Handles "grant all" query i.e. all the privilleges on an object */
         if (privileges == 16511)
@@ -6349,8 +6359,6 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 			/* While revoking check if schema-level grant exists, if yes remove entries from bbf_schema_permissions but 
 			* skip engine side execution, hence only_object_grants is set as false. 
 			*/
-	
-
 			foreach(lc, grantees)
 			{
 				Oid grantee_oid = lfirst_oid(lc);
@@ -6421,7 +6429,10 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		sch_id = classForm->relnamespace;
 		ReleaseSysCache(tuple);
 		schema_name = get_namespace_name(sch_id);
-		logical_schema = get_logical_schema_name(schema_name, false);
+		if(schema_name!=NULL)
+			logical_schema = get_logical_schema_name(schema_name, false);
+		else 
+			logical_schema = get_authid_user_ext_schema_name(dbname, current_user);
 
 		if (OidIsValid(object_oid))
 			func_args = gen_func_arg_list(object_oid);
