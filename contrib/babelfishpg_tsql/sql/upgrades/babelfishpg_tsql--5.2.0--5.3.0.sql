@@ -63,13 +63,6 @@ $$
     end;
 $$;
 
--- Babelfish catalog tables are marked system tables and postgres does not normally allow modification on
--- system tables so need to temporarily set allow_system_table_mods to update the primary key of babelfish_function_ext.
-SET allow_system_table_mods = ON;
-ALTER TABLE sys.babelfish_schema_permissions DROP CONSTRAINT babelfish_schema_permissions_pkey;
-ALTER TABLE sys.babelfish_schema_permissions ADD CONSTRAINT babelfish_schema_permissions_pkey PRIMARY KEY(dbid, schema_name, object_name, permission, grantee, object_type, grantor);
-RESET allow_system_table_mods;
-
 -- Please add your SQLs here
 /*
  * Note: These SQL statements may get executed multiple times specially when some features get backpatched.
