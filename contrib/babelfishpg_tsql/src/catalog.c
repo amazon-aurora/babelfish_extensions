@@ -2593,7 +2593,8 @@ get_perms_grantor_name(HeapTuple tuple, TupleDesc dsc)
 {
 	bool		isNull;
 	Datum		grantor_datum = heap_getattr(tuple, Anum_bbf_schema_perms_grantor, dsc, &isNull);
-	char *grantor_name = pstrdup(TextDatumGetCString(grantor_datum));
+	char 		*grantor_name = pstrdup(TextDatumGetCString(grantor_datum));
+
 	truncate_identifier(grantor_name, strlen(grantor_name), false);
 
 	return CStringGetDatum(grantor_name);
@@ -2828,23 +2829,28 @@ check_exist(void *arg, HeapTuple tuple)
 	return found;
 }
 
+/*
+ * The following function checks whether the permission is database level permission.
+ * In a database level permission, schema-name is set as ALL. 
+ * To exclude ALL from metadata inconsistency, this function passes true in case of a database level permission.
+ */
 static bool 
 is_database_level_permission(void *arg, HeapTuple tuple)
 {
-	Rule	   *rule;
-	TupleDesc dsc;
+	Rule	   	*rule;
+	TupleDesc  	dsc;
 	bool		object_type_is_null;
-	const char *object_type_str; 
+	const char 	*object_type_str; 
 	Datum		object_type; 
 	rule = (Rule *) arg;
 	dsc = rule->tupdesc;
 	object_type = heap_getattr(tuple, Anum_bbf_schema_perms_object_type, dsc, &object_type_is_null);
 	object_type_str= TextDatumGetCString(object_type);
+
 	if (object_type_is_null)
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-					errmsg("schema name should not be null in babelfish_schema_permissions catalog")));
-
+				errmsg("schema name should not be null in babelfish_schema_permissions catalog")));
 	if (strcmp(object_type_str, "d") == 0)
 		return true;
 	return check_exist(arg, tuple);
@@ -2996,8 +3002,8 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 	Datum		new_record_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
 	bool		new_record_nulls_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
 	bool		new_record_repl_user_ext[BBF_AUTHID_USER_EXT_NUM_COLS];
-	const char *grantee = psprintf("%s_%s", db_name, user_name);
-	const char *grantor = psprintf("%s_dbo", db_name);
+	const char 	*grantee = psprintf("%s_%s", db_name, user_name);
+	const char 	*grantor = psprintf("%s_dbo", db_name);
 
 	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
 										 RowExclusiveLock);
@@ -3037,7 +3043,7 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 		/* Add entry to bbf_schema_permissions when CONNECT privilege is granted */
 		if(!privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
 		{
-			add_entry_to_bbf_schema_perms("ALL", "ALL", 2048, grantee, "d", NULL , grantor, false);
+			add_entry_to_bbf_schema_perms("ALL", "ALL", ACL_CONNECT, grantee, "d", NULL , grantor, false);
 		}
 	}
 	else
@@ -3707,10 +3713,10 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	HeapTuple	tuple_bbf_schema;
 	Datum		new_record_bbf_schema[BBF_SCHEMA_PERMS_NUM_OF_COLS];
 	bool		new_record_nulls_bbf_schema[BBF_SCHEMA_PERMS_NUM_OF_COLS];
-	int16	dbid = get_cur_db_id();
-	int new_permission = 0;
+	int16		dbid = get_cur_db_id();
+	int 		new_permission = 0;
 
-	/* Immediately return, if grantee is NULL or PUBLIC. */
+	/* Immediately return, if grantee is NULL or permission is 0 */
 	if (grantee == NULL || permission==0)
 		return;
 
@@ -3728,7 +3734,7 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	new_record_bbf_schema[Anum_bbf_schema_perms_object_name - 1] = CStringGetTextDatum(pstrdup(object_name));
 	if(grant_option)
 	{
-		new_permission = permission | 256;
+		new_permission = permission | ACL_USAGE;
 		new_record_bbf_schema[Anum_bbf_schema_perms_permission - 1] = Int32GetDatum(new_permission);
 	}
 	else{
@@ -3786,7 +3792,7 @@ update_privileges_of_object(const char *schema_name,
 	if (schema_name == NULL || is_shared_schema(schema_name))
 		return;
 
-	/* Immediately return, if grantee is NULL or PUBLIC. */
+	/* Immediately return, if grantee is NULL. */
 	if (grantee == NULL)
 		return;
 
@@ -3807,7 +3813,7 @@ update_privileges_of_object(const char *schema_name,
 		 */
 		current_permission = old_permission & ~new_permission;
 	}
-	if ((!grant_option && current_permission == 0) || (grant_option && current_permission == 256))
+	if ((!grant_option && current_permission == 0) || (grant_option && current_permission == ACL_USAGE))
 	{
 		remove_entry_from_bbf_schema_perms(schema_name, object_name, grantee, object_type, grantor, grant_option);
 		return;
@@ -3858,20 +3864,19 @@ update_privileges_of_object(const char *schema_name,
 				false, NULL, 6, scanKey);
 
 	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
-    {
+    	{
 		Datum datum;
-        bool isnull;
-        int permission_val;
+		bool isnull;
+		int permission_val;
 
-        datum = heap_getattr(tuple_bbf_schema, Anum_bbf_schema_perms_permission, RelationGetDescr(bbf_schema_rel), &isnull);
+		datum = heap_getattr(tuple_bbf_schema, Anum_bbf_schema_perms_permission, RelationGetDescr(bbf_schema_rel), &isnull);
 
-        if (isnull)
-            continue;
+		if (isnull)
+			continue;
 		permission_val = DatumGetInt32(datum);
 
-        if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
-        {
-
+        	if ((grant_option && (permission_val & ACL_USAGE)) || (!grant_option && !(permission_val & ACL_USAGE)))
+        	{
 			bbf_schema_dsc = RelationGetDescr(bbf_schema_rel);
 			/* Build a tuple to insert */
 			MemSet(new_record_bbf_schema, 0, sizeof(new_record_bbf_schema));
@@ -4028,7 +4033,7 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 
 		permission_val = DatumGetInt32(datum);
 
-		if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
+		if ((grant_option && (permission_val & ACL_USAGE)) || (!grant_option && !(permission_val & ACL_USAGE)))
 		{
 			catalog_entry_exists = true;
 			break;
@@ -4102,7 +4107,6 @@ get_privilege_of_object(const char *schema_name,
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
 				true, NULL, 6, scanKey);
-	// tuple_bbf_schema = systable_getnext(scan);
 
 	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
 	{
@@ -4116,13 +4120,12 @@ get_privilege_of_object(const char *schema_name,
 
 		current_perm = DatumGetInt32(datum);
 
-		if ((grant_option && (current_perm & 256)) || (!grant_option && !(current_perm & 256)))
+		if ((grant_option && (current_perm & ACL_USAGE)) || (!grant_option && !(current_perm & ACL_USAGE)))
 		{
 			permission = current_perm;
 			break;
 		}
 	}
-
 
 	systable_endscan(scan);
 	table_close(bbf_schema_rel, AccessShareLock);
@@ -4150,7 +4153,7 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 	if (schema_name == NULL || is_shared_schema(schema_name))
 		return;
 
-	/* Immediately return, if grantee is NULL or PUBLIC. */
+	/* Immediately return, if grantee is NULL. */
 	if ((grantee == NULL))
 		return;
 
@@ -4211,11 +4214,12 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 		if (isnull)
 			continue;
 
-		// Check the 256 bit according to grant_option and delete matching tuple
-		if ((grant_option && (permission_val & 256)) || (!grant_option && !(permission_val & 256)))
+		/* Check the ACL_USAGE bit according to grant_option and delete matching tuple */
+		if ((grant_option && (permission_val & ACL_USAGE)) || (!grant_option && !(permission_val & ACL_USAGE)))
 		{
+			/* Delete the matching tuple and exit */
 			CatalogTupleDelete(bbf_schema_rel, &tuple_bbf_schema->t_self);
-			break;  // Delete only one matching tuple and exit
+			break;  
 		}
 	}
 
