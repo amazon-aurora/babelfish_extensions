@@ -69,6 +69,7 @@ char	   *pltsql_host_release = NULL;
 char	   *pltsql_host_service_pack_level = NULL;
 
 bool		pltsql_enable_create_alter_view_from_pg = false;
+bool		bypass_migration_mode_check = false;
 
 static const struct config_enum_entry explain_format_options[] = {
 	{"text", EXPLAIN_FORMAT_TEXT, false},
@@ -984,6 +985,15 @@ define_custom_variables(void)
 							 PGC_USERSET,
 							 GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE,
 							 check_no_browsetable, NULL, NULL);
+
+	DefineCustomBoolVariable("babelfishpg_tsql.bypass_migration_mode_check",
+							 gettext_noop("Bypass migration mode check"),
+							 NULL,
+							 &bypass_migration_mode_check,
+							 false,
+							 PGC_SUSET, /* only superuser can set */
+							 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+							 NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("babelfishpg_tsql.showplan_xml",
 							 gettext_noop("SQL-Server compatibility SHOWPLAN_XML option."),

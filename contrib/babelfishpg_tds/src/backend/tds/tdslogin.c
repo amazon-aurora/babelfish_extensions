@@ -2269,6 +2269,21 @@ TdsSendLoginAck(Port *port)
 						 errmsg("\"%s\" is not a Babelfish user", port->user_name)));
 		}
 
+		/* Add the migration mode consistency check here */
+		if (pltsql_plugin_handler_ptr && 
+			pltsql_plugin_handler_ptr->pltsql_check_migration_mode_consistency)
+		{
+			const char	*bypass_check = GetConfigOption("babelfishpg_tsql.bypass_migration_mode_check", true, false);
+			if (bypass_check && strncasecmp(bypass_check, "off", 3) == 0)
+			{
+				ereport(LOG, (errmsg("Migration mode consistency check started")));
+				StartTransactionCommand();
+				pltsql_plugin_handler_ptr->pltsql_check_migration_mode_consistency();
+				CommitTransactionCommand();
+				ereport(LOG, (errmsg("Migration mode consistency check completed")));
+			}
+		}
+
 		TdsSetDbContext();
 
 		/*

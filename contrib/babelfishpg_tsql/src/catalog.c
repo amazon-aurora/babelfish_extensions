@@ -222,12 +222,12 @@ init_catalog(PG_FUNCTION_ARGS)
 
 	/* sysdatabases */
 	sysdatabases_oid = get_relname_relid(SYSDATABASES_TABLE_NAME, sys_schema_oid);
-	sysdatabaese_idx_name_oid = get_relname_relid(SYSDATABASES_PK_NAME, sys_schema_oid);
+	sysdatabaese_idx_name_oid = get_sysdatabaese_idx_name_oid();
 	sysdatabaese_idx_oid_oid = get_relname_relid(SYSDATABASES_OID_IDX_NAME, sys_schema_oid);
 
 	/* namespace_ext */
-	namespace_ext_oid = get_relname_relid(NAMESPACE_EXT_TABLE_NAME, sys_schema_oid);
-	namespace_ext_idx_oid_oid = get_relname_relid(NAMESAPCE_EXT_PK_NAME, sys_schema_oid);
+	namespace_ext_oid = get_namespace_ext_oid();
+	namespace_ext_idx_oid_oid = get_namespace_ext_idx_oid_oid();
 
 	/* bbf_function_ext */
 	bbf_function_ext_oid = get_relname_relid(BBF_FUNCTION_EXT_TABLE_NAME, sys_schema_oid);
@@ -317,6 +317,146 @@ initTsqlSyscache()
 	{
 		InitExtensionCatalogCache(my_cacheinfo, SYSDATABASEOID, 5);
 		tsql_syscache_inited = true;
+	}
+}
+
+/*
+ * Check migration mode consistency using direct catalog access
+ * This function checks if current migration mode matches existing database structures
+ */
+void
+check_migration_mode_consistency(void)
+{
+	bool			found_single_db_schema = false;
+	bool			found_multi_db_schema = false;
+	const char		*current_mode;
+	const char		*expected_mode = NULL;
+	Relation		namespace_rel;
+	TupleDesc		namespace_rel_descr;
+	HeapTuple		tuple;
+	TableScanDesc	tblscan;
+
+	/* Get current migration mode setting */
+	current_mode = GetConfigOption("babelfishpg_tsql.migration_mode", true, false);
+
+	/* Open the catalog table */
+	if (!OidIsValid(namespace_ext_oid) || !OidIsValid(sysdatabases_oid))
+		return;
+
+	namespace_rel = table_open(namespace_ext_oid, AccessShareLock);
+	namespace_rel_descr = RelationGetDescr(namespace_rel);
+
+	tblscan = table_beginscan(namespace_rel, SnapshotAny, 0, NULL);
+
+	/* Scan for matching schemas */
+	while (HeapTupleIsValid(tuple = heap_getnext(tblscan, ForwardScanDirection)))
+	{
+		bool		isNull;
+		Datum		dbid_datum;
+		Datum		namespace_datum;
+		Datum		orig_name_datum;
+		int16		dbid;
+		char		*nspname = NULL;
+		char		*orig_name = NULL;
+		char		*dbname = NULL;
+		char		expected_schema_name[NAMEDATALEN];
+
+		/* Get dbid */
+		dbid_datum = heap_getattr(tuple, Anum_namespace_ext_dbid, namespace_rel_descr, &isNull);
+
+		if (isNull)
+			continue;
+		dbid = DatumGetInt16(dbid_datum);
+
+		/* Skip system databases (dbid <= 4) */
+		if (dbid <= 4)
+			continue;
+		
+		/* Get orig_name */
+		orig_name_datum = heap_getattr(tuple, Anum_namespace_ext_orig_name, namespace_rel_descr, &isNull);
+
+		if (isNull)
+			continue;
+		orig_name = TextDatumGetCString(orig_name_datum);
+
+		if (!orig_name || orig_name[0] == '\0')
+			continue;
+
+		/* Check if it's a schema we're interested in ('dbo' or 'guest') */
+		if (strcmp(orig_name, "dbo") != 0 && strcmp(orig_name, "guest") != 0)
+		{
+			pfree(orig_name);
+			continue;
+		}
+		
+		/* Get physical schema name */
+		namespace_datum = heap_getattr(tuple, Anum_namespace_ext_namespace, namespace_rel_descr, &isNull);
+		if (isNull)
+		{
+			pfree(orig_name);
+			continue;
+		}
+		
+		nspname = NameStr(*DatumGetName(namespace_datum));
+		
+		/* Look up database name */
+		dbname = get_db_name(dbid);
+		
+		if (!dbname)
+		{
+			pfree(orig_name);
+			continue;
+		}
+		
+		/* Build expected schema name */
+		snprintf(expected_schema_name, NAMEDATALEN, "%s_%s", dbname, orig_name);
+		
+		/* Check schema naming pattern */
+		if (strcmp(nspname, expected_schema_name) == 0)
+			found_multi_db_schema = true;
+		else if (strcmp(nspname, orig_name) == 0)
+			found_single_db_schema = true;
+		
+		pfree(dbname);
+		pfree(orig_name);
+		
+		/* If we found both patterns, we can stop checking */
+		if (found_single_db_schema && found_multi_db_schema)
+			break;
+	}
+		
+	table_endscan(tblscan);
+	table_close(namespace_rel, AccessShareLock);
+		
+	/* Case 1: Both patterns found - catalog inconsistency */
+	if (found_single_db_schema && found_multi_db_schema)
+	{
+		ereport(LOG, (errmsg("Migration mode consistency check failed!")));
+		ereport(ERROR,
+			(errcode(ERRCODE_CONFIG_FILE_ERROR),
+			 errmsg("Inconsistent migration mode patterns detected in catalog - connection blocked. "
+			 		"Found both single-db and multi-db schema naming patterns in user databases. "
+			 		"Current migration mode is '%s'. To resolve this issue, drop databases and objects "
+					"that were created using a different migration mode.",
+					 current_mode)));
+	}
+		
+	/* Determine expected mode based on schema naming pattern */
+	if (found_multi_db_schema)
+		expected_mode = "multi-db";
+	else if (found_single_db_schema)
+		expected_mode = "single-db";
+		
+	/* Case 2: Consistent pattern but GUC mismatch */
+	if (expected_mode && strcmp(current_mode, expected_mode) != 0)
+	{
+		ereport(LOG, (errmsg("Migration mode consistency check failed!")));
+		ereport(ERROR,
+			(errcode(ERRCODE_CONFIG_FILE_ERROR),
+			 errmsg("Migration mode inconsistency detected - connection blocked. "
+			 		"Current migration mode '%s' conflicts with existing database structure which requires '%s' mode. "
+			 		"To prevent catalog inconsistency, set babelfishpg_tsql.migration_mode = '%s'.",
+					current_mode, expected_mode, expected_mode)));
 	}
 }
 
@@ -1877,6 +2017,43 @@ get_bbf_partition_depend_idx_oid()
 									get_namespace_oid("sys", false));
 
 	return bbf_partition_depend_idx_oid;
+}
+
+
+/*****************************************
+ *			NAMESPACE_EXT
+ *****************************************/
+Oid
+get_namespace_ext_idx_oid_oid()
+{
+	if (!OidIsValid(namespace_ext_idx_oid_oid))
+		namespace_ext_idx_oid_oid = get_relname_relid(NAMESAPCE_EXT_PK_NAME,
+									get_namespace_oid("sys", false));
+
+	return namespace_ext_idx_oid_oid;
+}
+
+Oid
+get_namespace_ext_oid()
+{
+	if (!OidIsValid(namespace_ext_oid))
+		namespace_ext_oid = get_relname_relid(NAMESPACE_EXT_TABLE_NAME,
+									get_namespace_oid("sys", false));
+
+	return namespace_ext_oid;
+}
+
+/*****************************************
+ *			SYSDATABASES
+ *****************************************/
+Oid
+get_sysdatabaese_idx_name_oid()
+{
+	if (!OidIsValid(sysdatabaese_idx_name_oid))
+		sysdatabaese_idx_name_oid = get_relname_relid(SYSDATABASES_PK_NAME,
+									get_namespace_oid("sys", false));
+
+	return sysdatabaese_idx_name_oid;
 }
 
 /*****************************************

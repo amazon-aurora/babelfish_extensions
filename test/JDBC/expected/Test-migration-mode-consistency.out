@@ -1,0 +1,333 @@
+
+-- tsql
+-- =====================================================
+-- Test Case 1: GUC mismatch detection (multi-db to single-db)
+-- =====================================================
+USE master;
+GO
+
+CREATE DATABASE multi_db_test;
+GO
+
+-- terminate-tsql-conn
+
+-- psql
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'single-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Migration mode inconsistency detected - connection blocked. Current migration mode 'single-db' conflicts with existing database structure which requires 'multi-db' mode. To prevent catalog inconsistency, set babelfishpg_tsql.migration_mode = 'multi-db'. )~~
+
+-- should fail
+USE master;
+GO
+~~ERROR (Code: 0)~~
+
+~~ERROR (Message: ERROR: syntax error at or near "USE"
+  Position: 16
+    Server SQLState: 42601)~~
+
+
+-- psql
+-- =====================================================
+-- Test Case 2: Normal operation in multi-db mode
+-- =====================================================
+-- Now set up multi-db mode properly
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+USE master;
+GO
+
+DROP DATABASE multi_db_test;
+GO
+
+-- terminate-tsql-conn
+
+-- psql
+-- =====================================================
+-- Test Case 3: Normal operation in single-db mode
+-- =====================================================
+-- Now set up multi-db mode properly
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'single-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+USE master;
+GO
+
+CREATE DATABASE single_db_test;
+GO
+
+-- terminate-tsql-conn
+
+-- psql
+-- =====================================================
+-- Test Case 4: GUC mismatch detection (single-db to multi-db)
+-- =====================================================
+-- Change migration mode to multi-db
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Migration mode inconsistency detected - connection blocked. Current migration mode 'multi-db' conflicts with existing database structure which requires 'single-db' mode. To prevent catalog inconsistency, set babelfishpg_tsql.migration_mode = 'single-db'. )~~
+
+-- should fail
+USE master;
+GO
+~~ERROR (Code: 0)~~
+
+~~ERROR (Message: ERROR: syntax error at or near "USE"
+  Position: 16
+    Server SQLState: 42601)~~
+
+
+-- psql
+-- cleanup single-db database
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'single-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+USE master;
+GO
+
+DROP DATABASE single_db_test;
+GO
+
+-- terminate-tsql-conn
+
+
+-- psql
+-- =====================================================
+-- Test Case 5: Mixed pattern detection
+-- =====================================================
+-- Enable bypass to create mixed patterns
+ALTER SYSTEM SET babelfishpg_tsql.bypass_migration_mode_check = true;
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+USE master;
+GO
+
+-- Create a single-db database
+USE master;
+GO
+
+CREATE DATABASE single_db_test;
+GO
+
+-- terminate-tsql-conn
+
+-- psql
+-- Now switch to multi-db mode but keep bypass on
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+-- Should succeed because bypass is on
+USE master;
+GO
+
+-- Create a new database with multi-db schema pattern
+CREATE DATABASE multi_db_test;
+GO
+
+-- Verify we have both patterns
+SELECT n.nspname, n.orig_name, d.name AS db_name
+FROM sys.babelfish_namespace_ext n 
+JOIN sys.babelfish_sysdatabases d ON n.dbid = d.dbid 
+WHERE d.name IN ('multi_db_test', 'single_db_test') AND n.orig_name = 'dbo'
+ORDER BY d.name, n.orig_name;
+GO
+~~START~~
+varchar#!#nvarchar#!#text
+multi_db_test_dbo#!#dbo#!#multi_db_test
+dbo#!#dbo#!#single_db_test
+~~END~~
+
+
+-- terminate-tsql-conn
+
+-- psql
+-- Disable bypass and try to connect - should fail with inconsistent pattern error
+ALTER SYSTEM SET babelfishpg_tsql.bypass_migration_mode_check = off;
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- tsql
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Inconsistent migration mode patterns detected in catalog - connection blocked. Found both single-db and multi-db schema naming patterns in user databases. Current migration mode is 'multi-db'. To resolve this issue, drop databases and objects that were created using a different migration mode. )~~
+
+-- should throw error
+USE master;
+GO
+~~ERROR (Code: 0)~~
+
+~~ERROR (Message: ERROR: syntax error at or near "USE"
+  Position: 23
+    Server SQLState: 42601)~~
+
+
+-- psql
+ALTER SYSTEM SET babelfishpg_tsql.migration_mode = 'multi-db';
+GO
+
+SELECT pg_reload_conf();
+GO
+~~START~~
+bool
+t
+~~END~~
+
+
+SELECT pg_sleep(1);
+GO
+~~START~~
+void
+
+~~END~~
+
+
+-- psql
+SHOW babelfishpg_tsql.migration_mode;
+GO
+~~START~~
+text
+multi-db
+~~END~~
+
+
+-- terminate-psql-conn

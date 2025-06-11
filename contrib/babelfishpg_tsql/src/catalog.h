@@ -169,6 +169,7 @@ extern List *update_babelfish_authid_user_ext_db_name(const char *old_db_name, c
 extern void rename_tsql_db(char *old_db_name, char *new_db_name);
 extern Oid get_login_for_user(Oid user_id, const char *physical_schema_name);
 extern bool user_exists_for_db(const char *db_name, const char *user_name);
+extern void check_migration_mode_consistency(void);
 
 /* MUST comply with babelfish_authid_user_ext table */
 typedef struct FormData_authid_user_ext
@@ -501,6 +502,9 @@ extern Oid	bbf_partition_depend_idx_oid;
 
 extern Oid	get_bbf_partition_depend_oid(void);
 extern Oid	get_bbf_partition_depend_idx_oid(void);
+extern Oid	get_namespace_ext_idx_oid_oid(void);
+extern Oid	get_namespace_ext_oid(void);
+extern Oid	get_sysdatabaese_idx_name_oid(void);
 extern void	add_entry_to_bbf_partition_depend(int16 dbid, char* partition_scheme_name, char *schema_name, char *table_name);
 extern void	remove_entry_from_bbf_partition_depend(int16 dbid, char *schema_name, char *table_name);
 extern bool	is_bbf_partitioned_table(int16 dbid, char *schema_name, char *table_name);
