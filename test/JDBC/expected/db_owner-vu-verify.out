@@ -624,8 +624,16 @@ grant delete on object::dbowner__s3.dbowner__t3 to dbowner__u2
 go
 grant execute on object::dbowner__s1.dbowner__f1 to dbowner__u1
 go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
+
 grant execute on object::dbowner__s3.dbowner__p3 to dbowner__u1
 go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot GRANT privileges to the entity owner or the grantor themselves)~~
+
 
 -- psql
 select schema_name, object_name, permission, grantee, grantor from sys.babelfish_schema_permissions
@@ -633,19 +641,17 @@ where grantee IN ('dbowner__main_db_guest', 'dbowner__main_db_dbowner__u1', 'dbo
 GO
 ~~START~~
 "sys"."varchar"#!#"sys"."varchar"#!#int4#!#"sys"."varchar"#!#"sys"."varchar"
-dbowner__s1#!#dbowner__t1#!#1#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1_bbfobj
+dbowner__s1#!#dbowner__t1#!#1#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1
 dbowner__s2#!#ALL#!#1#!#dbowner__main_db_guest#!#dbowner__main_db_dbowner__u2
-dbowner__s1#!#ALL#!#2#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1_bbfobj
 dbo#!#dbowner__t0#!#2#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbo
+dbowner__s1#!#ALL#!#2#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1
 dbowner__s2#!#dbowner__t2#!#4#!#dbowner__main_db_dbowner__u1#!#dbowner__main_db_dbowner__u2
-dbowner__s3#!#ALL#!#4#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1_bbfobj
+dbowner__s3#!#ALL#!#4#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1
+dbowner__s3#!#dbowner__t3#!#8#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1
 dbo#!#ALL#!#8#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbo
-dbowner__s3#!#dbowner__t3#!#8#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbowner__u1_bbfobj
-dbowner__s3#!#dbowner__p3#!#128#!#dbowner__main_db_dbowner__u1#!#dbowner__main_db_dbowner__u1_bbfobj
-dbowner__s1#!#dbowner__f1#!#128#!#dbowner__main_db_dbowner__u1#!#dbowner__main_db_dbowner__u1_bbfobj
+ALL#!#ALL#!#2048#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbo
 ALL#!#ALL#!#2048#!#dbowner__main_db_dbowner__u1#!#dbowner__main_db_dbo
 ALL#!#ALL#!#2048#!#dbowner__main_db_guest#!#dbowner__main_db_dbo
-ALL#!#ALL#!#2048#!#dbowner__main_db_dbowner__u2#!#dbowner__main_db_dbo
 ~~END~~
 
 
@@ -668,8 +674,16 @@ revoke delete on object::dbowner__s3.dbowner__t3 to dbowner__u2
 go
 revoke execute on object::dbowner__s1.dbowner__f1 to dbowner__u1
 go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot REVOKE privileges to the entity owner or the grantor themselves)~~
+
 revoke execute on object::dbowner__s3.dbowner__p3 to dbowner__u1
 go
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: Cannot REVOKE privileges to the entity owner or the grantor themselves)~~
+
 
 -- tsql
 -- Adding a member to db_owner role should not affect other user's privileges

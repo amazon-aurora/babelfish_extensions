@@ -3895,9 +3895,14 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	Oid		schemaOid;
 	char		*user = GetUserNameFromId(GetUserId(), false);
 	const char	*db_owner = get_owner_of_db(dbname);
+	char 		*db_owner_name = get_db_owner_name(dbname);
 	const char *grantor;
 	HeapTuple	tup;
 	Form_pg_namespace nspForm;
+	const char *suffix = "_bbfobj";
+	int grantor_len;
+	int suffix_len = strlen(suffix);
+	// const char *orig_grantor = grantor;
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3928,6 +3933,21 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	{
 		grantor = psprintf("%s_dbo", dbname);
 	}
+	grantor_len = strlen(grantor);
+	if (grantor_len >= suffix_len &&
+		strcmp(grantor + grantor_len - suffix_len, suffix) == 0)
+	{
+		char *temp = palloc(grantor_len - suffix_len + 1);
+		memcpy(temp, grantor, grantor_len - suffix_len);
+		temp[grantor_len - suffix_len] = '\0';
+		// grantor = /temp;
+		if(is_member_of_role(get_role_oid(temp, false),
+	                                     get_role_oid(db_owner_name, false)))
+		{
+			grantor = temp;
+		}
+	}
+
 
 	ReleaseSysCache(tup);
 

@@ -6229,16 +6229,37 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
  */
 static bool
 update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *grantees,
-    List *col_privs, Oid object_oid, const char *grantor, 
+    List *col_privs, Oid object_oid, const char *orig_grantor, 
     bool grant_option, const char *obj_owner_name, ObjectType objtype)
 {
 	Oid 		save_userid;
 	int 		save_sec_context;
 	bool 		only_object_grants = true;
 	char 		*dbname = get_cur_db_name();
+	char 		*db_owner_name = get_db_owner_name(dbname);
 	const char 	*current_user = GetUserNameFromId(GetUserId(), false);
 	Oid  		sch_id = InvalidOid;
 	const char 	*logical_schema = NULL;
+	const char *suffix = "_bbfobj";
+	int grantor_len = strlen(orig_grantor);
+	int suffix_len = strlen(suffix);
+	const char *grantor = orig_grantor;
+
+	// If grantor ends with "_bbfobj", create a truncated copy
+	if (grantor_len >= suffix_len &&
+		strcmp(orig_grantor + grantor_len - suffix_len, suffix) == 0)
+	{
+		char *temp = palloc(grantor_len - suffix_len + 1);
+		memcpy(temp, orig_grantor, grantor_len - suffix_len);
+		temp[grantor_len - suffix_len] = '\0';
+		// grantor = /temp;
+		if(is_member_of_role(get_role_oid(temp, false),
+	                                     get_role_oid(db_owner_name, false)))
+		{
+			grantor = temp;
+		}
+	}
+
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
 	/* 
