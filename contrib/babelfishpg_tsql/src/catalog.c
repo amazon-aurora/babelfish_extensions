@@ -1942,7 +1942,7 @@ static bool is_singledb_exists_userdb(void);
 
 /* Rule validation function declaration */
 static bool check_exist(void *arg, HeapTuple tuple);
-static bool is_database_level_permission(void *arg, HeapTuple tuple);
+static bool is_database_level_permission_or_public_grantee(void *arg, HeapTuple tuple);
 static bool check_rules(Rule rules[], size_t num_rules, HeapTuple tuple, TupleDesc dsc,
 						Tuplestorestate *res_tupstore, TupleDesc res_tupdesc);
 static bool check_must_match_rules(Rule rules[], size_t num_rules, Oid catalog_oid,
@@ -2083,11 +2083,11 @@ Rule		must_match_rules_function[] =
 Rule		must_match_rules_schema_permission[] =
 {
 	{"<schema_name> in babelfish_schema_permissions must also exist in babelfish_namespace_ext",
-	"babelfish_namespace_ext", "nspname", NULL, get_perms_schema_name, NULL, is_database_level_permission, NULL},
+	"babelfish_namespace_ext", "nspname", NULL, get_perms_schema_name, NULL, is_database_level_permission_or_public_grantee, NULL},
 	{"<grantee> in babelfish_schema_permissions must also exist in pg_authid",
-	"pg_authid", "rolname", NULL, get_perms_grantee_name, NULL, is_database_level_permission, NULL},
+	"pg_authid", "rolname", NULL, get_perms_grantee_name, NULL, is_database_level_permission_or_public_grantee, NULL},
 	{"<grantor> in babelfish_schema_permissions must also exist in pg_authid",
-	"pg_authid", "rolname", NULL, get_perms_grantor_name, NULL, is_database_level_permission, NULL}
+	"pg_authid", "rolname", NULL, get_perms_grantor_name, NULL, is_database_level_permission_or_public_grantee, NULL}
 };
 
 /* babelfish_server_options */
@@ -2594,9 +2594,8 @@ get_perms_grantor_name(HeapTuple tuple, TupleDesc dsc)
 	bool		isNull;
 	Datum		grantor_datum = heap_getattr(tuple, Anum_bbf_schema_perms_grantor, dsc, &isNull);
 	char 		*grantor_name = pstrdup(TextDatumGetCString(grantor_datum));
-
 	truncate_identifier(grantor_name, strlen(grantor_name), false);
-
+	
 	return CStringGetDatum(grantor_name);
 }
 
@@ -2833,25 +2832,35 @@ check_exist(void *arg, HeapTuple tuple)
  * The following function checks whether the permission is database level permission.
  * In a database level permission, schema-name is set as ALL. 
  * To exclude ALL from metadata inconsistency, this function passes true in case of a database level permission.
+ * Similarly, it checks for "public" grantee, to exclude "public" from metadata inconsistency. 
  */
 static bool 
-is_database_level_permission(void *arg, HeapTuple tuple)
+is_database_level_permission_or_public_grantee(void *arg, HeapTuple tuple)
 {
 	Rule	   	*rule;
 	TupleDesc  	dsc;
 	bool		object_type_is_null;
 	const char 	*object_type_str; 
 	Datum		object_type; 
+	bool        grantee_is_null;
+    const char  *grantee_str;
+    Datum       grantee;
+
 	rule = (Rule *) arg;
 	dsc = rule->tupdesc;
+
 	object_type = heap_getattr(tuple, Anum_bbf_schema_perms_object_type, dsc, &object_type_is_null);
 	object_type_str= TextDatumGetCString(object_type);
+
+	grantee = heap_getattr(tuple, Anum_bbf_schema_perms_grantee, dsc, &grantee_is_null);
+    grantee_str = TextDatumGetCString(grantee);
 
 	if (object_type_is_null)
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				errmsg("schema name should not be null in babelfish_schema_permissions catalog")));
-	if (strcmp(object_type_str, "d") == 0)
+
+	if ((strcmp(object_type_str, "d") == 0 ) || (strcmp(grantee_str, PUBLIC_ROLE_NAME) == 0))
 		return true;
 	return check_exist(arg, tuple);
 }

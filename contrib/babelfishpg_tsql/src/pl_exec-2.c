@@ -3895,14 +3895,13 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	Oid		schemaOid;
 	char		*user = GetUserNameFromId(GetUserId(), false);
 	const char	*db_owner = get_owner_of_db(dbname);
-	char 		*db_owner_name = get_db_owner_name(dbname);
-	const char *grantor;
+	char		*db_owner_name = get_db_owner_name(dbname);
+	const char 	*grantor;
 	HeapTuple	tup;
 	Form_pg_namespace nspForm;
-	const char *suffix = "_bbfobj";
-	int grantor_len;
-	int suffix_len = strlen(suffix);
-	// const char *orig_grantor = grantor;
+	const char 	*suffix = "_bbfobj";
+	int 		grantor_len;
+	int 		suffix_len = strlen(suffix);
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3927,30 +3926,36 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		elog(ERROR, "cache lookup failed for namespace %u", schemaOid);
 
 	nspForm = (Form_pg_namespace) GETSTRUCT(tup);
-	// grantor for schema-level grants will be schema owner 
+
+	/* 
+	 * Grantor for schema-level grants will be schema owner 
+	 */
 	grantor = GetUserNameFromId(nspForm->nspowner, false);
+	
+	/*
+	 * If the grantor is db_owner, set it as dbo to match TSQL 
+	 */
 	if (strcmp(schema_name, psprintf("%s_dbo", dbname)) == 0 && strcmp(grantor, psprintf("%s_db_owner", dbname)) == 0)
 	{
 		grantor = psprintf("%s_dbo", dbname);
 	}
+
+	/*
+	 * 
+	 */
 	grantor_len = strlen(grantor);
-	if (grantor_len >= suffix_len &&
-		strcmp(grantor + grantor_len - suffix_len, suffix) == 0)
+	if (grantor_len >= suffix_len && strcmp(grantor + grantor_len - suffix_len, suffix) == 0)
 	{
 		char *temp = palloc(grantor_len - suffix_len + 1);
 		memcpy(temp, grantor, grantor_len - suffix_len);
 		temp[grantor_len - suffix_len] = '\0';
-		// grantor = /temp;
-		if(is_member_of_role(get_role_oid(temp, false),
-	                                     get_role_oid(db_owner_name, false)))
+		if(is_member_of_role(get_role_oid(temp, false), get_role_oid(db_owner_name, false)))
 		{
 			grantor = temp;
 		}
 	}
 
-
 	ReleaseSysCache(tup);
-
 	foreach(lc, stmt->grantees)
 	{
 		int i;
