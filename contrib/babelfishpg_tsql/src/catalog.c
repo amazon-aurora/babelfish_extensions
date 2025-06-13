@@ -2842,9 +2842,9 @@ is_database_level_permission_or_public_grantee(void *arg, HeapTuple tuple)
 	bool		object_type_is_null;
 	const char 	*object_type_str; 
 	Datum		object_type; 
-	bool        grantee_is_null;
-    const char  *grantee_str;
-    Datum       grantee;
+	bool        	grantee_is_null;
+    	const char  	*grantee_str;
+    	Datum       	grantee;
 
 	rule = (Rule *) arg;
 	dsc = rule->tupdesc;
@@ -2853,7 +2853,7 @@ is_database_level_permission_or_public_grantee(void *arg, HeapTuple tuple)
 	object_type_str= TextDatumGetCString(object_type);
 
 	grantee = heap_getattr(tuple, Anum_bbf_schema_perms_grantee, dsc, &grantee_is_null);
-    grantee_str = TextDatumGetCString(grantee);
+    	grantee_str = TextDatumGetCString(grantee);
 
 	if (object_type_is_null)
 		ereport(ERROR,
