@@ -3344,8 +3344,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					PG_TRY();
 					{
-						const char *current_db_name = get_cur_db_name();
-						const char *grantor = psprintf("%s_dbo", current_db_name);
+						const char 	*current_db_name = get_cur_db_name();
+						const char 	*grantor = psprintf("%s_dbo", current_db_name);
 						/*
 						 * We have performed all the permissions checks.
 						 * Set current user to bbf_role_admin for create permissions.
@@ -3388,9 +3388,10 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							if (strcmp(queryString, INTERNAL_ALTER_ROLE) != 0)
 							{	
 								create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
+
 								/* Add connect privillege entry into the bbf_schema_permissions, which is granted by default when a user is created. */
 								if(isuser)
-									add_entry_to_bbf_schema_perms("ALL", "ALL", 2048, stmt->role, "d", NULL , grantor, false);
+									add_entry_to_bbf_schema_perms("ALL", "ALL", ACL_CONNECT, stmt->role, "d", NULL , grantor, false);
 							}
 						}
 
@@ -4032,14 +4033,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 					/* Remove the CONNECT privilege entry from bbf_schema_permissions when a user is dropped. */
 					foreach(item, stmt->roles)
 					{
-						RoleSpec *rolspec = lfirst(item);
-						const char *current_db_name = get_cur_db_name();
-						const char *grantee = GetUserNameFromId(get_role_oid(rolspec->rolename, false), false);
-						const char *grantor = psprintf("%s_dbo", current_db_name);
+						RoleSpec 	*rolspec = lfirst(item);
+						const char 	*current_db_name = get_cur_db_name();
+						const char 	*grantee = GetUserNameFromId(get_role_oid(rolspec->rolename, false), false);
+						const char 	*grantor = psprintf("%s_dbo", current_db_name);
 
 						if(privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
 						{
-							update_privileges_of_object("ALL", "ALL", 2048, grantee, "d", false, grantor, false);
+							update_privileges_of_object("ALL", "ALL", ACL_CONNECT, grantee, "d", false, grantor, false);
 						}
 					}
 

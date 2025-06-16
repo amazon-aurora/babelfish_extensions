@@ -3941,7 +3941,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	}
 
 	/*
-	 * 
+	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
 	 */
 	grantor_len = strlen(grantor);
 	if (grantor_len >= suffix_len && strcmp(grantor + grantor_len - suffix_len, suffix) == 0)
@@ -4035,6 +4035,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 		pfree(rolname);
 	}
 	pfree(user);
+	pfree(db_owner_name);
 	pfree(schema_name);
 	pfree(dbname);
 	pfree(login);

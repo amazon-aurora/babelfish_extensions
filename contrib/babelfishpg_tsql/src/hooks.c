@@ -6240,21 +6240,20 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	const char 	*current_user = GetUserNameFromId(GetUserId(), false);
 	Oid  		sch_id = InvalidOid;
 	const char 	*logical_schema = NULL;
-	const char *suffix = "_bbfobj";
-	int grantor_len = strlen(orig_grantor);
-	int suffix_len = strlen(suffix);
-	const char *grantor = orig_grantor;
+	const char 	*suffix = "_bbfobj";
+	int 		grantor_len = strlen(orig_grantor);
+	int 		suffix_len = strlen(suffix);
+	const char 	*grantor = orig_grantor;
 
-	// If grantor ends with "_bbfobj", create a truncated copy
-	if (grantor_len >= suffix_len &&
-		strcmp(orig_grantor + grantor_len - suffix_len, suffix) == 0)
+	/*  
+	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
+	 */
+	if (grantor_len >= suffix_len && strcmp(orig_grantor + grantor_len - suffix_len, suffix) == 0)
 	{
 		char *temp = palloc(grantor_len - suffix_len + 1);
 		memcpy(temp, orig_grantor, grantor_len - suffix_len);
 		temp[grantor_len - suffix_len] = '\0';
-		// grantor = /temp;
-		if(is_member_of_role(get_role_oid(temp, false),
-	                                     get_role_oid(db_owner_name, false)))
+		if(is_member_of_role(get_role_oid(temp, false), get_role_oid(db_owner_name, false)))
 		{
 			grantor = temp;
 		}
@@ -6280,6 +6279,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 
 		if (!HeapTupleIsValid(tuple))
 			elog(ERROR, "cache lookup failed for relation %u", object_oid);
+
 		classForm = (Form_pg_class) GETSTRUCT(tuple);
 		sch_id = classForm->relnamespace;
 		ReleaseSysCache(tuple);
@@ -6328,8 +6328,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				{
 					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true);
 				}
-				if (grantee &&
-					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
@@ -6416,6 +6415,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				int old_priv_grant_with_option = 0;
 				int priv_from_normal_grant = 0;
 				int priv_from_grant_option = 0;
+
 				if (grantee_oid == ACL_ID_PUBLIC)
 					grantee = PUBLIC_ROLE_NAME;
 				else
@@ -6438,8 +6438,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				{
 					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, OBJ_RELATION, grantor, true);
 				}
-				if (grantee &&
-					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
@@ -6459,6 +6458,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				 */
 				priv_from_normal_grant = old_priv_normal_grant & privileges; 
 				priv_from_grant_option = old_priv_grant_with_option & privileges;
+
 				if(priv_from_normal_grant)
 				{
 					update_privileges_of_object(logical_schema, object_name, priv_from_normal_grant, grantee, OBJ_RELATION, false, grantor, false);
@@ -6478,10 +6478,10 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		const char 	*object_name = get_func_name(object_oid);
 		const char 	*func_args = NULL;
 		const char 	*object_type;
-		HeapTuple tuple;
-		Form_pg_class classForm;
-		tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_oid));
+		HeapTuple 	tuple;
+		Form_pg_class 	classForm;
 
+		tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_oid));
 		if (!HeapTupleIsValid(tuple))
 			elog(ERROR, "cache lookup failed for relation %u", object_oid);
 		
@@ -6536,8 +6536,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				{
 					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
 				}
-				if (grantee &&
-					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
@@ -6587,7 +6586,6 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				else
 				{
 					int common_permission = old_priv_grant_with_option & privileges;
-
 					if(common_permission != 0)
 					{
 						/* 
@@ -6652,8 +6650,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				{
 					old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
 				}
-				if (grantee &&
-					(strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
+				if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 				{
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_GRANT_OPERATION),
@@ -6684,6 +6681,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		}
 	}
 	pfree(dbname);
+	pfree(db_owner_name);
 	return only_object_grants;
 }
 
