@@ -3902,6 +3902,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	const char 	*suffix = "_bbfobj";
 	int 		grantor_len;
 	int 		suffix_len = strlen(suffix);
+	const char 	*grantor_suffix = NULL;
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3944,11 +3945,10 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
 	 */
 	grantor_len = strlen(grantor);
-	if (grantor_len >= suffix_len && strcmp(grantor + grantor_len - suffix_len, suffix) == 0)
+	grantor_suffix = grantor + grantor_len - suffix_len;
+	if (grantor_len >= suffix_len && strcmp(grantor_suffix, suffix) == 0)
 	{
-		char *temp = palloc(grantor_len - suffix_len + 1);
-		memcpy(temp, grantor, grantor_len - suffix_len);
-		temp[grantor_len - suffix_len] = '\0';
+		const char *temp = pnstrdup(grantor, grantor_len - suffix_len);
 		if(is_member_of_role(get_role_oid(temp, false), get_role_oid(db_owner_name, false)))
 		{
 			grantor = temp;
