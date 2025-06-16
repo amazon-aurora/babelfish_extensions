@@ -3948,8 +3948,11 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	grantor_suffix = grantor + grantor_len - suffix_len;
 	if (grantor_len >= suffix_len && strcmp(grantor_suffix, suffix) == 0)
 	{
-		const char *temp = pnstrdup(grantor, grantor_len - suffix_len);
-		if(is_member_of_role(get_role_oid(temp, false), get_role_oid(db_owner_name, false)))
+		const char 	*temp = pnstrdup(grantor, grantor_len - suffix_len);
+		Oid 		temp_oid = get_role_oid(temp, true);
+		Oid 		db_owner_oid = get_role_oid(db_owner_name, true);
+
+		if (OidIsValid(temp_oid) && OidIsValid(db_owner_oid) && is_member_of_role(temp_oid, db_owner_oid))
 		{
 			grantor = temp;
 		}

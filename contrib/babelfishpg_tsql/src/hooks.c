@@ -6252,8 +6252,11 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	grantor_suffix = orig_grantor + grantor_len - suffix_len;
 	if (grantor_len >= suffix_len && strcmp(grantor_suffix, suffix) == 0)
 	{
-		const char *temp = pnstrdup(orig_grantor, grantor_len - suffix_len);
-		if(is_member_of_role(get_role_oid(temp, false), get_role_oid(db_owner_name, false)))
+		const char	*temp = pnstrdup(orig_grantor, grantor_len - suffix_len);
+		Oid 		temp_oid = get_role_oid(temp, true);
+		Oid 		db_owner_oid = get_role_oid(db_owner_name, true);
+
+		if (OidIsValid(temp_oid) && OidIsValid(db_owner_oid) && is_member_of_role(temp_oid, db_owner_oid))
 		{
 			grantor = temp;
 		}
