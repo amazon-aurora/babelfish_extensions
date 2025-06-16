@@ -3012,7 +3012,13 @@ exec_stmt_grantdb(PLtsql_execstate *estate, PLtsql_stmt_grantdb *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
 					 errmsg("Cannot disable access to the guest user in master or tempdb.")));
+		/*
+		 * Adding entries for user_can_connect might involve TOAST table access, so ensure we
+		 * have a valid snapshot.
+		 */
+		PushActiveSnapshot(GetTransactionSnapshot());
 		alter_user_can_connect(stmt->is_grant, grantee_name, dbname);
+		PopActiveSnapshot();
 	}
 	return PLTSQL_RC_OK;
 }
@@ -3774,6 +3780,12 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("Cannot find the schema \"%s\", because it does not exist or you do not have permission.", stmt->schema_name)));
 
+		/*
+		 * Executing GRANT ON SCHEMA might involve TOAST table access, so ensure we
+		 * have a valid snapshot.
+		 */
+		PushActiveSnapshot(GetTransactionSnapshot());
+
 		/* Execute the GRANT SCHEMA subcommands. */
 		for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
 		{
@@ -3800,6 +3812,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 				update_privileges_of_object(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false);
 			}
 		}
+		PopActiveSnapshot();
 		pfree(rolname);
 	}
 	pfree(user);
@@ -3837,8 +3850,14 @@ exec_stmt_change_dbowner(PLtsql_execstate *estate, PLtsql_stmt_change_dbowner *s
 		/* Is the current login already DB owner? */
 		if (get_role_oid(get_owner_of_db(stmt->db_name), true) == GetSessionUserId())
 		{
+			/*
+			 * Update the owner of a database might involve TOAST table access, so ensure we
+			 * have a valid snapshot.
+			 */
+			PushActiveSnapshot(GetTransactionSnapshot());
 			/* Current login is DB owner, so perform the update */
-			update_db_owner(stmt->new_owner_name, stmt->db_name);	
+			update_db_owner(stmt->new_owner_name, stmt->db_name);
+			PopActiveSnapshot();
 			return PLTSQL_RC_OK;	
 		}			
 	}		
@@ -3874,7 +3893,13 @@ exec_stmt_change_dbowner(PLtsql_execstate *estate, PLtsql_stmt_change_dbowner *s
 
 	/* Grant dbo role to the new owner */
 	grant_revoke_role_to_login(stmt->new_owner_name, get_dbo_role_name(stmt->db_name), true);
+	/*
+	 * Update the owner of a database might involve TOAST table access, so ensure we
+	 * have a valid snapshot.
+	 */
+	PushActiveSnapshot(GetTransactionSnapshot());
 	update_db_owner(stmt->new_owner_name, stmt->db_name);
+	PopActiveSnapshot();
 
 	return PLTSQL_RC_OK;
 }
@@ -4002,3 +4027,460 @@ exec_stmt_fulltextindex(PLtsql_execstate *estate, PLtsql_stmt_fulltextindex *stm
 
 	return PLTSQL_RC_OK;
 }
+<<<<<<< HEAD
+=======
+
+/*
+ * tsql_compare_values
+ *		Note: This function is used to sort the values in the array.
+ *		It compare two datum values using the function oid of comparator provided in arg,
+ *		it also sets the contains_duplicate flag in the context if duplicate
+ *		values are found.
+ *		Returns -1 if a < b, 1 if a > b and 0 if a == b.
+ */
+int
+tsql_compare_values(const void *a, const void *b, void *arg)
+{
+	Datum		*da = (Datum *) a;
+	Datum		*db = (Datum *) b;
+	int		result;
+
+	tsql_compare_context *cxt = (tsql_compare_context *) arg;
+
+	result = DatumGetInt32(OidFunctionCall2Coll(cxt->function_oid, cxt->colloid, *da, *db));
+	if (result == 0)
+		cxt->contains_duplicate = true;
+	return result;
+}
+
+/*
+ * check_create_or_drop_permission_for_partition_specifier
+ *	Checks if the current user has permission to create or drop a partition 
+ *	function or partition scheme. It allows only those logins that is either 
+ *	db owner or member of sysadmin.
+ */
+static void
+check_create_or_drop_permission_for_partition_specifier(const char *name, bool is_create, bool is_function)
+{
+	char		*dbname = get_cur_db_name();
+	Oid		session_user_id = GetSessionUserId();
+	char		*login = GetUserNameFromId(session_user_id, false);
+	bool		login_is_db_owner = false;
+
+	if (strncmp(login, get_owner_of_db(dbname), NAMEDATALEN) == 0)
+		login_is_db_owner = true;
+
+	if (!login_is_db_owner && !is_member_of_role(session_user_id, get_role_oid("sysadmin", false)) &&
+		!has_privs_of_role(GetUserId(), get_db_ddladmin_oid(dbname, false)))
+	{
+		if (is_create)
+			ereport(ERROR, 
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE), 
+					errmsg("User does not have permission to perform this action.")));
+		else
+			ereport(ERROR, 
+				(errcode(ERRCODE_UNDEFINED_OBJECT), 
+					errmsg("Cannot drop the partition %s '%s', because it does not exist or you do not have permission.", 
+							(is_function? "function": "scheme"), name)));
+	}
+
+	pfree(dbname);
+	pfree(login);
+}
+
+/*
+ * exec_stmt_partition_scheme
+ * 	 Handles the CREATE/DROP PARTITION FUNCTION statement.
+ */
+static int
+exec_stmt_partition_function(PLtsql_execstate *estate, PLtsql_stmt_partition_function *stmt)
+{
+	const char		*partition_function_name = stmt->function_name;
+	PLtsql_type		*typ = stmt->datatype;
+	List 			*arg = stmt->args;
+	bool 			isnull;
+	Oid			valtype;
+	int32			valtypmod;
+	Datum			tsql_type_datum;
+	char			*tsql_typename = NULL;
+	char			*collation = NULL;
+	Oid			collation_oid = InvalidOid;
+	bool			type_is_collatable;
+	Datum			*input_values;
+	Datum			*sql_variant_values;
+	ArrayType		*arr_value = NULL;
+	Oid			sql_variant_oid;
+	Oid			basetype_oid;
+	Oid			opclass_oid;
+	Oid			opfamily_oid;
+	Oid			cmpfunction_oid;
+	int			nargs;
+	HeapTuple		tuple;
+	Form_pg_type		typform;
+	int16			dbid = get_cur_db_id();
+	tsql_compare_context	cxt;
+	LOCAL_FCINFO(fcinfo, 1);
+
+	/* check if the login has necessary permissions for CREATE/DROP */
+	check_create_or_drop_permission_for_partition_specifier(partition_function_name, stmt->is_create, true);
+
+	if (!stmt->is_create) /* drop command */
+	{
+		/*
+		 * DROP PARTITION FUNCTION might involve TOAST table access, so ensure we
+		 * have a valid snapshot.
+		 */
+		PushActiveSnapshot(GetTransactionSnapshot());
+		/* delete entry from the sys.babelfish_partition_scheme catalog */
+		remove_entry_from_bbf_partition_function(dbid, partition_function_name);
+		PopActiveSnapshot();
+		/* make sure later statements in batch can see the updated catalog entry */
+		CommandCounterIncrement();
+		return PLTSQL_RC_OK;
+	}
+
+	/*
+	 * Otherwise, Create Command.
+	 */
+
+	/* check if given name is exceeding the allowed limit */
+	if (strlen(partition_function_name) > 128)
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("The identifier that starts with '%.128s' is too long. Maximum length is 128.", partition_function_name)));
+	}
+
+	/*
+	 * Get collation oid if collation is specified.
+	 */
+	if (stmt->collation)
+	{
+		collation_oid = tsql_get_oid_from_collidx(tsql_find_collation_internal(tsql_translate_tsql_collation_to_bbf_collation(stmt->collation)));
+	
+		/* raise an error if specified collation is invalid */
+		if (!OidIsValid(collation_oid))
+			ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+					errmsg("Invalid collation '%s'.", stmt->collation)));
+	}
+
+	/* check if there is existing partition function with the given name in the current database */
+	if (partition_function_exists(dbid, partition_function_name))
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_DUPLICATE_FUNCTION),
+				errmsg("There is already an object named '%s' in the database.", partition_function_name)));
+	}
+
+	/*
+	 * Try to find the TSQL type name for the input type and if it fails
+	 * and input type is DOMAIN type created in sys schema then
+	 * find the TSQL type name using the base type of DOMAIN.
+	 */
+	InitFunctionCallInfoData(*fcinfo, NULL, 0, InvalidOid, NULL, NULL);
+	fcinfo->args[0].value = ObjectIdGetDatum(typ->typoid);
+	fcinfo->args[0].isnull = false;
+	tsql_type_datum = (*common_utility_plugin_ptr->translate_pg_type_to_tsql) (fcinfo);
+	if (tsql_type_datum)
+	{
+		tsql_typename = text_to_cstring(DatumGetTextPP(tsql_type_datum));
+	}
+	else
+	{
+		tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typ->typoid));
+		typform = (Form_pg_type) GETSTRUCT(tuple);
+		if (OidIsValid(typform->typbasetype) && typform->typnamespace == get_namespace_oid("sys", false))
+		{
+			/* Input type is DOMAIN type created in sys schema. */
+			InitFunctionCallInfoData(*fcinfo, NULL, 0, InvalidOid, NULL, NULL);
+			fcinfo->args[0].value = ObjectIdGetDatum(typform->typbasetype);
+			fcinfo->args[0].isnull = false;
+			tsql_type_datum = (*common_utility_plugin_ptr->translate_pg_type_to_tsql) (fcinfo);
+			if (tsql_type_datum)
+			{
+				tsql_typename = text_to_cstring(DatumGetTextPP(tsql_type_datum));
+			}
+		}
+		ReleaseSysCache(tuple);
+	}
+	
+	/*
+	 * Check if datatype is supported or not, if tsql_typename is NULL
+	 * then it implies that type is User Defined Type.
+	 */
+	if (!tsql_typename || is_tsql_text_ntext_or_image_datatype(typ->typoid) ||
+		(*common_utility_plugin_ptr->is_tsql_geometry_datatype) (typ->typoid) ||
+		(*common_utility_plugin_ptr->is_tsql_geography_datatype) (typ->typoid) ||
+		(*common_utility_plugin_ptr->is_tsql_rowversion_or_timestamp_datatype) (typ->typoid) ||
+		typ->typoid == XMLOID) /* we don't have XML type specific to TSQL */
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("The type '%s' is not valid for this operation.", typ->typname)));
+	}
+	/*
+	 * Types varchar(max), nvarchar(max), varbinary(max) are also not supported.
+	 */
+	else if (typ->atttypmod == -1 && is_tsql_datatype_with_max_scale_expr_allowed(typ->typoid))
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("The type '%s(max)' is not valid for this operation.", tsql_typename)));
+	}
+	else if ((*common_utility_plugin_ptr->is_tsql_sqlvariant_datatype) (typ->typoid))
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("The type '%s' is not yet supported for partition function in Babelfish.", tsql_typename)));
+
+	type_is_collatable = OidIsValid(typ->collation);
+
+	/*
+	 * Raise an error if collate clause is specified and datatype is not collatable.
+	 */
+	if (stmt->collation && !type_is_collatable)
+	{
+		
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 	errmsg("Expression type '%s' is invalid for COLLATE clause.", tsql_typename)));
+	}
+	/*
+	 * Use default database collation if collate clause is not specified and datatype is collatable.
+	 */
+	else if (stmt->collation == NULL && type_is_collatable)
+		collation_oid = tsql_get_database_or_server_collation_oid_internal(false);
+	
+	/* get collation name from collation oid when type is collatable */
+	if (type_is_collatable)
+		collation = get_collation_name(collation_oid);
+	
+	/* check if the given number of boundaries are exceeding allowed limit */
+	nargs = list_length(arg);
+	if (nargs >= MAX_PARTITIONS_LIMIT)
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("CREATE/ALTER partition function failed as only a "
+					"maximum of %d partitions can be created.", MAX_PARTITIONS_LIMIT)));
+	}
+
+	input_values = palloc(nargs * sizeof(Datum));
+
+	for (volatile int i = 0; i < nargs; i++)
+	{
+		Datum val;
+
+		/* evaluate the value from the expr */
+		val = exec_eval_expr(estate, list_nth(arg, i), &isnull, &valtype, &valtypmod);
+
+		/* raise error for null value */
+		if (isnull)
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("NULL values are not allowed in partition function boundary values list.")));
+
+		/* 
+		 * implicitly convert range values to specified parameter type
+		 * and raise error with ordinal position if conversion fails
+		 */
+		PG_TRY();
+		{
+			input_values[i] = exec_cast_value(estate, val, &isnull,
+							valtype, valtypmod,
+							typ->typoid, typ->atttypmod);
+		}
+		PG_CATCH();
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("Could not implicitly convert range values type specified at ordinal %d to partition function parameter type.",
+						i+1)));
+		}
+		PG_END_TRY();
+	}
+
+	/*
+	 * Find oid of comparator function for input type, which will be used during the sorting.
+	 * Here, we are first finding the default operator class for the input type then using that
+	 * we are finding the operator family for that operator class and finally using that we are
+	 * finding the defined comparator function for that operator family.
+	 */
+	basetype_oid = getBaseType(typ->typoid);
+	opclass_oid = GetDefaultOpClass(basetype_oid, BTREE_AM_OID);
+	opfamily_oid = get_opclass_family(opclass_oid);
+	cmpfunction_oid = get_opfamily_proc(opfamily_oid, basetype_oid, basetype_oid,
+						BTORDER_PROC);
+
+	/* set the function oid of operator in tsql comparator context */
+	cxt.function_oid = cmpfunction_oid;
+	cxt.colloid = collation_oid;
+	cxt.contains_duplicate = false;
+
+	/* 
+	 * sort the datum values using quick sort, we don't need to worry about worst case
+	 * of quick sort here when the array is already sorted, the function qsort_arg()
+	 * itself first checks and returns the same array if values already sorted.
+	 */
+	qsort_arg(input_values, nargs, sizeof(Datum), tsql_compare_values, &cxt);
+
+	/* raise error if input contains duplicate value */
+	if (cxt.contains_duplicate)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("Duplicate values are not allowed in partition function boundary values list.")));
+	}
+
+	sql_variant_oid = (*common_utility_plugin_ptr->get_tsql_datatype_oid) ("sql_variant");
+	sql_variant_values = palloc(nargs * sizeof(Datum));
+	/* cast each value to sql_variant datatype */
+	for (int i = 0; i < nargs; i++)
+	{
+		sql_variant_values[i] = exec_cast_value(estate, input_values[i], &isnull,
+							typ->typoid, typ->atttypmod,
+							sql_variant_oid,
+							-1);
+	}
+
+	/* construct array object from the values which needs to inserted in the catalog */
+	arr_value = construct_array(sql_variant_values, nargs, sql_variant_oid,
+					-1, false, 'i');
+
+	/* add entry in the sys.babelfish_partition_function catalog */
+	add_entry_to_bbf_partition_function(dbid, partition_function_name, tsql_typename, stmt->is_right, arr_value, collation);
+
+	pfree(tsql_typename);
+	pfree(input_values);
+	pfree(sql_variant_values);
+	pfree(arr_value);
+	if (collation)
+		pfree(collation);
+
+	/* cleanup estate */
+	exec_eval_cleanup(estate);
+	
+	/* make sure later statements in batch can see the updated catalog entry */
+	CommandCounterIncrement();
+	return PLTSQL_RC_OK;
+}
+
+/*
+ * exec_stmt_partition_scheme
+ * 	 Handles the CREATE/DROP PARTITION SCHEME statement.
+ */
+static int
+exec_stmt_partition_scheme(PLtsql_execstate *estate, PLtsql_stmt_partition_scheme *stmt)
+{
+	const char *partition_scheme_name = stmt->scheme_name;
+	bool		next_used = false;
+	int		filegroups = stmt->filegroups;
+	char		*partition_func_name = stmt->function_name;
+	int16		dbid = get_cur_db_id();
+
+	/* check if the login has necessary permissions for CREATE/DROP */
+	check_create_or_drop_permission_for_partition_specifier(partition_scheme_name, stmt->is_create, false);
+
+	if (!stmt->is_create) /* drop command */
+	{
+		/*
+		 * DROP PARTITION SCHEME might involve TOAST table access, so ensure we
+		 * have a valid snapshot.
+		 */
+		PushActiveSnapshot(GetTransactionSnapshot());
+		/* delete entry from the sys.babelfish_partition_scheme catalog */
+		remove_entry_from_bbf_partition_scheme(dbid, partition_scheme_name);
+		PopActiveSnapshot();
+		/* make sure later statements in batch can see the updated catalog entry */
+		CommandCounterIncrement();
+		return PLTSQL_RC_OK;
+	}
+	
+	/*
+	 * Otherwise, Create Command.
+	 */
+
+	/* check if given name is exceeding the allowed limit */
+	if (strlen(partition_scheme_name) > 128)
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("The identifier that starts with '%.128s' is too long. Maximum length is 128.",
+						partition_scheme_name)));
+	}
+
+	/* raise error if provided partition function doesn't exists in the current database */
+	if (!partition_function_exists(dbid, partition_func_name))
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("Invalid object name '%s'.", partition_func_name)));
+	}
+
+	/* 
+	 * perform next_used calculation check if it is specified
+	 * filegroups are sufficient for the partitions which 
+	 * will be created using the given partition function
+	 */
+	if (filegroups == -1) /* implies that ALL option was used */
+	{
+		next_used = true;
+	}
+	else
+	{
+		int	partition_count = get_partition_count(dbid, partition_func_name);
+		if (filegroups < partition_count)
+		{
+			ereport(ERROR, 
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("The associated partition function '%s' generates more partitions than there are file groups mentioned in the scheme '%s'.", 
+							partition_func_name, partition_scheme_name)));
+		}
+		else if (filegroups > partition_count)
+		{
+			next_used = true;
+		}
+	}
+
+	/* check if there is existing partition scheme with the given name in the current database */
+	if (partition_scheme_exists(dbid, partition_scheme_name))
+	{
+		ereport(ERROR, 
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				errmsg("There is already an object named '%s' in the database.", partition_scheme_name)));
+	}
+	/*
+	 * Adding entries for Partition Scheme might involve TOAST table access, so ensure we
+	 * have a valid snapshot.
+	 */
+	PushActiveSnapshot(GetTransactionSnapshot());
+	/* add entry in the sys.babelfish_partition_scheme catalog */
+	add_entry_to_bbf_partition_scheme(dbid, partition_scheme_name, partition_func_name, next_used);
+
+	PopActiveSnapshot();
+
+	/* make sure later statements in batch can see the updated catalog entry */
+	CommandCounterIncrement();
+	return PLTSQL_RC_OK;
+}
+
+static void
+set_search_path_for_sp_procs(char *schema)
+{
+	char 		*dbo_schema = get_dbo_schema_name(get_current_pltsql_db_name());
+	char 		*new_search_path;
+
+	if (schema != NULL && strcmp(schema, "dbo") == 0)
+		new_search_path = psprintf("%s, sys, pg_catalog, %s",
+						quote_identifier(dbo_schema), "master_dbo");
+	else
+		new_search_path = psprintf("%s, sys, pg_catalog, %s",
+						get_current_db_search_path(), "master_dbo");
+
+	SetConfigOption("search_path", new_search_path,
+					PGC_SUSET, PGC_S_SESSION);
+
+	pfree(new_search_path);
+	pfree(dbo_schema);
+}
+>>>>>>> 01fcb1931 (Create active snapshot when updating various system catalogs accessing TOAST tables (#3827))
