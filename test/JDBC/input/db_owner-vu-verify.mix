@@ -400,7 +400,7 @@ go
 
 -- psql
 select schema_name, object_name, permission, grantee, grantor from sys.babelfish_schema_permissions
-where grantee IN ('dbowner__main_db_guest', 'dbowner__main_db_dbowner__u1', 'dbowner__main_db_dbowner__u2') order by permission;
+where grantee IN ('dbowner__main_db_guest', 'dbowner__main_db_dbowner__u1', 'dbowner__main_db_dbowner__u2') order by permission, grantee, schema_name;
 GO
 
 -- tsql user=dbowner__l1 password=123
