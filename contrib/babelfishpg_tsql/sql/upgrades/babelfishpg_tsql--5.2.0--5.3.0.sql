@@ -468,7 +468,7 @@ WHERE sch.nspname = t.typnamespace::regnamespace::name
  * Update grantor to 'dbo' before altering primary key, to avoid grantor is NULL error
  */
 UPDATE sys.babelfish_schema_permissions
-SET grantor = 'dbo';
+SET grantor = 'master_dbo';
 
 -- Babelfish catalog tables are marked system tables and postgres does not normally allow modification on
 -- system tables so need to temporarily set allow_system_table_mods to update the primary key of babelfish_function_ext.
