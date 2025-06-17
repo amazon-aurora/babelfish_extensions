@@ -598,3 +598,6 @@ ignore#!#money_aggregate-before-17_6-or-16_10-vu-cleanup
 ignore#!#1_GRANT_SCHEMA-before-17_6-vu-prepare
 ignore#!#1_GRANT_SCHEMA-before-17_6-vu-verify
 ignore#!#1_GRANT_SCHEMA-before-17_6-vu-cleanup
+ignore#!#db_owner-before-17_6-vu-prepare
+ignore#!#db_owner-before-17_6-vu-verify
+ignore#!#db_owner-before-17_6-vu-cleanup

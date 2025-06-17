@@ -101,25 +101,25 @@ GO
 ~~ERROR (Message: Cannot use the special principal 'db_accessadmin')~~
 
 -- Cannot GRANT/REVOKE on objects TO/FROM db_accessadmin
-GRANT ALL on babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
+GRANT ALL on object::babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
 
-REVOKE ALL on babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
+REVOKE ALL on object::babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
 
-GRANT SELECT on babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
+GRANT SELECT on object::babel_5136_t1 to db_accessadmin; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: Cannot grant, deny or revoke permissions to or from special roles.)~~
 
-REVOKE EXECUTE on babel_5136_f1 to db_accessadmin; -- Error, no grant on special roles
+REVOKE EXECUTE on object::babel_5136_f1 to db_accessadmin; -- Error, no grant on special roles
 go
 ~~ERROR (Code: 33557097)~~
 

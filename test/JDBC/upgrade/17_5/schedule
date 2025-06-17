@@ -597,7 +597,7 @@ BABEL-5186
 BABEL-2736
 cast_nvarchar_test
 datareader_datawriter
-db_owner
+db_owner-before-17_6
 smalldatetime_date_cmp
 BABEL-2961
 BABEL-5031
