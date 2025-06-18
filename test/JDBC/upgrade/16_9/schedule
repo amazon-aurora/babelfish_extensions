@@ -214,7 +214,7 @@ datediff_big
 datediff
 dateadd
 datename_tzoffset-before-16_10-or-17_6
-datepart
+datepart-before-16_10-or-17_6
 datetime2fromparts-after-15-2
 forjson
 forjson-datatypes
