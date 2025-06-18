@@ -4227,8 +4227,11 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 		if ((grant_option && (permission_val & ACL_USAGE)) || (!grant_option && !(permission_val & ACL_USAGE)))
 		{
 			/* Delete the matching tuple and exit */
-			CatalogTupleDelete(bbf_schema_rel, &tuple_bbf_schema->t_self);
-			break;  
+			if (HeapTupleIsValid(tuple_bbf_schema))
+			{
+				CatalogTupleDelete(bbf_schema_rel, &tuple_bbf_schema->t_self);
+				break;  
+			}
 		}
 	}
 
