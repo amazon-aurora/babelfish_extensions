@@ -6246,6 +6246,9 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	const char 	*grantor = orig_grantor;
 	const char *grantor_suffix = NULL;
 
+	if(objtype!= OBJECT_TABLE && objtype!=OBJECT_FUNCTION && objtype!=OBJECT_PROCEDURE)
+        return true;
+
 	/*  
 	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
 	 */
@@ -6285,8 +6288,9 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 
 		classForm = (Form_pg_class) GETSTRUCT(tuple);
 		sch_id = classForm->relnamespace;
-		ReleaseSysCache(tuple);
 		schema_name = get_namespace_name(sch_id);
+		ReleaseSysCache(tuple);
+
 		if (isTempNamespace(sch_id))
 		{
 			ereport(ERROR,
@@ -6490,9 +6494,9 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		
 		classForm = (Form_pg_class) GETSTRUCT(tuple);
 		sch_id = classForm->relnamespace;
+		schema_name = get_namespace_name(sch_id);
 		ReleaseSysCache(tuple);
 
-		schema_name = get_namespace_name(sch_id);
 		if(schema_name != NULL)
 			logical_schema = get_logical_schema_name(schema_name, false);
 		else 
