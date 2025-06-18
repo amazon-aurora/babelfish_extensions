@@ -3871,8 +3871,9 @@ update_privileges_of_object(const char *schema_name,
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
 				false, NULL, 6, scanKey);
+	tuple_bbf_schema = systable_getnext(scan);
 
-	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	while (HeapTupleIsValid(tuple_bbf_schema))
     	{
 		Datum datum;
 		bool isnull;
@@ -3905,6 +3906,7 @@ update_privileges_of_object(const char *schema_name,
 			heap_freetuple(new_tuple);
 			break;
 		}
+		tuple_bbf_schema = systable_getnext(scan);
 	}
 
 	systable_endscan(scan);
@@ -4026,8 +4028,9 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 					get_bbf_schema_perms_idx_oid(),
 					true, NULL, 5, scanKey);
 	}
+	tuple_bbf_schema = systable_getnext(scan);
 
-	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	while (HeapTupleIsValid(tuple_bbf_schema))
 	{
 		Datum datum;
 		bool isnull;
@@ -4047,6 +4050,7 @@ privilege_exists_in_bbf_schema_permissions(const char *schema_name,
 			catalog_entry_exists = true;
 			break;
 		}
+		tuple_bbf_schema = systable_getnext(scan);
 	}
 
 	systable_endscan(scan);
@@ -4116,8 +4120,9 @@ get_privilege_of_object(const char *schema_name,
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
 				true, NULL, 6, scanKey);
+	tuple_bbf_schema = systable_getnext(scan);
 
-	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	while (HeapTupleIsValid(tuple_bbf_schema))
 	{
 		Datum datum;
 		bool isnull;
@@ -4134,6 +4139,7 @@ get_privilege_of_object(const char *schema_name,
 			permission = current_perm;
 			break;
 		}
+		tuple_bbf_schema = systable_getnext(scan);
 	}
 
 	systable_endscan(scan);
@@ -4210,8 +4216,9 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 	scan = systable_beginscan(bbf_schema_rel,
 				get_bbf_schema_perms_idx_oid(),
 				true, NULL, 6, scanKey);
+	tuple_bbf_schema = systable_getnext(scan);
 
-	while ((tuple_bbf_schema = systable_getnext(scan)) != NULL)
+	while (HeapTupleIsValid(tuple_bbf_schema))
 	{
 		bool		isnull;
 		Datum		permission_datum = heap_getattr(tuple_bbf_schema,
@@ -4233,6 +4240,7 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 				break;  
 			}
 		}
+		tuple_bbf_schema = systable_getnext(scan);
 	}
 
 	systable_endscan(scan);
