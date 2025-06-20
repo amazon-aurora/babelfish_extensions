@@ -154,6 +154,7 @@ text
 
 
 
+<<<<<<< HEAD
 -- Checking stability of DATENAME for varying configs: 
 SELECT * FROM datename_stability_test 
 ORDER BY config_type, config_value;
@@ -189,6 +190,8 @@ DATEFIRST#!#2025-01-05#!#week#!#2
 ~~END~~
 
 
+=======
+>>>>>>> f14c0e190 (Changed testfile into prepare/verify/cleanup structure)
 -- Error Scenarios
     -- Unsupported date time datatype inputs
 SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15 +01:30' AS DATE)) AS date_type;
