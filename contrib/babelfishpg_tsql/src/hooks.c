@@ -100,6 +100,7 @@
 #define UNPIVOT_SOURCE_ALIAS_INDEX  4  /* Source table alias */
 #define UNPIVOT_SOURCE_COLS_INDEX   5  /* List of source columns */
 #define UNPIVOT_NODE_INDEX          6  /* Transformed node (JoinExpr) */
+#define ALL_PERMISSIONS_ON_OBJECT   16511  /* All permissions on an object */
 
 extern bool babelfish_dump_restore;
 extern char *babelfish_dump_restore_min_oid;
@@ -6225,7 +6226,7 @@ handle_grantstmt_for_dbsecadmin(ObjectType objType, Oid objId, Oid ownerId,
 
 
 /* 
- * The following hook aims to add/remove entries into BBF schema permissions catalog
+ * Function update_bbf_schema_permissions_catalog aims to add/remove entries into sys.babelfish_schema_permissions catalog
  */
 static bool
 update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *grantees,
@@ -6244,26 +6245,8 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	int 		grantor_len = strlen(orig_grantor);
 	int 		suffix_len = strlen(suffix);
 	const char 	*grantor = orig_grantor;
-	const char *grantor_suffix = NULL;
-
-	if(objtype!= OBJECT_TABLE && objtype!=OBJECT_FUNCTION && objtype!=OBJECT_PROCEDURE)
-        return true;
-
-	/*  
-	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
-	 */
-	grantor_suffix = orig_grantor + grantor_len - suffix_len;
-	if (grantor_len >= suffix_len && strcmp(grantor_suffix, suffix) == 0)
-	{
-		const char	*temp = pnstrdup(orig_grantor, grantor_len - suffix_len);
-		Oid 		temp_oid = get_role_oid(temp, true);
-		Oid 		db_owner_oid = get_role_oid(db_owner_name, true);
-
-		if (OidIsValid(temp_oid) && OidIsValid(db_owner_oid) && is_member_of_role(temp_oid, db_owner_oid))
-		{
-			grantor = temp;
-		}
-	}
+	const char 	*grantor_suffix = NULL;
+	ObjectAddress 	address;
 
 	GetUserIdAndSecContext(&save_userid, &save_sec_context);
 
@@ -6273,24 +6256,57 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	if (!IS_TDS_CONN() || sql_dialect != SQL_DIALECT_TSQL || save_sec_context == 1 || (list_length(col_privs) != 0))
 		return true;
 
+	/*
+	 * Return if the object_type is not table, function or procedure.
+	 */
+	if(objtype != OBJECT_TABLE && objtype != OBJECT_FUNCTION && objtype != OBJECT_PROCEDURE)
+        	return true;
+
+	/*  
+	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal Babelfish role. 
+	 * This is the case when the schema_owner is the member of db_owner user role.
+	 * It sets the grantor as an internal role and adds a suffix "_bbfobj" to the grantor.
+	 */
+	if(grantor_len > suffix_len)
+	{
+		/*
+		 * Check if the grantor has a "_bbfobj" suffix 
+		 */
+		grantor_suffix = orig_grantor + grantor_len - suffix_len;
+		if (strcmp(grantor_suffix, suffix) == 0)
+		{
+			const char	*temp = pnstrdup(orig_grantor, grantor_len - suffix_len);
+			Oid 		temp_oid = get_role_oid(temp, true);
+			Oid 		db_owner_oid = get_role_oid(db_owner_name, true);
+
+			/*
+			 * If the grantor has "_bbfobj" suffix, remove it and check that the user is a member of db_owner user role to ensure this was an internal user role.
+			 * Set "_bbfobj" suffix rempved string as the grantor  
+			 */
+			if (OidIsValid(temp_oid) && OidIsValid(db_owner_oid) && is_member_of_role(temp_oid, db_owner_oid))
+			{
+				grantor = temp;
+			}
+		}
+	}
+
     	if (objtype == OBJECT_TABLE)
     	{
         	ListCell 	*lc;
 		const char 	*schema_name = NULL;
 		const char	*object_name = get_rel_name(object_oid);
 		const char	*grantee = NULL;
-		HeapTuple	tuple;
-		Form_pg_class	classForm;
-		tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(object_oid));
 
-		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "cache lookup failed for relation %u", object_oid);
-
-		classForm = (Form_pg_class) GETSTRUCT(tuple);
-		sch_id = classForm->relnamespace;
+		address.objectId = object_oid;
+		address.objectSubId = 0;
+		address.classId = RelationRelationId;
+		sch_id = get_object_namespace(&address);
 		schema_name = get_namespace_name(sch_id);
-		ReleaseSysCache(tuple);
 
+		/*
+		 * Return if the permission is being granted on a temp table. 
+		 * This condition checks if it is a temporary namespace i.e. in turn checking if it is a temp table.
+		 */
 		if (isTempNamespace(sch_id))
 		{
 			ereport(ERROR,
@@ -6298,7 +6314,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		 			errmsg("Cannot find the object \"%s\", because it does not exist or you do not have permission.", object_name)));
 		}
 
-		if(schema_name!=NULL)
+		if(schema_name != NULL)
 			logical_schema = get_logical_schema_name(schema_name, false);
 		else 
 			logical_schema = get_authid_user_ext_schema_name(dbname, current_user);
@@ -6306,7 +6322,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		/* 
 		 * Handles "grant all" query i.e. all the privilleges on an object 
 		 */
-        	if (privileges == 16511)
+        	if (privileges == ALL_PERMISSIONS_ON_OBJECT)
 			privileges = ALL_PERMISSIONS_ON_RELATION;
 		if (is_grant)
 		{
@@ -6383,7 +6399,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 				else
 				{
 					int common_permission = old_priv_grant_with_option & privileges;
-					if(common_permission!=0)
+					if(common_permission != 0)
 					{
 						/* 
 						 * There are a few common privilleges already there in grant with option privillege. We need to grant the other permissions. 
@@ -6417,11 +6433,11 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 			 */
 			foreach(lc, grantees)
 			{
-				Oid grantee_oid = lfirst_oid(lc);
-				int old_priv_normal_grant = 0;
-				int old_priv_grant_with_option = 0;
-				int priv_from_normal_grant = 0;
-				int priv_from_grant_option = 0;
+				Oid 	grantee_oid = lfirst_oid(lc);
+				int 	old_priv_normal_grant = 0;
+				int 	old_priv_grant_with_option = 0;
+				int 	priv_from_normal_grant = 0;
+				int 	priv_from_grant_option = 0;
 
 				if (grantee_oid == ACL_ID_PUBLIC)
 					grantee = PUBLIC_ROLE_NAME;
@@ -6485,17 +6501,12 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		const char 	*object_name = get_func_name(object_oid);
 		const char 	*func_args = NULL;
 		const char 	*object_type;
-		HeapTuple 	tuple;
-		Form_pg_class 	classForm;
 
-		tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(object_oid));
-		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "cache lookup failed for relation %u", object_oid);
-		
-		classForm = (Form_pg_class) GETSTRUCT(tuple);
-		sch_id = classForm->relnamespace;
+		address.objectId = object_oid;
+		address.objectSubId = 0;
+		address.classId = ProcedureRelationId;
+		sch_id = get_object_namespace(&address);
 		schema_name = get_namespace_name(sch_id);
-		ReleaseSysCache(tuple);
 
 		if(schema_name != NULL)
 			logical_schema = get_logical_schema_name(schema_name, false);
@@ -6513,7 +6524,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		/* 
 		 * Handles "grant all" query i.e. all the privilleges on an object 
 		 */
-		if (privileges == 16511)
+		if (privileges == ALL_PERMISSIONS_ON_OBJECT)
 			privileges = ALL_PERMISSIONS_ON_FUNCTION;        
 		if (is_grant)
 		{
