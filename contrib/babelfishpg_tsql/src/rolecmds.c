@@ -184,7 +184,10 @@ create_bbf_authid_login_ext(CreateRoleStmt *stmt)
 	/* Grant membership of guests */
 	/* sa and fixed server roles except sysadmin should not have membership in database guest roles */
 	if (!(role_is_sa(roleid) || ((get_sysadmin_oid() != roleid) && IS_BBF_FIXED_SERVER_ROLE(stmt->role))))
-		grant_guests_to_login(GetUserNameFromId(roleid, false));
+	{
+		if (from_windows)
+			grant_guests_to_login(GetUserNameFromId(roleid, false));
+	}
 }
 
 void
@@ -449,7 +452,8 @@ drop_bbf_authid_user_ext(ObjectAccessType access,
 	if (HeapTupleIsValid(tuple))
 	{
 		bool  is_null;
-
+		BpChar	type = ((Form_authid_user_ext) GETSTRUCT(tuple))->type;
+		char  	*type_str;
 		Datum datum = heap_getattr(tuple,
 								   Anum_bbf_authid_user_ext_login_name,
 								   RelationGetDescr(bbf_authid_user_ext_rel),
@@ -458,9 +462,12 @@ drop_bbf_authid_user_ext(ObjectAccessType access,
 		{
 			char *login = NameStr(*DatumGetName(datum));
 
+			type_str = bpchar_to_cstring(&type);
 			/* Grant guest user to login if it's mapped user is being dropped. */
-			if (strlen(login) > 0)
+			if (strlen(login) > 0 && strncmp(type_str, "U", 1) != 0)
 				grant_revoke_role_to_login(login, get_guest_role_name(get_cur_db_name()), "bbf_role_admin", true);
+
+			pfree(type_str);
 		}
 		CatalogTupleDelete(bbf_authid_user_ext_rel,
 						   &tuple->t_self);
@@ -1381,14 +1388,17 @@ create_bbf_authid_user_ext(CreateRoleStmt *stmt, bool has_schema, bool has_login
 			 * membership from these roles.
 			 */
 			SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-			grant_revoke_role_to_login(login_name_str, get_guest_role_name(db_name), NULL, false);
+			if (!from_windows)
+				grant_revoke_role_to_login(login_name_str, get_guest_role_name(db_name), NULL, false);
 		}
 		PG_FINALLY();
 		{
 			SetUserIdAndSecContext(save_userid, save_sec_context);
 		}
 		PG_END_TRY();
-		grant_revoke_role_to_login(login_name_str, get_guest_role_name(db_name), "bbf_role_admin", false); /* revoke even membership granted by bbf_role_admin */
+
+		if (!from_windows)
+			grant_revoke_role_to_login(login_name_str, get_guest_role_name(db_name), "bbf_role_admin", false); /* revoke even membership granted by bbf_role_admin */
 		pfree(db_name);
 	}
 
@@ -1596,6 +1606,91 @@ revoke_guest_from_mapped_logins(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(0);
 }
 
+PG_FUNCTION_INFO_V1(revoke_guest_from_windows_logins);
+Datum
+revoke_guest_from_windows_logins(PG_FUNCTION_ARGS)
+{
+	Relation	bbf_authid_login_ext_rel;
+	TableScanDesc scan;
+	HeapTuple	tuple;
+	bool		is_null;
+
+	/* We only allow this to be called from an extension's SQL script. */
+	if (!creating_extension)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("%s can only be called from an SQL script executed by CREATE/ALTER EXTENSION",
+						"add_existing_users_to_catalog()")));
+
+	bbf_authid_login_ext_rel = table_open(get_authid_login_ext_oid(), AccessShareLock);
+	scan = table_beginscan_catalog(bbf_authid_login_ext_rel, 0, NULL);
+	tuple = heap_getnext(scan, ForwardScanDirection);
+
+	while (HeapTupleIsValid(tuple))
+	{
+		Datum datum = heap_getattr(tuple,
+									Anum_bbf_authid_login_ext_rolname,
+									RelationGetDescr(bbf_authid_login_ext_rel),
+									&is_null);
+
+		if (!is_null)
+		{
+			char *login = NameStr(*DatumGetName(datum));
+
+			/* 
+				* Revoke guest user from windows login 
+				* as it should not have guest membership by default.
+				*/
+			if (strlen(login) > 0)
+			{
+				BpChar type = ((Form_authid_user_ext) GETSTRUCT(tuple))->type;
+				Relation	db_rel;
+				TableScanDesc	scan_desc;
+				HeapTuple	tup;
+				bool		isnull;
+				char *type_str;
+				
+				db_rel = table_open(sysdatabases_oid, AccessShareLock);
+				scan_desc = table_beginscan_catalog(db_rel, 0, NULL);
+				tup = heap_getnext(scan_desc, ForwardScanDirection);
+				type_str = bpchar_to_cstring(&type);
+
+				while (HeapTupleIsValid(tup))
+				{
+					Datum		db_name_datum = heap_getattr(tup,
+													Anum_sysdatabases_name,
+													db_rel->rd_att,
+													&isnull);
+					const char	*db_name = TextDatumGetCString(db_name_datum);
+
+					/* check if mapped user for individual login exists in the database */
+					if (strncmp(type_str, "U", 1) == 0)
+					{
+						char	 *user = get_authid_user_ext_physical_name(db_name, login);
+
+						if (!strlen(user))
+						{
+							grant_revoke_role_to_login(login, get_guest_role_name(db_name), NULL, false);
+							grant_revoke_role_to_login(login, get_guest_role_name(db_name), "bbf_role_admin", false); /* revoke even membership granted by bbf_role_admin */
+						}
+					}
+
+				tup = heap_getnext(scan_desc, ForwardScanDirection);
+				}
+				table_endscan(scan_desc);
+				table_close(db_rel, AccessShareLock);
+				pfree(type_str);
+			}
+			
+		}
+		tuple = heap_getnext(scan, ForwardScanDirection);
+	}
+
+	table_endscan(scan);
+	table_close(bbf_authid_login_ext_rel, AccessShareLock);
+	PG_RETURN_INT32(0);
+}
+
 void
 alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 {
@@ -1618,6 +1713,9 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 	char	   *physical_name = NULL;
 	char	   *login_name_str = NULL;
 	char	   *old_login_name = NULL;
+	bool	   from_windows = false;
+	char	   *type_str;
+	BpChar	   type;
 
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return;
@@ -1676,6 +1774,14 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("tuple does not exist")));
+
+	type = ((Form_authid_user_ext) GETSTRUCT(tuple))->type;
+	type_str = bpchar_to_cstring(&type);
+	
+	if (strncmp(type_str, "U", 1) == 0)
+		from_windows = true;
+	
+	pfree(type_str);
 
 	/* Build a tuple to insert */
 	MemSet(new_record_user_ext, 0, sizeof(new_record_user_ext));
@@ -1753,7 +1859,8 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 			grant_revoke_role_to_login(old_login_name, stmt->role->rolename, NULL, false);
 			grant_revoke_role_to_login(old_login_name, stmt->role->rolename, "bbf_role_admin", false);
 			/* Now grant guest user to old login as it's mapped user is being removed. */
-			grant_revoke_role_to_login(old_login_name, get_guest_role_name(get_cur_db_name()), "bbf_role_admin", true);
+			if (!from_windows)
+				grant_revoke_role_to_login(old_login_name, get_guest_role_name(get_cur_db_name()), "bbf_role_admin", true);
 		}
 
 		/* Revoke guest user from new login as login now has a mapped user in current database. */
@@ -1767,14 +1874,16 @@ alter_bbf_authid_user_ext(AlterRoleStmt *stmt)
 			 * membership from these roles.
 			 */
 			SetUserIdAndSecContext(get_sa_role_oid(), save_sec_context | SECURITY_LOCAL_USERID_CHANGE);
-			grant_revoke_role_to_login(login_name_str, get_guest_role_name(get_cur_db_name()), NULL, false);
+			if (!from_windows)
+				grant_revoke_role_to_login(login_name_str, get_guest_role_name(get_cur_db_name()), NULL, false);
 		}
 		PG_FINALLY();
 		{
 			SetUserIdAndSecContext(save_userid, save_sec_context);
 		}
 		PG_END_TRY();
-		grant_revoke_role_to_login(login_name_str, get_guest_role_name(get_cur_db_name()), "bbf_role_admin", false); /* revoke even membership granted by bbf_role_admin */
+		if (!from_windows)
+			grant_revoke_role_to_login(login_name_str, get_guest_role_name(get_cur_db_name()), "bbf_role_admin", false); /* revoke even membership granted by bbf_role_admin */
 	}
 
 	if (new_user_name)

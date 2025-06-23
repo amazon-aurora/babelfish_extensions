@@ -895,6 +895,15 @@ CREATE OR REPLACE FUNCTION sys.len(expr sys.BBF_BINARY) RETURNS INTEGER AS
 STRICT
 LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE PROCEDURE sys.babelfish_revoke_guest_from_windows_logins()
+  LANGUAGE C
+  AS 'babelfishpg_tsql', 'revoke_guest_from_windows_logins';
+  
+  CALL sys.babelfish_revoke_guest_from_windows_logins();
+  
+  -- Drop this procedure after it gets executed once.
+  DROP PROCEDURE sys.babelfish_revoke_guest_from_windows_logins();
+
 -- Drops the temporary procedure used by the upgrade script.
 -- Please have this be one of the last statements executed in this upgrade script.
 DROP PROCEDURE sys.babelfish_drop_deprecated_object(varchar, varchar, varchar);
