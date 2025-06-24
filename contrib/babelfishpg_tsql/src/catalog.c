@@ -3003,6 +3003,7 @@ void
 alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 {
 	Relation	bbf_authid_user_ext_rel;
+	Relation	bbf_schema_perm_rel;
 	TupleDesc	bbf_authid_user_ext_dsc;
 	ScanKeyData key[2];
 	HeapTuple	usertuple;
@@ -3017,6 +3018,9 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 	bbf_authid_user_ext_rel = table_open(get_authid_user_ext_oid(),
 										 RowExclusiveLock);
 	bbf_authid_user_ext_dsc = RelationGetDescr(bbf_authid_user_ext_rel);
+
+	/* Open the schema permission catalog for connect privilege update */
+	bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
 
 	/* Search and obtain the tuple based on the user name and db name */
 	ScanKeyInit(&key[0],
@@ -3052,7 +3056,7 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 		/* Add entry to bbf_schema_permissions when CONNECT privilege is granted */
 		if(!privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
 		{
-			add_entry_to_bbf_schema_perms("ALL", "ALL", ACL_CONNECT, grantee, "d", NULL , grantor, false);
+			add_entry_to_bbf_schema_perms(bbf_schema_perm_rel, "ALL", "ALL", ACL_CONNECT, grantee, "d", NULL , grantor, false);
 		}
 	}
 	else
@@ -3061,7 +3065,7 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 		/* Remove entry from bbf_schema_permissions when CONNECT privilege is revoked */
 		if(!privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
 		{
-			remove_entry_from_bbf_schema_perms("ALL", "ALL", grantee, "d", grantor, false);
+			remove_entry_from_bbf_schema_perms(bbf_schema_perm_rel, "ALL", "ALL", grantee, "d", grantor, false);
 		}
 	}
 
@@ -3079,6 +3083,7 @@ alter_user_can_connect(bool is_grant, char *user_name, char *db_name)
 
 	table_endscan(tblscan);
 	table_close(bbf_authid_user_ext_rel, RowExclusiveLock);
+	table_close(bbf_schema_perm_rel, RowExclusiveLock);
 }
 
 /* Checks if the guest user is enabled on a given database. */
@@ -3708,7 +3713,8 @@ rename_procfunc_update_bbf_catalog(RenameStmt *stmt)
  * Add an entry to catalog BABELFISH_SCHEMA_PERMISSIONS.
  */
 void
-add_entry_to_bbf_schema_perms(const char *schema_name,
+add_entry_to_bbf_schema_perms(Relation bbf_schema_rel,
+				const char *schema_name,
 				const char *object_name,
 				int permission,
 				const char *grantee,
@@ -3717,7 +3723,6 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 				const char *grantor,
 				bool grant_option)
 {
-	Relation	bbf_schema_rel;
 	TupleDesc	bbf_schema_dsc;
 	HeapTuple	tuple_bbf_schema;
 	Datum		new_record_bbf_schema[BBF_SCHEMA_PERMS_NUM_OF_COLS];
@@ -3729,9 +3734,6 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	if (grantee == NULL || permission==0)
 		return;
 
-	/* Fetch the relation */
-	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
-									RowExclusiveLock);
 	bbf_schema_dsc = RelationGetDescr(bbf_schema_rel);
 
 	/* Build a tuple to insert */
@@ -3764,9 +3766,6 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
 	/* Insert new record in the bbf_authid_user_ext table */
 	CatalogTupleInsert(bbf_schema_rel, tuple_bbf_schema);
 
-	/* Close bbf_authid_user_ext, but keep lock till commit */
-	table_close(bbf_schema_rel, RowExclusiveLock);
-
 	/* make sure later steps can see the entry added here */
 	CommandCounterIncrement();
 }
@@ -3775,7 +3774,8 @@ add_entry_to_bbf_schema_perms(const char *schema_name,
  * Updates the permission column for a particular row in BABELFISH_SCHEMA_PERMISSIONS table.
  */
 void
-update_privileges_of_object(const char *schema_name,
+update_privileges_of_object(Relation bbf_schema_rel,
+				const char *schema_name,
 				const char *object_name,
 				int new_permission,
 				const char *grantee,
@@ -3784,7 +3784,6 @@ update_privileges_of_object(const char *schema_name,
 				const char *grantor,
 				bool grant_option)
 {
-	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
 	TupleDesc	bbf_schema_dsc;
 	HeapTuple	new_tuple;
@@ -3824,12 +3823,9 @@ update_privileges_of_object(const char *schema_name,
 	}
 	if ((!grant_option && current_permission == 0) || (grant_option && current_permission == ACL_USAGE))
 	{
-		remove_entry_from_bbf_schema_perms(schema_name, object_name, grantee, object_type, grantor, grant_option);
+		remove_entry_from_bbf_schema_perms(bbf_schema_rel, schema_name, object_name, grantee, object_type, grantor, grant_option);
 		return;
 	}
-
-	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
-							RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0],
 				Anum_bbf_schema_perms_dbid,
@@ -3910,7 +3906,6 @@ update_privileges_of_object(const char *schema_name,
 	}
 
 	systable_endscan(scan);
-	table_close(bbf_schema_rel, RowExclusiveLock);
 
 	/* make sure later steps can see the entry updated here */
 	CommandCounterIncrement();
@@ -4151,14 +4146,14 @@ get_privilege_of_object(const char *schema_name,
  * Removes a row from the catalog BABELFISH_SCHEMA_PERMISSIONS.
  */
 void
-remove_entry_from_bbf_schema_perms(const char *schema_name,
+remove_entry_from_bbf_schema_perms(Relation bbf_schema_rel,
+				  const char *schema_name,
 				  const char *object_name,
 				  const char *grantee,
 				  const char *object_type,
 				  const char *grantor,
 				  bool grant_option)
 {
-	Relation	bbf_schema_rel;
 	HeapTuple	tuple_bbf_schema;
 	ScanKeyData scanKey[6];
 	SysScanDesc scan;
@@ -4172,8 +4167,6 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 	if ((grantee == NULL))
 		return;
 
-	bbf_schema_rel = table_open(get_bbf_schema_perms_oid(),
-									RowExclusiveLock);
 	ScanKeyInit(&scanKey[0],
 				Anum_bbf_schema_perms_dbid,
 				BTEqualStrategyNumber, F_INT2EQ,
@@ -4244,7 +4237,6 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
 	}
 
 	systable_endscan(scan);
-	table_close(bbf_schema_rel, RowExclusiveLock);
 }
 
 /*
@@ -4252,7 +4244,8 @@ remove_entry_from_bbf_schema_perms(const char *schema_name,
  * If exists, updates the PERMISSION column in the table.
  */
 void
-add_or_update_object_in_bbf_schema(const char *schema_name,
+add_or_update_object_in_bbf_schema(Relation bbf_schema_rel,
+				const char *schema_name,
 				const char *object_name,
 				int new_permission,
 				const char *grantee,
@@ -4263,9 +4256,9 @@ add_or_update_object_in_bbf_schema(const char *schema_name,
 				bool grant_option)
 {
 	if (!privilege_exists_in_bbf_schema_permissions(schema_name, object_name, grantee, object_type, grantor, grant_option))
-		add_entry_to_bbf_schema_perms(schema_name, object_name, new_permission, grantee, object_type, func_args,grantor, grant_option);
+		add_entry_to_bbf_schema_perms(bbf_schema_rel, schema_name, object_name, new_permission, grantee, object_type, func_args,grantor, grant_option);
 	else
-		update_privileges_of_object(schema_name, object_name, new_permission, grantee, object_type, is_grant, grantor, grant_option);
+		update_privileges_of_object(bbf_schema_rel, schema_name, object_name, new_permission, grantee, object_type, is_grant, grantor, grant_option);
 }
 
 /*

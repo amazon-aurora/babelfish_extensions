@@ -3903,6 +3903,7 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	int 		grantor_len;
 	int 		suffix_len = strlen(suffix);
 	const char 	*grantor_suffix = NULL;
+	Relation	bbf_schema_perm_rel;
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -4016,10 +4017,12 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 				exec_grantschema_subcmds(schema_name, rolname, stmt->is_grant, stmt->with_grant_option, permissions[i]);
 		}
 
+		bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
+
 		if (stmt->is_grant)
 		{
 			/* For GRANT statement, add or update privileges in the catalog. */
-			add_or_update_object_in_bbf_schema(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL, grantor, false);
+			add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL, grantor, false);
 		}
 		else
 		{
@@ -4032,10 +4035,11 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 					if (stmt->privileges & permissions[i])
 						grant_perms_to_objects_in_schema(stmt->schema_name, permissions[i], rolname, grantor);
 				}
-				update_privileges_of_object(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false, grantor, false);
+				update_privileges_of_object(bbf_schema_perm_rel, stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false, grantor, false);
 			}
 		}
 		pfree(rolname);
+		table_close(bbf_schema_perm_rel, RowExclusiveLock);
 	}
 	pfree(user);
 	pfree(db_owner_name);

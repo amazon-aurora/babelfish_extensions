@@ -2968,6 +2968,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 				{
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
+					Relation	bbf_schema_perm_rel;
 					List	   *login_options = NIL;
 					List	   *user_options = NIL;
 					ListCell   *option;
@@ -3385,14 +3386,16 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * our babelfish catalog. These roles are meant to be internal
 							 * and not be visible to customer from Babelfish endpoint.
 							 */
+							bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
 							if (strcmp(queryString, INTERNAL_ALTER_ROLE) != 0)
 							{	
 								create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
 
 								/* Add connect privillege entry into the bbf_schema_permissions, which is granted by default when a user is created. */
 								if(isuser)
-									add_entry_to_bbf_schema_perms("ALL", "ALL", ACL_CONNECT, stmt->role, "d", NULL , grantor, false);
+									add_entry_to_bbf_schema_perms(bbf_schema_perm_rel, "ALL", "ALL", ACL_CONNECT, stmt->role, "d", NULL , grantor, false);
 							}
+							table_close(bbf_schema_perm_rel, RowExclusiveLock);
 						}
 
 					}
@@ -4037,11 +4040,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						const char 	*current_db_name = get_cur_db_name();
 						const char 	*grantee = GetUserNameFromId(get_role_oid(rolspec->rolename, false), false);
 						const char 	*grantor = psprintf("%s_dbo", current_db_name);
+						Relation bbf_schema_perm_rel;
+						bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
 
 						if(privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
 						{
-							update_privileges_of_object("ALL", "ALL", ACL_CONNECT, grantee, "d", false, grantor, false);
+							update_privileges_of_object(bbf_schema_perm_rel, "ALL", "ALL", ACL_CONNECT, grantee, "d", false, grantor, false);
 						}
+						table_close(bbf_schema_perm_rel, RowExclusiveLock);
 					}
 
 					/*
