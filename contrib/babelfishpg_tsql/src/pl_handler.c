@@ -64,6 +64,7 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc_tables.h"
+#include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/plancache.h"
@@ -3393,7 +3394,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 								/* Add connect privillege entry into the bbf_schema_permissions, which is granted by default when a user is created. */
 								if(isuser)
-									add_entry_to_bbf_schema_perms(bbf_schema_perm_rel, "ALL", "ALL", ACL_CONNECT, stmt->role, "d", NULL , grantor, false);
+									add_entry_to_bbf_schema_perms(bbf_schema_perm_rel, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, ACL_CONNECT, stmt->role, OBJ_DATABASE, NULL, grantor, false);
 							}
 							table_close(bbf_schema_perm_rel, RowExclusiveLock);
 						}
@@ -4040,13 +4041,61 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						const char 	*current_db_name = get_cur_db_name();
 						const char 	*grantee = GetUserNameFromId(get_role_oid(rolspec->rolename, false), false);
 						const char 	*grantor = psprintf("%s_dbo", current_db_name);
-						Relation bbf_schema_perm_rel;
+						Relation 	bbf_schema_perm_rel;
+						ScanKeyData	scanKey[6];
+						// SysScanDesc	scan;
+
 						bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
 
-						if(privilege_exists_in_bbf_schema_permissions("ALL", "ALL", grantee, "d", grantor, false))
+						ScanKeyInit(&scanKey[0],
+								Anum_bbf_schema_perms_dbid,
+								BTEqualStrategyNumber, F_INT2EQ,
+								Int16GetDatum(get_cur_db_id()));
+						ScanKeyEntryInitialize(&scanKey[1], 0,
+									Anum_bbf_schema_perms_schema_name,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(PERMISSIONS_FOR_DATABASE));
+						ScanKeyEntryInitialize(&scanKey[2], 0,
+									Anum_bbf_schema_perms_object_name,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA));
+						ScanKeyEntryInitialize(&scanKey[3], 0,
+									Anum_bbf_schema_perms_grantee,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(grantee));
+						ScanKeyEntryInitialize(&scanKey[4], 0,
+									Anum_bbf_schema_perms_object_type,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(OBJ_DATABASE));
+						ScanKeyEntryInitialize(&scanKey[5], 0,
+									Anum_bbf_schema_perms_grantor,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(grantor));
+						// scan = systable_beginscan(bbf_schema_perm_rel,
+						// 		get_bbf_schema_perms_idx_oid(),
+						// 		true, NULL, 6, scanKey);
+
+
+						if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_DATABASE, grantor, false))
 						{
-							update_privileges_of_object(bbf_schema_perm_rel, "ALL", "ALL", ACL_CONNECT, grantee, "d", false, grantor, false);
+							update_privileges_of_object(bbf_schema_perm_rel, scanKey, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, ACL_CONNECT, grantee, OBJ_DATABASE, false, grantor, false);
 						}
+						// systable_endscan(scan);
 						table_close(bbf_schema_perm_rel, RowExclusiveLock);
 					}
 

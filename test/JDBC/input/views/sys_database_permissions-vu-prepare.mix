@@ -1,0 +1,106 @@
+-- tsql
+create login babel_5690_login_1 with password = '123';
+go
+
+create login babel_5690_login_2 with password = '123';
+go
+
+create login babel_5690_login_3 with password = '123';
+go
+
+create database babel_5690_db_1;
+go
+
+use babel_5690_db_1;
+go
+
+create user babel_5690_user_1 for login babel_5690_login_1;
+go
+
+create user babel_5690_user_2 for login babel_5690_login_2;
+go
+
+create user babel_5690_user_3 for login babel_5690_login_3;
+go
+
+CREATE VIEW babel_5690_db_permissions_view AS
+SELECT
+    dp.class_desc,
+    dp.major_id,
+    sys.USER_NAME(dp.grantee_principal_id) AS grantee_name,
+    sys.USER_NAME(dp.grantor_principal_id) AS grantor_name,
+    dp.permission_name,
+    dp.state_desc
+FROM
+    sys.database_permissions dp;
+GO
+GRANT SELECT ON dbo.babel_5690_db_permissions_view TO PUBLIC;
+GO
+
+create schema sch1;
+go
+
+create schema sch2 authorization babel_5690_user_1;
+go
+
+create table sch1.t1(c int);
+go
+
+create table sch2.t2(c int);
+go
+
+create table babel_5690_table_1(column_1 int);
+go
+
+create view babel_5690_view_1 as select * from babel_5690_table_1;
+go
+
+create procedure babel_5690_procedure_1 as begin select * from babel_5690_table_1 end;
+go
+
+create function babel_5690_function_1() returns int as begin return 0; end;
+go
+
+create login babel_5690_login_4 with password = '123';
+go
+
+create login babel_5690_login_5 with password = '123';
+go
+
+create login babel_5690_login_6 with password = '123';
+go
+
+create database babel_5690_db_2;
+go
+
+use babel_5690_db_2;
+go
+
+create user babel_5690_user_4 for login babel_5690_login_4;
+go
+
+create user babel_5690_user_5 for login babel_5690_login_5;
+go
+
+create user babel_5690_user_6 for login babel_5690_login_6;
+go
+
+create table babel_5690_table_2(column_1 int);
+go
+
+create function babel_5690_function_2() returns int as begin return 0; end;
+go
+
+CREATE VIEW babel_5690_db_permissions_view AS
+SELECT
+    dp.class_desc,
+    dp.major_id,
+    sys.USER_NAME(dp.grantee_principal_id) AS grantee_name,
+    sys.USER_NAME(dp.grantor_principal_id) AS grantor_name,
+    dp.permission_name,
+    dp.state_desc
+FROM
+    sys.database_permissions dp;
+GO
+GRANT SELECT ON dbo.babel_5690_db_permissions_view TO PUBLIC;
+GO

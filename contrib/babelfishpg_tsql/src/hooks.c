@@ -6365,29 +6365,74 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 	{
 		foreach(lc, grantees)
 		{
-			Oid	grantee_oid = lfirst_oid(lc);
-			int 	old_priv_normal_grant = 0;
-			int 	old_priv_grant_with_option = 0;
+			Oid		grantee_oid = lfirst_oid(lc);
+			int 		old_priv_normal_grant = 0;
+			int 		old_priv_grant_with_option = 0;
+			ScanKeyData	scanKey[6];
+			// SysScanDesc	scan;
 
 			if (grantee_oid == ACL_ID_PUBLIC)
 				grantee = PUBLIC_ROLE_NAME;
 			else
 				grantee = GetUserNameFromId(grantee_oid, false);
 			
+			ScanKeyInit(&scanKey[0],
+					Anum_bbf_schema_perms_dbid,
+					BTEqualStrategyNumber, F_INT2EQ,
+					Int16GetDatum(get_cur_db_id()));
+			ScanKeyEntryInitialize(&scanKey[1], 0,
+						Anum_bbf_schema_perms_schema_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(logical_schema));
+			ScanKeyEntryInitialize(&scanKey[2], 0,
+						Anum_bbf_schema_perms_object_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(object_name));
+			ScanKeyEntryInitialize(&scanKey[3], 0,
+						Anum_bbf_schema_perms_grantee,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantee));
+			ScanKeyEntryInitialize(&scanKey[4], 0,
+						Anum_bbf_schema_perms_object_type,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(object_type));
+			ScanKeyEntryInitialize(&scanKey[5], 0,
+						Anum_bbf_schema_perms_grantor,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantor));
+			// scan = systable_beginscan(bbf_schema_perm_rel,
+			// 		get_bbf_schema_perms_idx_oid(),
+			// 		true, NULL, 6, scanKey);
+			
 			/* 
 			 * Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option 
 			 */
-			if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, false))
+			if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, false))
 			{
-				old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, false);
+				old_priv_normal_grant = get_privilege_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, false);
 			}
 
 			/* 
 			 * Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option 
 			 */
-			if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, true))
+			if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, true))
 			{
-				old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
+				old_priv_grant_with_option = get_privilege_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, true);
 			}
 			if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 			{
@@ -6418,7 +6463,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 					/* 
 					 * Remove all entries from normal grants 
 					 */
-					update_privileges_of_object(bbf_schema_perm_rel, logical_schema, object_name, old_priv_normal_grant, grantee, object_type, false, grantor, false);
+					update_privileges_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, old_priv_normal_grant, grantee, object_type, false, grantor, false);
 				}
 				/* 
 				 * Indicates few the permissions being granted are already present in normal grants 
@@ -6428,7 +6473,7 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 					/*
 					 * Remove common_permission entries from normal grants 
 					 */
-					update_privileges_of_object(bbf_schema_perm_rel, logical_schema, object_name, common_permission, grantee, object_type, false, grantor, false);
+					update_privileges_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, common_permission, grantee, object_type, false, grantor, false);
 				}
 			}
 			/* 
@@ -6456,11 +6501,12 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 			 */
 			if(grant_option)
 			{
-				add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, true);
+				add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, scanKey, logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, true);
 			}
 			else{
-				add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, false);
+				add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, scanKey, logical_schema, object_name, privileges, grantee, object_type, true, func_args, grantor, false);
 			}
+			// systable_endscan(scan);
 		}
 	}
 	else
@@ -6471,33 +6517,123 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 		 */
 		foreach(lc, grantees)
 		{
-			Oid 	grantee_oid = lfirst_oid(lc);
-			int 	old_priv_normal_grant = 0;
-			int 	old_priv_grant_with_option = 0;
-			int 	priv_from_normal_grant = 0;
-			int 	priv_from_grant_option = 0;
+			Oid 		grantee_oid = lfirst_oid(lc);
+			int 		old_priv_normal_grant = 0;
+			int 		old_priv_grant_with_option = 0;
+			int 		priv_from_normal_grant = 0;
+			int 		priv_from_grant_option = 0;
+			ScanKeyData	scanKey[6];
+			// SysScanDesc	scan;
+			ScanKeyData	scanKeySchema[6];
+			// SysScanDesc	 scanSchema;
 
 			if (grantee_oid == ACL_ID_PUBLIC)
 				grantee = PUBLIC_ROLE_NAME;
 			else
 				grantee = GetUserNameFromId(grantee_oid, false);
 
-			if (privilege_exists_in_bbf_schema_permissions(logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_SCHEMA, grantor, false))
+			ScanKeyInit(&scanKey[0],
+					Anum_bbf_schema_perms_dbid,
+					BTEqualStrategyNumber, F_INT2EQ,
+					Int16GetDatum(get_cur_db_id()));
+			ScanKeyEntryInitialize(&scanKey[1], 0,
+						Anum_bbf_schema_perms_schema_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(logical_schema));
+			ScanKeyEntryInitialize(&scanKey[2], 0,
+						Anum_bbf_schema_perms_object_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(object_name));
+			ScanKeyEntryInitialize(&scanKey[3], 0,
+						Anum_bbf_schema_perms_grantee,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantee));
+			ScanKeyEntryInitialize(&scanKey[4], 0,
+						Anum_bbf_schema_perms_object_type,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(object_type));
+			ScanKeyEntryInitialize(&scanKey[5], 0,
+						Anum_bbf_schema_perms_grantor,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantor));
+			// scan = systable_beginscan(bbf_schema_perm_rel,
+			// 		get_bbf_schema_perms_idx_oid(),
+			// 		true, NULL, 6, scanKey);
+					
+			ScanKeyInit(&scanKeySchema[0],
+					Anum_bbf_schema_perms_dbid,
+					BTEqualStrategyNumber, F_INT2EQ,
+					Int16GetDatum(get_cur_db_id()));
+			ScanKeyEntryInitialize(&scanKeySchema[1], 0,
+						Anum_bbf_schema_perms_schema_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(logical_schema));
+			ScanKeyEntryInitialize(&scanKeySchema[2], 0,
+						Anum_bbf_schema_perms_object_name,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA));
+			ScanKeyEntryInitialize(&scanKeySchema[3], 0,
+						Anum_bbf_schema_perms_grantee,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantee));
+			ScanKeyEntryInitialize(&scanKeySchema[4], 0,
+						Anum_bbf_schema_perms_object_type,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(OBJ_SCHEMA));
+			ScanKeyEntryInitialize(&scanKeySchema[5], 0,
+						Anum_bbf_schema_perms_grantor,
+						BTEqualStrategyNumber,
+						InvalidOid,
+						tsql_get_database_or_server_collation_oid_internal(false),
+						F_TEXTEQ,
+						CStringGetTextDatum(grantor));
+			// scanSchema = systable_beginscan(bbf_schema_perm_rel,
+			// 		get_bbf_schema_perms_idx_oid(),
+			// 		true, NULL, 6, scanKeySchema);
+
+			if (privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKeySchema, logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_SCHEMA, grantor, false))
 				only_object_grants =  false;
 
 			/* 
 			 * Extract older permissions existing on the object for corresponding grantor and grantee - false indicates permissions without grant_option 
 			 */
-			if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, false))
+			if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, false))
 			{
-				old_priv_normal_grant = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, false);
+				old_priv_normal_grant = get_privilege_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, false);
 			}
 			/* 
 			 * Extract older permissions existing on the object for corresponding grantor and grantee - true indicates permissions with grant_option 
 			 */
-			if(privilege_exists_in_bbf_schema_permissions(logical_schema, object_name, grantee, object_type, grantor, true))
+			if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, true))
 			{
-				old_priv_grant_with_option = get_privilege_of_object(logical_schema, object_name, grantee, object_type, grantor, true);
+				old_priv_grant_with_option = get_privilege_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, grantee, object_type, grantor, true);
 			}
 			if (grantee && (strcmp(grantee, obj_owner_name) == 0 || strcmp(grantee, grantor) == 0))
 			{
@@ -6522,12 +6658,14 @@ update_bbf_schema_permissions_catalog(AclMode privileges, bool is_grant, List *g
 
 			if(priv_from_normal_grant)
 			{
-				update_privileges_of_object(bbf_schema_perm_rel, logical_schema, object_name, priv_from_normal_grant, grantee, object_type, false, grantor, false);
+				update_privileges_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, priv_from_normal_grant, grantee, object_type, false, grantor, false);
 			}
 			if(priv_from_grant_option)
 			{
-				update_privileges_of_object(bbf_schema_perm_rel, logical_schema, object_name, priv_from_grant_option, grantee, object_type, false, grantor, true);
+				update_privileges_of_object(bbf_schema_perm_rel, scanKey, logical_schema, object_name, priv_from_grant_option, grantee, object_type, false, grantor, true);
 			}
+			// systable_endscan(scan);
+			// systable_endscan(scanSchema);
 		}
 	}
 	table_close(bbf_schema_perm_rel, ExclusiveLock);

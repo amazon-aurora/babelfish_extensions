@@ -1,0 +1,849 @@
+-- tsql
+-- reset the login password
+ALTER LOGIN babel_5690_login_1 WITH PASSWORD = '123';
+GO
+
+-- reset the login password
+ALTER LOGIN babel_5690_login_2 WITH PASSWORD = '123';
+GO
+
+-- reset the login password
+ALTER LOGIN babel_5690_login_3 WITH PASSWORD = '123';
+GO
+
+use babel_5690_db_1;
+go
+
+-- By default there will be connect permission for all users and there will be select permission on the view whose grantee = public 
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Perform GRANT/REVOKE CONNECT permission by dbo
+revoke connect from babel_5690_user_1;
+go
+
+-- Connect permission is revoked from babel_5690_user_1 
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+grant connect to babel_5690_user_1;
+go
+
+-- Connect permission is granted to babel_5690_user_1 by dbo, grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Perform GRANT/REVOKE CONNECT permission by securityadmin
+alter role securityadmin add member babel_5690_login_1;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+revoke connect from babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- Connect permission is revoked from babel_5690_user_2
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+grant connect to babel_5690_user_2;
+go
+
+alter role securityadmin drop member babel_5690_login_1;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- Connect permission is granted to babel_5690_user_1 by securityadmin login, grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Grant permission on a schema when schema owner is not set by dbo, Grantor = dbo
+grant execute on schema::sch1 to babel_5690_user_2;
+go
+
+-- Grant permission on a schema when schema owner is set by dbo, Grantor = schema owner (user1)
+grant execute on schema::sch2 to babel_5690_user_2;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke back the permissions
+revoke execute on schema::sch1 to babel_5690_user_2;
+revoke execute on schema::sch2 to babel_5690_user_2;
+go
+
+alter role db_owner add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_owner, Grantor = dbo
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_owner, Grantor = schema owner (user1)
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke back the permissions
+revoke execute on schema::sch1 to babel_5690_user_3;
+revoke execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_owner drop member babel_5690_user_2;
+go
+
+alter role db_securityadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_securityadmin, Grantor = dbo
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_securityadmin, Grantor = schema owner (user1)
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Revoke back the permissions
+revoke execute on schema::sch1 to babel_5690_user_3;
+revoke execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_securityadmin drop member babel_5690_user_2;
+go
+
+alter role db_ddladmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_ddladmin, negative test - permission denied
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_ddladmin, negative test - permission denied
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_ddladmin drop member babel_5690_user_2;
+go
+
+alter role db_accessadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_accessadmin, negative test - permission denied
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_accessadmin, negative test - permission denied
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_accessadmin drop member babel_5690_user_2;
+go
+
+alter role db_datawriter add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_datawriter, negative test - permission denied
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_datawriter, negative test - permission denied
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_datawriter drop member babel_5690_user_2;
+go
+
+alter role db_datareader add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_datareader, negative test - permission denied
+grant execute on schema::sch1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_datareader, negative test - permission denied
+grant execute on schema::sch2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_datareader drop member babel_5690_user_2;
+go
+
+-- Negative Test i.e. Grant with option on schema is not supported in Babelfish yet
+grant select on schema::sch1 to babel_5690_user_3 with grant option;
+go
+
+grant select on schema::sch2 to babel_5690_user_3 with grant option;
+go
+
+-- Grant permission on a schema objects when schema owner is not set by dbo, Grantor = dbo
+grant select on sch1.t1 to babel_5690_user_2;
+go
+
+-- Grant permission on a schema objects when schema owner is set by dbo, Grantor = dbo
+grant select on sch2.t2 to babel_5690_user_2;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke back the permissions
+revoke select on sch1.t1 to babel_5690_user_2;
+revoke select on sch2.t2 to babel_5690_user_2;
+go
+
+alter role db_owner add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_owner, Grantor = dbo
+grant select on sch1.t1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_owner, Grantor = schema owner (user1)
+grant select on sch2.t2 to babel_5690_user_3;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke back the permissions
+revoke select on sch1.t1 to babel_5690_user_3;
+revoke select on sch2.t2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_owner drop member babel_5690_user_2;
+go
+
+alter role db_securityadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_securityadmin, Grantor = dbo
+grant select on sch1.t1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_securityadmin, Grantor = schema owner (user1)
+grant select on sch2.t2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Revoke back the permissions
+revoke select on sch1.t1 to babel_5690_user_3;
+revoke select on sch2.t2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_securityadmin drop member babel_5690_user_2;
+go
+
+alter role db_accessadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permission on a schema when schema owner is not set by db_accessadmin, Grantor = dbo
+grant select on sch1.t1 to babel_5690_user_3;
+go
+
+-- Grant permission on a schema when schema owner is set by db_accessadmin, Grantor = schema owner (user1)
+grant select on sch2.t2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_accessadmin drop member babel_5690_user_2;
+go
+
+grant delete on sch1.t1 to babel_5690_user_2 with grant option;
+go
+
+grant delete on sch2.t2 to babel_5690_user_2 with grant option;
+go
+
+-- schema1 grantor - dbo, schema2 grantor = schema owner (user1)
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+grant delete on sch1.t1 to babel_5690_user_3;
+go
+
+grant delete on sch2.t2 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Revoke the permissions
+revoke delete on sch1.t1 from babel_5690_user_3;
+revoke delete on sch2.t2 from babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+revoke delete on sch1.t1 to babel_5690_user_2;
+go
+
+revoke delete on sch2.t2 to babel_5690_user_2;
+go
+
+-- Grant permissions to objects via dbo
+grant select on babel_5690_table_1 to babel_5690_user_2;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- Grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_1 to babel_5690_user_2;
+revoke select on babel_5690_view_1 to babel_5690_user_2;
+revoke execute on babel_5690_procedure_1 to babel_5690_user_2;
+revoke execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+alter role db_owner add member babel_5690_user_1;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permissions to objects via db_owner
+grant select on babel_5690_table_1 to babel_5690_user_2;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- Grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_1 to babel_5690_user_2;
+revoke select on babel_5690_view_1 to babel_5690_user_2;
+revoke execute on babel_5690_procedure_1 to babel_5690_user_2;
+revoke execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_owner drop member babel_5690_user_1;
+go
+
+alter role db_securityadmin add member babel_5690_user_1;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permissions to objects via db_securityadmin
+grant select on babel_5690_table_1 to babel_5690_user_2;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- Grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_1 to babel_5690_user_2;
+revoke select on babel_5690_view_1 to babel_5690_user_2;
+revoke execute on babel_5690_procedure_1 to babel_5690_user_2;
+revoke execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_securityadmin drop member babel_5690_user_1;
+go
+
+alter role db_accessadmin add member babel_5690_user_1;
+go
+
+-- tsql user=babel_5690_login_1 password='123'
+use babel_5690_db_1;
+go
+
+-- Grant permissions to objects via db_accessadmin
+grant select on babel_5690_table_1 to babel_5690_user_2;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_accessadmin drop member babel_5690_user_1;
+go
+
+-- Grant permission with grant option
+grant select on babel_5690_table_1 to babel_5690_user_2 with grant option;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2 with grant option;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2 with grant option;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2 with grant option;
+go
+
+-- Grantor = dbo
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+grant select on babel_5690_table_1 to babel_5690_user_3 with grant option;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_3;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_3;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_3;
+go
+
+-- Grantor = user2
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_1 to babel_5690_user_3;
+revoke select on babel_5690_view_1 to babel_5690_user_3;
+revoke execute on babel_5690_procedure_1 to babel_5690_user_3;
+revoke execute on babel_5690_function_1 to babel_5690_user_3;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_1 to babel_5690_user_2;
+revoke select on babel_5690_view_1 to babel_5690_user_2;
+revoke execute on babel_5690_procedure_1 to babel_5690_user_2;
+revoke execute on babel_5690_function_1 to babel_5690_user_2;
+go
+
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Grant a few permissions
+grant select on babel_5690_table_1 to babel_5690_user_1 with grant option;
+go
+
+grant select on babel_5690_view_1 to babel_5690_user_2 with grant option;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_3 with grant option;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_2 with grant option;
+go
+
+grant select on sch1.t1 to babel_5690_user_2;
+go
+
+grant select on sch2.t2 to babel_5690_user_3;
+go
+
+grant execute on schema::sch1 to babel_5690_user_2;
+go
+
+grant execute on schema::sch2 to babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+grant execute on babel_5690_function_1 to babel_5690_user_3;
+go
+
+-- tsql user=babel_5690_login_3 password='123'
+use babel_5690_db_1;
+go
+
+grant execute on babel_5690_procedure_1 to babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- All permissions are visible
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Permissions where user2 is grantor/grantee are only visible
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_owner add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- All permissions are visible to db_owner
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_owner drop member babel_5690_user_2;
+go
+
+alter role db_ddladmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Permissions where user2 is grantor/grantee are only visible when user 2 is db_ddladmin
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_ddladmin drop member babel_5690_user_2;
+go
+
+alter role db_securityadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- All permissions are visible to db_securityadmin
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_securityadmin drop member babel_5690_user_2;
+go
+
+alter role db_datawriter add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Permissions where user2 is grantor/grantee are only visible when user 2 is db_datawriter
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_datawriter drop member babel_5690_user_2;
+go
+
+alter role db_accessadmin add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- All permissions are visible to db_accessadmin
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_accessadmin drop member babel_5690_user_2;
+go
+
+alter role db_datareader add member babel_5690_user_2;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Permissions where user2 is grantor/grantee are only visible when user 2 is db_datareader
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+alter role db_datareader drop member babel_5690_user_2;
+go
+
+-- Revoke the permissions
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+revoke execute on babel_5690_function_1 from babel_5690_user_3;
+go
+
+-- tsql user=babel_5690_login_3 password='123'
+use babel_5690_db_1;
+go
+
+revoke execute on babel_5690_procedure_1 from babel_5690_user_2;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+revoke select on babel_5690_table_1 from babel_5690_user_1;
+revoke select on babel_5690_view_1 from babel_5690_user_2;
+revoke execute on babel_5690_procedure_1 from babel_5690_user_3;
+revoke execute on babel_5690_function_1 from babel_5690_user_2;
+revoke select on sch1.t1 from babel_5690_user_2;
+revoke select on sch2.t2 from babel_5690_user_3;
+revoke execute on schema::sch1 from babel_5690_user_2;
+revoke execute on schema::sch2 from babel_5690_user_2;
+
+-- Grant Permissions to public
+grant select on babel_5690_table_1 to public;
+grant execute on babel_5690_procedure_1 to public;
+go
+
+-- Grant Permissions to guest
+grant select on babel_5690_table_1 to guest;
+grant execute on babel_5690_procedure_1 to guest;
+go
+
+-- tsql user=babel_5690_login_2 password='123'
+use babel_5690_db_1;
+go
+
+-- Permissions granted to public are visible to all the users, while permissions granted to guest are not
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_1;
+go
+
+-- Revoke Permissions
+revoke select on babel_5690_table_1 to public;
+revoke execute on babel_5690_procedure_1 to public;
+revoke select on babel_5690_table_1 to guest;
+revoke execute on babel_5690_procedure_1 to guest;
+go
+
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- tsql
+use babel_5690_db_2;
+go
+
+-- Grant a few permissions
+grant select on babel_5690_table_2 to babel_5690_user_4;
+grant execute on babel_5690_function_2 to babel_5690_user_4;
+go
+
+-- Switching over to a new database, we can only view the permissions existing in that database
+select * from dbo.babel_5690_db_permissions_view;
+go
+
+-- Revoke the permissions
+revoke select on babel_5690_table_2 from babel_5690_user_4;
+revoke execute on babel_5690_function_2 from babel_5690_user_4;
+go
+
+select * from dbo.babel_5690_db_permissions_view;
+go

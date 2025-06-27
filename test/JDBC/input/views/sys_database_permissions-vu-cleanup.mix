@@ -1,0 +1,49 @@
+-- tsql
+use babel_5690_db_1
+go
+
+select current_user;
+go
+
+drop function babel_5690_function_1 
+go
+
+drop procedure babel_5690_procedure_1 
+go
+
+drop view babel_5690_view_1 
+go
+
+drop table babel_5690_table_1 
+go
+
+drop table sch1.t1;
+go
+
+drop table sch2.t2;
+go
+
+drop schema sch1;
+go
+
+drop schema sch2;
+go
+
+drop user babel_5690_user_3 
+go
+
+drop user babel_5690_user_2 
+go
+
+drop user babel_5690_user_1 
+go
+
+drop login babel_5690_login_3 
+go
+
+drop login babel_5690_login_2 
+go
+
+drop login babel_5690_login_1 
+go
+
