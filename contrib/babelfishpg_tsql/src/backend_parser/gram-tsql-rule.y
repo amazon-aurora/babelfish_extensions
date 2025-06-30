@@ -1779,11 +1779,104 @@ table_ref:	relation_expr tsql_table_hint_expr
 					 */
 					$$ = (Node *) $1;
 				}
+			| TSQL_APPLY openxml_expr
+				{
+					/*
+					 * This case handles openxml cross/outer apply
+					 */
+					$$ = (Node *) $2;
+				}
+			| openxml_expr
+				{
+					/*
+					 * Standard openxml case
+					 */
+					$$ = (Node *) $1;
+				}
 			| table_ref TSQL_UNPIVOT tsql_unpivot_clause alias_clause
 				{
 					List *unpivot_info = list_make3($1, (List *)$3, $4);
                     $$ = tsql_unpivot_transformation(unpivot_info, @1);
 				}
+		;
+
+openxml_expr: OPENXML '(' a_expr ',' a_expr ')' WITH_table TABLE qualified_name opt_alias_clause
+				{
+					RangeTableFunc *n = makeNode(RangeTableFunc);
+					n->docexpr = NULL;
+					n->rowexpr = $5;
+					n->location = @1;
+					/* Default flag is 0 when not specified */
+					n->namespaces = list_make2((Node *)$3, makeIntConst(0, @1));
+					n->columns = list_make1($9);
+					n->alias = $10;
+					$$ = (Node *) n;
+				}
+			| OPENXML '(' a_expr ',' a_expr ',' a_expr ')' WITH_table TABLE qualified_name opt_alias_clause
+				{
+					RangeTableFunc *n = makeNode(RangeTableFunc);
+					n->docexpr = NULL;
+					n->rowexpr = $5;
+					n->location = @1;
+					n->namespaces = list_make2((Node *)$3, (Node *)$7);
+					n->columns = list_make1($11);
+					n->alias = $12;
+					$$ = (Node *) n;
+				}
+			| OPENXML '(' a_expr ',' a_expr ')' WITH_paren '(' openxml_column_list ')' opt_alias_clause
+				{
+					RangeTableFunc *n = makeNode(RangeTableFunc);
+					n->docexpr = NULL;
+					n->rowexpr = $5;
+					n->location = @1;
+					/* Default flag is 0 when not specified */
+					n->columns = $9;
+					n->namespaces = list_make2((Node *)$3, makeIntConst(0, @1));
+					n->alias = $11;
+					$$ = (Node *) n;
+				}
+			| OPENXML '(' a_expr ',' a_expr ',' a_expr ')' WITH_paren '(' openxml_column_list ')' opt_alias_clause
+				{
+					RangeTableFunc *n = makeNode(RangeTableFunc);
+					n->docexpr = NULL;
+					n->rowexpr = $5;
+					n->columns = $11;
+					n->location = @1;
+					n->namespaces = list_make2((Node *)$3, (Node *)$7);
+					n->alias = $13;
+					$$ = (Node *) n;
+				}
+		;
+
+openxml_column_list: openxml_column_el                    { $$ = list_make1($1); }
+            | openxml_column_list ',' openxml_column_el    { $$ = lappend($1, $3); }
+        ;
+
+openxml_column_el:
+			ColId Typename
+				{
+					RangeTableFuncCol *fc = makeNode(RangeTableFuncCol);
+
+					fc->colname = $1;
+					fc->typeName = $2;
+					fc->colexpr = NULL;
+					fc->coldefexpr = NULL;
+					fc->location = @1;
+
+					$$ = (Node *) fc;
+				}	
+			| ColId Typename Sconst
+				{
+					RangeTableFuncCol *fc = makeNode(RangeTableFuncCol);
+
+					fc->colname = $1;
+					fc->typeName = $2;
+					fc->colexpr = (Node *) makeStringConst($3, @1);
+					fc->coldefexpr = NULL;
+					fc->location = @1;
+
+					$$ = (Node *) fc;
+				}	
 		;
 
 openjson_expr: OPENJSON '(' a_expr  ')' opt_alias_clause
