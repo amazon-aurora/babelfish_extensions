@@ -1729,8 +1729,7 @@ resolve_numeric_typmod_from_exp(Plan *plan, Node *expr, bool *found)
 				funcName = get_func_name(func_oid);
 				if (funcName)
 				{
-					if ((strlen(funcName) == 5 && (strncmp(funcName, "round", 5) == 0)) ||
-						(strlen(funcName) == 4 && (strncmp(funcName, "sign", 4) == 0)) ||
+					if ((strlen(funcName) == 4 && (strncmp(funcName, "sign", 4) == 0)) ||
 						(strlen(funcName) == 3 && (strncmp(funcName, "abs", 3) == 0)))
 					{
 						int32 fixsize_default_typmod = get_default_typmod_for_fixedsize_dataypes(func->funcresulttype);
