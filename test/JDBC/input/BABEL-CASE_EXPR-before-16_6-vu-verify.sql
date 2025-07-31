@@ -8200,9 +8200,6 @@ SELECT CAST(4.56 AS NUMERIC(5,2))
 ORDER BY value;
 GO
 
--- TODO FIX: While calculating for money and smallmoney
--- babelfish is calculating it same as numeric logic
--- which is different from TSQL.
 -- Test Case 81: UNION with MONEY type
 SELECT CAST(1.23 AS DECIMAL(10,2)) AS value
 UNION ALL
@@ -8392,4 +8389,24 @@ FROM
 WHERE 
     o.[name] = 'BABEL_5341_V6'
     AND c.[name] = 'RESULT';
+GO
+
+SELECT CAST(
+   GetDecimalValue_BABEL_5980() 
+   /
+   (CASE WHEN 1<0
+      THEN cast(1 as decimal(24,6))
+      ELSE datediff(dd, '2000-01-01', '2023-12-31')
+   END)
+   AS DECIMAL(24,6)) AS Result;
+GO
+
+SELECT CAST(
+   GetDecimalValue_BABEL_5980() 
+   /
+   (CASE WHEN 1<0
+      THEN 1
+      ELSE datediff(dd, '2000-01-01', '2023-12-31')
+   END)
+   AS DECIMAL(24,6)) AS Result;
 GO

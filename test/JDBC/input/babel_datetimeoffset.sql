@@ -110,6 +110,19 @@ go
 select CAST('2079-06-06 23:59:29.123456 -9:30' AS datetimeoffset(7));
 go
 
+-- Test AM/PM notation
+select CAST('2025-05-20 02:30:20.123456 PM -07:00' as DATETIMEOFFSET);
+go
+select CAST('2025-05-20 02:30:20.123456 PM-07:0' as DATETIMEOFFSET);
+go
+select CAST('2025-05- 20    02:30:20.123456     PM    -07:00' as DATETIMEOFFSET(4));
+go
+select CAST('2025-05-20 02:30:20.123456 AM +07:59' as DATETIMEOFFSET);
+go
+    -- out of range
+select CAST('2025-05-20 02:30:20.123456 AM +07:79' as DATETIMEOFFSET);
+go
+
 -- Test type cast to/from other time formats
 -- Test datetime/dateime2
 select CAST(CAST('2020-03-15 23:59:29.99' AS datetime) AS datetimeoffset);
@@ -124,6 +137,8 @@ select CAST(CAST('1900-05-06 13:59:29.998 -8:00' AS datetimeoffset) AS datetime2
 go
 
 -- Test date
+select CAST(CAST('' AS date) AS datetimeoffset);
+go
 select CAST(CAST('1999-12-31' AS date) AS datetimeoffset);
 go
 select CAST(CAST('0001-12-31' AS date) AS datetimeoffset);
@@ -139,6 +154,8 @@ select CAST(CAST('12000-01-01' AS date) AS datetimeoffset);
 go
 
 -- Test time
+select CAST(CAST('' AS time) AS datetimeoffset);
+go
 select CAST(CAST('23:59:59.999' AS time) AS datetimeoffset);
 go
 select CAST(CAST('00:30:31' AS time) AS datetimeoffset);

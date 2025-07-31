@@ -626,6 +626,7 @@ MoneyPartitionFunction#!#R #!#RANGE#!#4#!#1#!#0
 NCharPartitionFunction#!#R #!#RANGE#!#8#!#1#!#0
 NumericPartitionFunction#!#R #!#RANGE#!#5#!#1#!#0
 NVarCharPartitionFunction#!#R #!#RANGE#!#6#!#1#!#0
+partition_float_real_range_partition_func#!#R #!#RANGE#!#6#!#1#!#0
 PARTITION_FUNCTION  유니코드스키마👻  #!#R #!#RANGE#!#4#!#1#!#0
 PARTITION_FUNCTION 😎$@ #123 🌍rder  #!#R #!#RANGE#!#4#!#1#!#0
 PARTITION_FUNCTIONログインαιώνια#!#R #!#RANGE#!#4#!#1#!#0
@@ -694,6 +695,11 @@ NVarCharPartitionFunction#!#1#!#2#!#Banana
 NVarCharPartitionFunction#!#1#!#3#!#Cherry
 NVarCharPartitionFunction#!#1#!#4#!#Date
 NVarCharPartitionFunction#!#1#!#5#!#Mango
+partition_float_real_range_partition_func#!#1#!#1#!#-1000.0
+partition_float_real_range_partition_func#!#1#!#2#!#-1.0
+partition_float_real_range_partition_func#!#1#!#3#!#0.0
+partition_float_real_range_partition_func#!#1#!#4#!#1.0
+partition_float_real_range_partition_func#!#1#!#5#!#1000.0
 PARTITION_FUNCTION  유니코드스키마👻  #!#1#!#1#!#0
 PARTITION_FUNCTION  유니코드스키마👻  #!#1#!#2#!#500
 PARTITION_FUNCTION  유니코드스키마👻  #!#1#!#3#!#1000
@@ -775,6 +781,7 @@ MoneyPartitionFunction#!#money#!#1#!#8#!#19#!#4#!#<NULL>
 NCharPartitionFunction#!#nchar#!#1#!#8000#!#0#!#0#!#bbf_unicode_cp1_ci_as
 NumericPartitionFunction#!#numeric#!#1#!#17#!#38#!#38#!#<NULL>
 NVarCharPartitionFunction#!#nvarchar#!#1#!#8000#!#0#!#0#!#bbf_unicode_cp1_ci_as
+partition_float_real_range_partition_func#!#float#!#1#!#8#!#53#!#0#!#<NULL>
 PARTITION_FUNCTION  유니코드스키마👻  #!#int#!#1#!#4#!#10#!#0#!#<NULL>
 PARTITION_FUNCTION 😎$@ #123 🌍rder  #!#int#!#1#!#4#!#10#!#0#!#<NULL>
 PARTITION_FUNCTIONログインαιώνια#!#int#!#1#!#4#!#10#!#0#!#<NULL>
@@ -809,6 +816,7 @@ MoneyPartitionScheme#!#MoneyPartitionFunction#!#PS#!#PARTITION_SCHEME#!#0#!#0
 NCharPartitionScheme#!#NCharPartitionFunction#!#PS#!#PARTITION_SCHEME#!#0#!#0
 NumericPartitionScheme#!#NumericPartitionFunction#!#PS#!#PARTITION_SCHEME#!#0#!#0
 NVarCharPartitionScheme#!#NVarCharPartitionFunction#!#PS#!#PARTITION_SCHEME#!#0#!#0
+partition_float_real_range_partition_scheme#!#partition_float_real_range_partition_func#!#PS#!#PARTITION_SCHEME#!#0#!#0
 PARTITION_SCHEME  유니코드스키마👻  #!#PARTITION_FUNCTION  유니코드스키마👻  #!#PS#!#PARTITION_SCHEME#!#0#!#0
 PARTITION_SCHEME 😎$@ #123 🌍rder  #!#PARTITION_FUNCTION 😎$@ #123 🌍rder  #!#PS#!#PARTITION_SCHEME#!#0#!#0
 PARTITION_SCHEMEログインαιώνια#!#PARTITION_FUNCTIONログインαιώνια#!#PS#!#PARTITION_SCHEME#!#0#!#0
@@ -1258,31 +1266,16 @@ PS_CollationTest_VarChar#!#PF_CollationTest_VarChar#!#PS#!#PARTITION_SCHEME#!#0#
 ~~END~~
 
 
-
--- psql
-
+-- tsql database=partitiondb
 ------------------------------------------------------------
 --- all user can use the metadata of the partition scheme 
 --- to create table if they permission to create table
 ------------------------------------------------------------
--- grant create permission to user on schema so that it can create table
-DO $$
-DECLARE
-    schema_name TEXT;
-BEGIN
-    IF current_setting('babelfishpg_tsql.migration_mode') = 'multi-db' THEN
-        schema_name := 'partitiondb_dbo';
-    ELSE
-        schema_name := 'dbo';
-    END IF;
-    EXECUTE 'GRANT CREATE ON SCHEMA ' || quote_ident(schema_name) || ' TO partitiondb_partition_u1';
-END$$;
+-- add user as a member of db_ddladmin, so that it gets create permission
+ALTER ROLE db_ddladmin ADD MEMBER partition_u1
 GO
 
--- tsql     user=partition_l1 password=12345678
-USE PartitionDb;
-GO
-
+-- tsql     user=partition_l1 password=12345678 database=partitiondb
 SELECT CURRENT_USER
 GO
 ~~START~~
@@ -1291,32 +1284,15 @@ partition_u1
 ~~END~~
 
 
-/** CREATE PERMISSION GRANTED VIA PG PORT MAY NOT TAKE EFFECT ON TSQL OBJECTS **/
-/** NOT A RECOMMENDED WAY **/
 CREATE TABLE PartitionDb_TestPartitionTable (
     Id INT,
     Value sys.varchar(20)
 ) ON PartitionDb_PartitionScheme(Id);
 GO
-~~ERROR (Code: 33557097)~~
 
-~~ERROR (Message: must be owner of table partitiondb_testpartitiontable)~~
-
-
--- psql
-
--- revoke create permission from user on schema
-DO $$
-DECLARE
-    schema_name TEXT;
-BEGIN
-    IF current_setting('babelfishpg_tsql.migration_mode') = 'multi-db' THEN
-        schema_name := 'partitiondb_dbo';
-    ELSE
-        schema_name := 'dbo';
-    END IF;
-    EXECUTE 'REVOKE CREATE ON SCHEMA ' || quote_ident(schema_name) || ' FROM partitiondb_partition_u1';
-END$$;
+-- tsql database=partitiondb
+-- remove user from member of db_ddladmin
+ALTER ROLE db_ddladmin DROP MEMBER partition_u1
 GO
 
 -- tsql
@@ -3898,4 +3874,134 @@ Go
 ~~ERROR (Code: 33557097)~~
 
 ~~ERROR (Message: Collation of partition column 'partitionkey' does not match collation of corresponding parameter in partition function 'PF_CollationTest_NVarChar'.)~~
+
+
+USE master
+GO
+
+---------------------------------------------------------------
+--- Test Partition Tables with Computed columns
+---------------------------------------------------------------
+-- Query to show data in each partition for table created without computed column
+SELECT 
+    p.partition_number,
+    p.rows,
+    CASE 
+        WHEN p.partition_number = 1 THEN 'x <= -1000.0'
+        WHEN p.partition_number = 2 THEN '-1000.0 < x <= -1.0'
+        WHEN p.partition_number = 3 THEN '-1.0 < x <= 0.0'
+        WHEN p.partition_number = 4 THEN '0.0 < x <= 1.0'
+        WHEN p.partition_number = 5 THEN '1.0 < x <= 1000.0'
+        WHEN p.partition_number = 6 THEN 'x > 1000.0'
+    END as partition_range,
+    MIN(t.float_val) as min_float_val,
+    MAX(t.float_val) as max_float_val,
+    COUNT(*) as row_count
+FROM partition_float_real_partitioned_test t
+JOIN sys.partitions p ON p.object_id = OBJECT_ID('partition_float_real_partitioned_test')
+    AND p.index_id <= 1
+WHERE p.partition_number = $PARTITION.partition_float_real_range_partition_func(t.float_val)
+GROUP BY p.partition_number, p.rows
+ORDER BY p.partition_number;
+GO
+~~START~~
+int#!#bigint#!#varchar#!#float#!#float#!#int
+1#!#0#!#x <= -1000.0#!#-12300.0#!#-1500.0#!#4
+2#!#0#!#-1000.0 < x <= -1.0#!#-750.0#!#-2.5#!#3
+3#!#0#!#-1.0 < x <= 0.0#!#-0.75#!#-1.23E-4#!#4
+4#!#0#!#0.0 < x <= 1.0#!#1.23E-4#!#0.75#!#4
+5#!#0#!#1.0 < x <= 1000.0#!#2.5#!#750.0#!#3
+6#!#0#!#x > 1000.0#!#1500.0#!#12300.0#!#4
+~~END~~
+
+
+
+-- Create partitioned table with computed columns
+CREATE TABLE partition_float_real_partitioned_computed_test (
+    id INT IDENTITY(1,1),
+    float_val FLOAT,
+    real_val REAL,
+    computed_val AS (float_val * real_val),
+    description VARCHAR(100)
+) ON partition_float_real_range_partition_scheme(float_val);
+GO
+
+-- Insert test data
+INSERT INTO partition_float_real_partitioned_computed_test (float_val, real_val, description)
+SELECT float_val, real_val, description
+FROM partition_float_real_partitioned_test;
+GO
+~~ROW COUNT: 22~~
+
+
+-- Query to show data in each partition for table created with computed column
+SELECT 
+    p.partition_number,
+    p.rows,
+    CASE 
+        WHEN p.partition_number = 1 THEN 'x <= -1000.0'
+        WHEN p.partition_number = 2 THEN '-1000.0 < x <= -1.0'
+        WHEN p.partition_number = 3 THEN '-1.0 < x <= 0.0'
+        WHEN p.partition_number = 4 THEN '0.0 < x <= 1.0'
+        WHEN p.partition_number = 5 THEN '1.0 < x <= 1000.0'
+        WHEN p.partition_number = 6 THEN 'x > 1000.0'
+    END as partition_range,
+    MIN(t.float_val) as min_float_val,
+    MAX(t.float_val) as max_float_val,
+    COUNT(*) as row_count
+FROM partition_float_real_partitioned_computed_test t
+JOIN sys.partitions p ON p.object_id = OBJECT_ID('partition_float_real_partitioned_computed_test')
+    AND p.index_id <= 1
+WHERE p.partition_number = $PARTITION.partition_float_real_range_partition_func(t.float_val)
+GROUP BY p.partition_number, p.rows
+ORDER BY p.partition_number;
+GO
+~~START~~
+int#!#bigint#!#varchar#!#float#!#float#!#int
+1#!#0#!#x <= -1000.0#!#-12300.0#!#-1500.0#!#4
+2#!#0#!#-1000.0 < x <= -1.0#!#-750.0#!#-2.5#!#3
+3#!#0#!#-1.0 < x <= 0.0#!#-0.75#!#-1.23E-4#!#4
+4#!#0#!#0.0 < x <= 1.0#!#1.23E-4#!#0.75#!#4
+5#!#0#!#1.0 < x <= 1000.0#!#2.5#!#750.0#!#3
+6#!#0#!#x > 1000.0#!#1500.0#!#12300.0#!#4
+~~END~~
+
+
+-- Query to compare partition distribution in partition table with and without computed column
+SELECT 
+    'Base table' as table_name,
+    p.partition_number,
+    COUNT(*) as row_count
+FROM partition_float_real_partitioned_test t
+JOIN sys.partitions p ON p.object_id = OBJECT_ID('partition_float_real_partitioned_test')
+    AND p.index_id <= 1
+WHERE p.partition_number = $PARTITION.partition_float_real_range_partition_func(t.float_val)
+GROUP BY p.partition_number
+UNION ALL
+SELECT 
+    'Computed table' as table_name,
+    p.partition_number,
+    COUNT(*) as row_count
+FROM partition_float_real_partitioned_computed_test t
+JOIN sys.partitions p ON p.object_id = OBJECT_ID('partition_float_real_partitioned_computed_test')
+    AND p.index_id <= 1
+WHERE p.partition_number = $PARTITION.partition_float_real_range_partition_func(t.float_val)
+GROUP BY p.partition_number
+ORDER BY table_name, partition_number;
+GO
+~~START~~
+varchar#!#int#!#int
+Base table#!#1#!#4
+Base table#!#2#!#3
+Base table#!#3#!#4
+Base table#!#4#!#4
+Base table#!#5#!#3
+Base table#!#6#!#4
+Computed table#!#1#!#4
+Computed table#!#2#!#3
+Computed table#!#3#!#4
+Computed table#!#4#!#4
+Computed table#!#5#!#3
+Computed table#!#6#!#4
+~~END~~
 

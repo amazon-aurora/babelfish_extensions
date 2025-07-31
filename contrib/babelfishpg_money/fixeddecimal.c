@@ -27,20 +27,7 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/numeric.h"
-
-/*
- * The scale which the number is actually stored.
- * For example: 100 will allow 2 decimal places of precision
- * This must always be a '1' followed by a number of '0's.
- */
-#define FIXEDDECIMAL_MULTIPLIER 10000LL
-
-/*
- * Number of decimal places to store.
- * This number should be the number of decimal digits that it takes to
- * represent FIXEDDECIMAL_MULTIPLIER - 1
- */
-#define FIXEDDECIMAL_SCALE 4
+#include "fixeddecimal.h"
 
 /* Sanity checks */
 #if FIXEDDECIMAL_SCALE == 0
@@ -50,27 +37,6 @@
 #if FIXEDDECIMAL_SCALE > 19
 #error "FIXEDDECIMAL_SCALE cannot be greater than 19"
 #endif
-
-/*
- * This is bounded by the maximum and minimum values of int64.
- * 9223372036854775807 is 19 decimal digits long, but we we can only represent
- * this number / FIXEDDECIMAL_MULTIPLIER, so we must subtract
- * FIXEDDECIMAL_SCALE
- */
-#define FIXEDDECIMAL_MAX_PRECISION 19 - FIXEDDECIMAL_SCALE
-
-/* Define this if your compiler has _builtin_add_overflow() */
-/* #define HAVE_BUILTIN_OVERFLOW */
-
-#ifndef HAVE_BUILTIN_OVERFLOW
-#define SAMESIGN(a,b)	(((a) < 0) == ((b) < 0))
-#endif							/* HAVE_BUILTIN_OVERFLOW */
-
-#define FIXEDDECIMAL_MAX (INT64_MAX/FIXEDDECIMAL_MULTIPLIER)
-#define FIXEDDECIMAL_MIN (INT64_MIN/FIXEDDECIMAL_MULTIPLIER)
-
-/* Compiler must have a working 128 int type */
-typedef __int128 int128;
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -218,6 +184,10 @@ PG_FUNCTION_INFO_V1(char_to_fixeddecimal);
 PG_FUNCTION_INFO_V1(int8_to_money);
 PG_FUNCTION_INFO_V1(int8_to_smallmoney);
 
+PG_FUNCTION_INFO_V1(fixeddecimal_ceiling);
+PG_FUNCTION_INFO_V1(fixeddecimal_floor);
+PG_FUNCTION_INFO_V1(fixeddecimal_power);
+
 
 /* Aggregate Internal State */
 typedef struct FixedDecimalAggState
@@ -229,8 +199,8 @@ typedef struct FixedDecimalAggState
 
 static char *pg_int64tostr(char *str, int64 value);
 static char *pg_int64tostr_zeropad(char *str, int64 value, int64 padding);
-static void apply_typmod(int64 value, int32 typmod, int precision, int scale);
-static int64 scanfixeddecimal(const char *str, int *precision, int *scale);
+static bool apply_typmod(int64 value, int32 typmod, int precision, int scale, FunctionCallInfo *fcinfo);
+static int64 scanfixeddecimal(const char *str, int *precision, int *scale, FunctionCallInfo *fcinfo);
 static FixedDecimalAggState *makeFixedDecimalAggState(FunctionCallInfo fcinfo);
 static void fixeddecimal_accum(FixedDecimalAggState *state, int64 newval);
 static int64 int8fixeddecimal_internal(int64 arg, const char *typename);
@@ -445,7 +415,7 @@ fixeddecimal2str(int64 val, char *buffer,
  * scanfixeddecimal --- try to parse a string into a fixeddecimal.
  */
 static int64
-scanfixeddecimal(const char *str, int *precision, int *scale)
+scanfixeddecimal(const char *str, int *precision, int *scale, FunctionCallInfo *fcinfo)
 {
 	const char *ptr = str;
 	int64		integralpart = 0;
@@ -454,6 +424,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 	int			vprecision = 0;
 	int			vscale = 0;
 	bool		has_seen_sign = false;
+	Node		*escontext = (*fcinfo)->context;
 
 	/*
 	 * Do our own scan, rather than relying on sscanf which might be broken
@@ -500,7 +471,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		 */
 		if ((*ptr >= 'a' && *ptr <= 'z') || (*ptr >= 'A' && *ptr <= 'Z'))
 		{
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("invalid characters found: cannot cast value \"%s\" to money",
 							str)));
@@ -520,7 +491,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 	{
 		if (has_seen_sign)
 		{
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("invalid characters found: cannot cast value \"%s\" to money",
 							str)));
@@ -539,7 +510,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 			vprecision++;
 			if ((tmp / 10) != integralpart) /* underflow? */
 			{
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 						 errmsg("value \"%s\" is out of range for type fixeddecimal",
 								str)));
@@ -559,7 +530,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		{
 			if (has_seen_sign)
 			{
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 						 errmsg("invalid characters found: cannot cast value \"%s\" to money",
 								str)));
@@ -583,7 +554,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 			vprecision++;
 			if ((tmp / 10) != integralpart) /* overflow? */
 			{
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 						 errmsg("value \"%s\" is out of range for type fixeddecimal",
 								str)));
@@ -628,7 +599,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		ptr++;
 
 	if (*ptr != '\0')
-		ereport(ERROR,
+		ereturn(escontext, (Datum) 0,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("value \"%s\" is out of range for type fixeddecimal", str)));
 
@@ -644,13 +615,13 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		int64		multiplier = FIXEDDECIMAL_MULTIPLIER;
 
 		if (__builtin_mul_overflow(integralpart, multiplier, &value))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
 
 		if (__builtin_sub_overflow(value, fractionalpart, &value))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
@@ -661,7 +632,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		if (value != 0 && (!SAMESIGN(value, integralpart) ||
 						   !SAMESIGN(value - fractionalpart, value) ||
 						   !SAMESIGN(value - fractionalpart, value)))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
@@ -676,13 +647,13 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 
 #ifdef HAVE_BUILTIN_OVERFLOW
 		if (__builtin_mul_overflow(integralpart, FIXEDDECIMAL_MULTIPLIER, &value))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
 
 		if (__builtin_add_overflow(value, fractionalpart, &value))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
@@ -692,7 +663,7 @@ scanfixeddecimal(const char *str, int *precision, int *scale)
 		if (value != 0 && (!SAMESIGN(value, integralpart) ||
 						   !SAMESIGN(value - fractionalpart, value) ||
 						   !SAMESIGN(value + fractionalpart, value)))
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("value \"%s\" is out of range for type fixeddecimal",
 							str)));
@@ -713,23 +684,24 @@ fixeddecimalin(PG_FUNCTION_ARGS)
 	int32		typmod = PG_GETARG_INT32(2);
 	int			precision;
 	int			scale;
-	int64		result = scanfixeddecimal(str, &precision, &scale);
+	int64		result = scanfixeddecimal(str, &precision, &scale, &fcinfo);
 
-	apply_typmod(result, typmod, precision, scale);
+	apply_typmod(result, typmod, precision, scale, &fcinfo);
 
 	PG_RETURN_INT64(result);
 }
 
-static void
-apply_typmod(int64 value, int32 typmod, int precision, int scale)
+static bool
+apply_typmod(int64 value, int32 typmod, int precision, int scale, FunctionCallInfo *fcinfo)
 {
 	int			precisionlimit;
 	int			scalelimit;
 	int			maxdigits;
+	Node			*escontext = (*fcinfo)->context;
 
 	/* Do nothing if we have a default typmod (-1) */
 	if (typmod < (int32) (VARHDRSZ))
-		return;
+		return true;
 
 	typmod -= VARHDRSZ;
 	precisionlimit = (typmod >> 16) & 0xffff;
@@ -739,13 +711,13 @@ apply_typmod(int64 value, int32 typmod, int precision, int scale)
 	if (scale > scalelimit)
 
 		if (scale != FIXEDDECIMAL_SCALE)
-			ereport(ERROR,
+			ereturn(escontext, false,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("FIXEDDECIMAL scale must be %d",
 							FIXEDDECIMAL_SCALE)));
 
 	if (precision > maxdigits)
-		ereport(ERROR,
+		ereturn(escontext, false,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("FIXEDDECIMAL field overflow"),
 				 errdetail("A field with precision %d, scale %d must round to an absolute value less than %s%d.",
@@ -754,7 +726,7 @@ apply_typmod(int64 value, int32 typmod, int precision, int scale)
 						   maxdigits ? "10^" : "",
 						   maxdigits ? maxdigits : 1
 						   )));
-
+	return true;
 }
 
 Datum
@@ -789,14 +761,21 @@ fixeddecimaltypmodin(PG_FUNCTION_ARGS)
 	}
 	else if (n == 1)
 	{
-		if (tl[0] < FIXEDDECIMAL_SCALE || tl[0] > FIXEDDECIMAL_MAX_PRECISION)
+		int val_precision = ((tl[0] - VARHDRSZ) >> 16) & 0xffff;
+		int val_scale = (tl[0] - VARHDRSZ) & 0xffff;
+		if (val_precision < FIXEDDECIMAL_SCALE || val_precision > FIXEDDECIMAL_MAX_PRECISION)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("FIXEDDECIMAL precision %d must be between %d and %d",
-							tl[0], FIXEDDECIMAL_SCALE, FIXEDDECIMAL_MAX_PRECISION)));
+							val_precision, FIXEDDECIMAL_SCALE, FIXEDDECIMAL_MAX_PRECISION)));
 
-		/* scale defaults to FIXEDDECIMAL_SCALE */
-		typmod = ((tl[0] << 16) | FIXEDDECIMAL_SCALE) + VARHDRSZ;
+		if (val_scale != FIXEDDECIMAL_SCALE)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("FIXEDDECIMAL scale must be %d",
+							FIXEDDECIMAL_SCALE)));
+
+		typmod = ((val_precision << 16) | val_scale) + VARHDRSZ;
 	}
 	else
 	{
@@ -1665,24 +1644,15 @@ fixeddecimalpl(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_add_overflow(arg1, arg2, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 + arg2;
-
 	/*
-	 * Overflow check.  If the inputs are of different signs then their sum
-	 * cannot overflow.  If the inputs are of the same sign, their sum had
-	 * better be that sign too.
+	 * Overflow check. If the result of addition
+	 * does not fit in 64 bit, then pg_add_s64_overflow
+	 * returns true
 	 */
-	if (SAMESIGN(arg1, arg2) && !SAMESIGN(result, arg1))
+	if (pg_add_s64_overflow(arg1, arg2, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -1694,24 +1664,15 @@ fixeddecimalmi(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_sub_overflow(arg1, arg2, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 - arg2;
-
 	/*
-	 * Overflow check.  If the inputs are of the same sign then their
-	 * difference cannot overflow.  If they are of different signs then the
-	 * result should be of the same sign as the first input.
+	 * Overflow check. If the result of subtraction
+	 * does not fit in 64 bit, then pg_sub_s64_overflow
+	 * returns true
 	 */
-	if (!SAMESIGN(arg1, arg2) && !SAMESIGN(result, arg1))
+	if (pg_sub_s64_overflow(arg1, arg2, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
+				 errmsg("fixeddecimal out of range")));						/* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -1728,7 +1689,20 @@ fixeddecimalmul(PG_FUNCTION_ARGS)
 	 * Remember that arg2 is the number multiplied by FIXEDDECIMAL_MULTIPLIER,
 	 * we must divide the result by this to get the correct result.
 	 */
-	result = (int128) arg1 * arg2 / FIXEDDECIMAL_MULTIPLIER;
+	result = ((int128) arg1 * arg2) / FIXEDDECIMAL_MULTIPLIER;
+	/* 
+	 * Round off the result to FIXEDDECIMAL_SCALE.
+	 * abs() in order to deal with -ve result as well 
+	 * if the result is negative we subtract 1, else add 1
+	 */
+	if (abs((arg1%FIXEDDECIMAL_MULTIPLIER * arg2%FIXEDDECIMAL_MULTIPLIER) % FIXEDDECIMAL_MULTIPLIER) >= FIXEDDECIMAL_ROUNDUP)
+	{
+		if (result < 0) 
+			result--;
+		else 
+			result++;
+	}
+
 
 	if (result != ((int64) result))
 		ereport(ERROR,
@@ -1846,27 +1820,34 @@ Datum
 fixeddecimalint8pl(PG_FUNCTION_ARGS)
 {
 	int64		arg1 = PG_GETARG_INT64(0);
-	int64		adder = PG_GETARG_INT64(1) * FIXEDDECIMAL_MULTIPLIER;
+	int64		arg2 = PG_GETARG_INT64(1);
+	int64		adder;
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_add_overflow(arg1, adder, &result))
+	/*
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
+	 */
+	if (pg_mul_s64_overflow(arg2, (int64) FIXEDDECIMAL_MULTIPLIER, &adder)) 
+	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 + adder;
+		/* ensure compiler realizes we mustn't reach the division (gcc bug) */
+		PG_RETURN_NULL();
+	}
 
 	/*
-	 * Overflow check.  If the inputs are of different signs then their sum
-	 * cannot overflow.  If the inputs are of the same sign, their sum had
-	 * better be that sign too.
+	 * Overflow check. If the result of addition
+	 * does not fit in 64 bit, then pg_add_s64_overflow
+	 * returns true
 	 */
-	if (SAMESIGN(arg1, adder) && !SAMESIGN(result, arg1))
+	if (pg_add_s64_overflow(arg1, adder, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
+
 
 	PG_RETURN_INT64(result);
 }
@@ -1875,28 +1856,34 @@ Datum
 fixeddecimalint8mi(PG_FUNCTION_ARGS)
 {
 	int64		arg1 = PG_GETARG_INT64(0);
-	int64		subtractor = PG_GETARG_INT64(1) * FIXEDDECIMAL_MULTIPLIER;
+	int64		arg2 = PG_GETARG_INT64(1);
+	int64		subtractor;
 	int64		result;
 
-
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_sub_overflow(arg1, subtractor, &result))
+	/*
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
+	 */
+	if (pg_mul_s64_overflow(arg2, (int64) FIXEDDECIMAL_MULTIPLIER, &subtractor)) 
+	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 - subtractor;
+		/* ensure compiler realizes we mustn't reach the division (gcc bug) */
+		PG_RETURN_NULL();
+	}
 
 	/*
-	 * Overflow check.  If the inputs are of the same sign then their
-	 * difference cannot overflow.  If they are of different signs then the
-	 * result should be of the same sign as the first input.
+	 * Overflow check. If the result of subtraction
+	 * does not fit in 64 bit, then pg_sub_s64_overflow
+	 * returns true
 	 */
-	if (!SAMESIGN(arg1, subtractor) && !SAMESIGN(result, arg1))
+	if (pg_sub_s64_overflow(arg1, subtractor, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
+	
 
 	PG_RETURN_INT64(result);
 }
@@ -1908,30 +1895,15 @@ fixeddecimalint8mul(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_mul_overflow(arg1, arg2, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 * arg2;
-
 	/*
-	 * Overflow check.  We basically check to see if result / arg1 gives arg2
-	 * again.  There is one case where this fails: arg1 = 0 (which cannot
-	 * overflow).
-	 *
-	 * Since the division is likely much more expensive than the actual
-	 * multiplication, we'd like to skip it where possible.  The best bang for
-	 * the buck seems to be to check whether both inputs are in the int32
-	 * range; if so, no overflow is possible.
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
 	 */
-	if (arg1 != (int64) ((int32) arg1) &&
-		result / arg1 != arg2)
+	if (pg_mul_s64_overflow(arg1, arg2, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -1968,19 +1940,20 @@ fixeddecimalint8div(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("fixeddecimal out of range")));
 #else
-		result = -arg1;
-		/* overflow check (needed for INT64_MIN) */
-		if (arg1 != 0 && SAMESIGN(result, arg1))
+		if (unlikely(arg1 == INT64_MIN))
+		{
 			ereport(ERROR,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("fixeddecimal out of range")));
+			PG_RETURN_NULL();
+		}
+		result = -arg1;
+			
 #endif							/* HAVE_BUILTIN_OVERFLOW */
-
 		PG_RETURN_INT64(result);
 	}
 
 	/* No overflow is possible */
-
 	result = arg1 / arg2;
 
 	PG_RETURN_INT64(result);
@@ -1989,28 +1962,34 @@ fixeddecimalint8div(PG_FUNCTION_ARGS)
 Datum
 int8fixeddecimalpl(PG_FUNCTION_ARGS)
 {
-	int64		adder = PG_GETARG_INT64(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		arg1 = PG_GETARG_INT64(0);
+	int64		adder;
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_add_overflow(adder, arg2, &result))
+	/*
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
+	 */
+	if (pg_mul_s64_overflow(arg1, (int64) FIXEDDECIMAL_MULTIPLIER, &adder)) 
+	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#else
-	result = adder + arg2;
+		/* ensure compiler realizes we mustn't reach the division (gcc bug) */
+		PG_RETURN_NULL();
+	}
 
 	/*
-	 * Overflow check.  If the inputs are of different signs then their sum
-	 * cannot overflow.  If the inputs are of the same sign, their sum had
-	 * better be that sign too.
+	 * Overflow check. If the result of addition
+	 * does not fit in 64 bit, then pg_add_s64_overflow
+	 * returns true
 	 */
-	if (SAMESIGN(adder, arg2) && !SAMESIGN(result, adder))
+	if (pg_add_s64_overflow(adder, arg2, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -2018,28 +1997,34 @@ int8fixeddecimalpl(PG_FUNCTION_ARGS)
 Datum
 int8fixeddecimalmi(PG_FUNCTION_ARGS)
 {
-	int64		subtractor = PG_GETARG_INT64(0) * FIXEDDECIMAL_MULTIPLIER;
+	int64		arg1 = PG_GETARG_INT64(0);
+	int64		subtractor;
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_sub_overflow(subtractor, arg2, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = subtractor - arg2;
-
 	/*
-	 * Overflow check.  If the inputs are of the same sign then their
-	 * difference cannot overflow.  If they are of different signs then the
-	 * result should be of the same sign as the first input.
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
 	 */
-	if (!SAMESIGN(subtractor, arg2) && !SAMESIGN(result, subtractor))
+	if (pg_mul_s64_overflow(arg1, (int64) FIXEDDECIMAL_MULTIPLIER, &subtractor)) 
+	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
+		/* ensure compiler realizes we mustn't reach the division (gcc bug) */
+		PG_RETURN_NULL();
+	}
+		
+	/*
+	 * Overflow check. If the result of subtraction
+	 * does not fit in 64 bit, then pg_sub_s64_overflow
+	 * returns true
+	 */
+	if (pg_sub_s64_overflow(subtractor, arg2, &result)) 
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
 
 	PG_RETURN_INT64(result);
 }
@@ -2051,30 +2036,15 @@ int8fixeddecimalmul(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_mul_overflow(arg1, arg2, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 * arg2;
-
 	/*
-	 * Overflow check.  We basically check to see if result / arg2 gives arg1
-	 * again.  There is one case where this fails: arg2 = 0 (which cannot
-	 * overflow).
-	 *
-	 * Since the division is likely much more expensive than the actual
-	 * multiplication, we'd like to skip it where possible.  The best bang for
-	 * the buck seems to be to check whether both inputs are in the int32
-	 * range; if so, no overflow is possible.
+	 * Overflow check. If the result of multiplication
+	 * does not fit in 64 bit, then pg_mul_s64_overflow
+	 * returns true
 	 */
-	if (arg2 != (int64) ((int32) arg2) &&
-		result / arg2 != arg1)
+	if (pg_mul_s64_overflow(arg1, arg2, &result)) 
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#endif							/* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -2608,6 +2578,7 @@ int2fixeddecimaldiv(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8((float8) arg1 / arg2);
 }
 
+
 /*----------------------------------------------------------
  *	Conversion operators.
  *---------------------------------------------------------*/
@@ -3136,7 +3107,81 @@ char_to_fixeddecimal(PG_FUNCTION_ARGS)
 	char	   *str = TextDatumGetCString(PG_GETARG_DATUM(0));
 	int			precision;
 	int			scale;
-	int64		result = scanfixeddecimal(str, &precision, &scale);
+	int64		result = scanfixeddecimal(str, &precision, &scale, &fcinfo);
+
+	PG_RETURN_INT64(result);
+}
+
+/*
+ * Mathematic functions 
+ */
+Datum
+fixeddecimal_ceiling(PG_FUNCTION_ARGS)
+{
+	int64       arg1 = PG_GETARG_INT64(0);
+	int64       truncvalue = arg1 - (arg1 % FIXEDDECIMAL_MULTIPLIER);
+	int64       result = truncvalue;
+
+	if (arg1 > 0 && arg1 % FIXEDDECIMAL_MULTIPLIER)
+	{
+		/*
+		* Overflow check. If the result of addition
+		* does not fit in 64 bit, then pg_add_s64_overflow
+		* returns true
+		*/
+		if (pg_add_s64_overflow(truncvalue, FIXEDDECIMAL_MULTIPLIER, &result))
+		{
+			ereport(ERROR, 
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
+			PG_RETURN_NULL();
+		}
+	}   
+	
+	PG_RETURN_INT64(result);
+}
+
+Datum
+fixeddecimal_floor(PG_FUNCTION_ARGS)
+{
+	int64       arg1 = PG_GETARG_INT64(0);
+	int64       truncvalue = arg1 - (arg1 % FIXEDDECIMAL_MULTIPLIER);
+	int64       result = truncvalue;
+
+	if (arg1 < 0 && arg1 % FIXEDDECIMAL_MULTIPLIER)
+	{
+		/*
+		* Overflow check. If the result of subtraction
+		* does not fit in 64 bit, then pg_sub_s64_overflow
+		* returns true
+		*/
+		if (pg_sub_s64_overflow(truncvalue, FIXEDDECIMAL_MULTIPLIER, &result))
+		{
+			ereport(ERROR, 
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
+			PG_RETURN_NULL();
+		}
+	}
+	
+	PG_RETURN_INT64(result);
+}
+
+Datum
+fixeddecimal_power(PG_FUNCTION_ARGS)
+{
+	int64       arg1 = PG_GETARG_INT64(0);
+	float8      arg1_float = (float8) arg1 / FIXEDDECIMAL_MULTIPLIER;
+	Numeric     arg2 = PG_GETARG_NUMERIC(1);
+	int64       result;
+	Numeric     arg1_numeric, 
+				result_numeric;
+
+	arg1_numeric = DatumGetNumeric(DirectFunctionCall1(float8_numeric, Float8GetDatum(arg1_float)));
+	result_numeric = DatumGetNumeric(DirectFunctionCall2(numeric_power, NumericGetDatum(arg1_numeric), NumericGetDatum(arg2)));
+	result_numeric = DatumGetNumeric(DirectFunctionCall2(numeric_mul, NumericGetDatum(result_numeric), 
+														DirectFunctionCall1(int8_numeric, FIXEDDECIMAL_MULTIPLIER)));
+	result = DatumGetInt64(DirectFunctionCall1(numeric_int8, NumericGetDatum(result_numeric)));
 
 	PG_RETURN_INT64(result);
 }
