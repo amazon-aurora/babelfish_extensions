@@ -21,7 +21,7 @@ runs:
     run: | 
       cd ~
       # Remove existing repositories
-      sudo rm /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/msprod.list /etc/apt/sources.list.d/mssql*.list
+      # sudo rm /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/msprod.list /etc/apt/sources.list.d/mssql*.list
       wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
       sudo dpkg -i packages-microsoft-prod.deb
       rm packages-microsoft-prod.deb
