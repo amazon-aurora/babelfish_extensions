@@ -1617,15 +1617,18 @@ bool
 pltsql_strpos_non_determinstic(text *src_text, text *substr_text, Oid collid, int *r)
 {
 	pg_locale_t mylocale = 0;
+	coll_info_t coll_info_of_inputcollid;
 
 	check_collation_set(collid);
+
+	coll_info_of_inputcollid = tsql_lookup_collation_table_internal(collid);
 
 	if (!pg_newlocale_from_collation(collid)->collate_is_c)
 		mylocale = pg_newlocale_from_collation(collid);
 	else
 		return false;
 
-	if (!mylocale->deterministic && mylocale->provider == 'i')
+	if (!mylocale->deterministic && OidIsValid(coll_info_of_inputcollid.oid))
 	{
 #ifdef USE_ICU
 		int32_t src_len_utf8 = VARSIZE_ANY_EXHDR(src_text);
@@ -1635,7 +1638,6 @@ pltsql_strpos_non_determinstic(text *src_text, text *substr_text, Oid collid, in
 		UErrorCode	status = U_ZERO_ERROR;
 		UStringSearch *usearch;
 		UChar *src_uchar, *substr_uchar;
-		coll_info_t coll_info_of_inputcollid = tsql_lookup_collation_table_internal(collid);
 		bool is_CS_AI = false;
 		bool is_substr_starts_with_surrogate;
 
@@ -1733,15 +1735,18 @@ bool
 pltsql_replace_non_determinstic(text *src_text, text *from_text, text *to_text, Oid collid, text **r)
 {
 	pg_locale_t mylocale = 0;
+	coll_info_t coll_info_of_inputcollid;
 
 	check_collation_set(collid);
+
+	coll_info_of_inputcollid = tsql_lookup_collation_table_internal(collid);
 
 	if (!pg_newlocale_from_collation(collid)->collate_is_c)
 		mylocale = pg_newlocale_from_collation(collid);
 	else
 		return false;
 
-	if (!mylocale->deterministic && mylocale->provider == 'i')
+	if (!mylocale->deterministic && OidIsValid(coll_info_of_inputcollid.oid))
 	{
 #ifdef USE_ICU
 		const char *src_text_currptr = VARDATA_ANY(src_text);
@@ -1756,7 +1761,6 @@ pltsql_replace_non_determinstic(text *src_text, text *from_text, text *to_text, 
 		UChar *src_uchar, *from_uchar;
 		text *result;
 		StringInfoData resbuf;
-		coll_info_t coll_info_of_inputcollid = tsql_lookup_collation_table_internal(collid);
 		bool is_CS_AI = false;
 		bool is_substr_starts_with_surrogate;
 
@@ -2026,7 +2030,7 @@ icu_find_matched_length(char *src_text, int src_len, char *substr_text, int subs
     if (!pg_newlocale_from_collation(collid)->collate_is_c)
         mylocale = pg_newlocale_from_collation(collid);
 
-    if (!mylocale->deterministic && mylocale->provider == 'i')
+    if (!mylocale->deterministic)
     {
 #ifdef USE_ICU
 		int32_t src_len_utf8 = src_len;
@@ -2303,7 +2307,7 @@ patindex_ai_collations(PG_FUNCTION_ARGS)
 	{
 		mylocale = pg_newlocale_from_collation(cid);
 		
-		if (!mylocale->deterministic && mylocale->provider == 'i')
+		if (!mylocale->deterministic)
 			result = patindex_ai_match_text(mylocale, input_str, pattern, cid, is_CS_AI);
 	}
 
