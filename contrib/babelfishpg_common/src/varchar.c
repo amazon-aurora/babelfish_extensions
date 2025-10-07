@@ -1970,7 +1970,9 @@ hashvarchar(PG_FUNCTION_ARGS)
 	else
 	{
 #ifdef USE_ICU
-		if (mylocale->provider == COLLPROVIDER_ICU)
+		coll_info coll_info_of_inputcollid = lookup_collation_table(collid);
+
+		if (OidIsValid(coll_info_of_inputcollid.oid))
 		{
 			int32_t		ulen = -1;
 			UChar	   *uchar = NULL;
@@ -1992,7 +1994,7 @@ hashvarchar(PG_FUNCTION_ARGS)
 		else
 #endif
 			/* shouldn't happen */
-			elog(ERROR, "unsupported collprovider: %c", mylocale->provider);
+			elog(ERROR, "unsupported collprovider");
 	}
 
 	/* Avoid leaking memory for toasted inputs */
