@@ -826,27 +826,6 @@ pltsql_bbfCustomProcessUtility(ParseState *pstate, PlannedStmt *pstmt, const cha
 	return false;
 }									  
 
-Oid prev_cache_collid;
-pg_locale_t *prev_locale = NULL;
-
-pg_locale_t *
-collation_cache_entry_hook_function(Oid collid, pg_locale_t *locale)
-{
-	if(!locale)
-	{
-		if(prev_locale && prev_cache_collid==collid)
-		{
-			return prev_locale;
-		}
-	}
-	else
-	{
-		prev_cache_collid = collid;
-		prev_locale = locale;
-	}
-	return NULL;
-}			
-
 static void
 pltsql_GetNewObjectId(VariableCache variableCache)
 {
