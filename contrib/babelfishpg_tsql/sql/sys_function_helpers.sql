@@ -10867,6 +10867,12 @@ BEGIN
 		ELSE
 			RETURN sys.babelfish_try_conv_money_to_string(typename, arg::numeric(19,4), p_style);
 		END IF;
+	WHEN 'sys.varbinary'::regtype, 'sys.binary'::regtype THEN
+		IF v_style = 1 THEN
+			RETURN pg_catalog.upper(arg::TEXT);
+		ELSEIF v_style = 2 THEN
+			RETURN pg_catalog.upper(SUBSTRING(arg::TEXT FROM 3));
+		END IF;
 	ELSE
 		RETURN CAST(arg AS sys.VARCHAR);
 	END CASE;
