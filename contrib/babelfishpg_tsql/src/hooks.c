@@ -35,7 +35,6 @@
 #include "catalog/pg_type.h"
 #include "commands/comment.h"
 #include "commands/copy.h"
-#include "commands/dbcommands.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
 #include "commands/proclang.h"

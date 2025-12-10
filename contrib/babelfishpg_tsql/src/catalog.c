@@ -2069,7 +2069,7 @@ static Datum get_nspname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_login_rolname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_default_database_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_user_rolname(HeapTuple tuple, TupleDesc dsc);
-static Datum get_database_name(HeapTuple tuple, TupleDesc dsc);
+static Datum get_bbf_database_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_function_nspname(HeapTuple tuple, TupleDesc dsc);
 static Datum get_function_name(HeapTuple tuple, TupleDesc dsc);
 static Datum get_perms_schema_name(HeapTuple tuple, TupleDesc dsc);
@@ -2212,7 +2212,7 @@ Rule		must_match_rules_user[] =
 	{"<rolname> in babelfish_authid_user_ext must also exist in pg_authid",
 	"pg_authid", "rolname", NULL, get_user_rolname, NULL, check_exist, NULL},
 	{"<database_name> in babelfish_authid_user_ext must also exist in babelfish_sysdatabases",
-	"babelfish_sysdatabases", "name", NULL, get_database_name, NULL, check_exist, NULL}
+	"babelfish_sysdatabases", "name", NULL, get_bbf_database_name, NULL, check_exist, NULL}
 };
 
 /* babelfish_function_ext */
@@ -2673,7 +2673,7 @@ get_user_rolname(HeapTuple tuple, TupleDesc dsc)
 }
 
 static Datum
-get_database_name(HeapTuple tuple, TupleDesc dsc)
+get_bbf_database_name(HeapTuple tuple, TupleDesc dsc)
 {
 	bool		isNull;
 	Datum		dbname = heap_getattr(tuple, Anum_bbf_authid_user_ext_database_name, dsc, &isNull);

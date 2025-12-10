@@ -10,7 +10,7 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_namespace.h"
-#include "commands/dbcommands.h"
+#include "catalog/pg_database.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
