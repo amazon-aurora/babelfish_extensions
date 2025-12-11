@@ -29,6 +29,7 @@ PG_FUNCTION_INFO_V1(datetime_out);
 PG_FUNCTION_INFO_V1(datetime_recv);
 PG_FUNCTION_INFO_V1(date_datetime);
 PG_FUNCTION_INFO_V1(time_datetime);
+PG_FUNCTION_INFO_V1(datetime_text);
 PG_FUNCTION_INFO_V1(timestamp_datetime);
 PG_FUNCTION_INFO_V1(varbinary_datetime);
 PG_FUNCTION_INFO_V1(datetime_varbinary);
@@ -847,6 +848,16 @@ time_datetime(PG_FUNCTION_ARGS)
 	CheckDatetimeRange(result, NULL);
 
 	PG_RETURN_TIMESTAMP(result);
+}
+
+Datum
+datetime_text(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				errmsg("datetime of range for datetime")));
+
+	PG_RETURN_CSTRING(NULL);
 }
 
 /* timestamp_datetime()

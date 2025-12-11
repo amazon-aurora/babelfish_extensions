@@ -363,6 +363,12 @@ CREATE CAST (TIME AS DATETIME)
 WITH FUNCTION sys.time2datetime (TIME) AS IMPLICIT;
 
 
+CREATE OR REPLACE FUNCTION sys.datetime2text(DATETIME)
+RETURNS TEXT
+AS 'babelfishpg_common', 'datetime_text'
+LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
+
+
 CREATE OR REPLACE FUNCTION sys.varchar2datetime(sys.VARCHAR)
 RETURNS DATETIME
 AS 'babelfishpg_common', 'varchar_datetime'
