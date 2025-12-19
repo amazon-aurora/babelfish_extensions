@@ -26,6 +26,14 @@ SELECT test_like_index_vu_prepare_v_csas_col
 FROM test_like_index_vu_prepare_v_csas 
 WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csas_col 
@@ -37,6 +45,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
 FROM test_like_index_vu_prepare_v_csas 
 WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -52,6 +68,16 @@ FROM test_like_index_vu_prepare_v_csas
 WHERE test_like_index_vu_prepare_v_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_v_csas_col3 LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_v_csas_col2 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col2 LIKE 'cs1 ' 
+AND test_like_index_vu_prepare_v_csas_col3 LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col2 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col2 LIKE ' cs1' 
+AND test_like_index_vu_prepare_v_csas_col3 LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csas_col2 
@@ -66,6 +92,14 @@ SELECT test_like_index_vu_prepare_v_csas_col
 FROM test_like_index_vu_prepare_v_csas 
 WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csas_col 
@@ -77,6 +111,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
 FROM test_like_index_vu_prepare_v_csas 
 WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_v_csas_col_no_idx 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
 GO
 
 -- Prefix match
@@ -92,6 +134,16 @@ FROM test_like_index_vu_prepare_v_csas
 WHERE test_like_index_vu_prepare_v_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_v_csas_col3 LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_v_csas_col2 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col2 LIKE 'cs1 ' 
+AND test_like_index_vu_prepare_v_csas_col3 LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_v_csas_col2 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col2 LIKE ' cs1' 
+AND test_like_index_vu_prepare_v_csas_col3 LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csas_col2 
@@ -105,6 +157,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csas_col 
 FROM test_like_index_vu_prepare_v_csas 
 WHERE test_like_index_vu_prepare_v_csas_col COLLATE latin1_general_ci_as LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col COLLATE latin1_general_ci_as LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csas_col 
+FROM test_like_index_vu_prepare_v_csas 
+WHERE test_like_index_vu_prepare_v_csas_col COLLATE latin1_general_ci_as LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -182,6 +242,14 @@ SELECT test_like_index_vu_prepare_v_cias_col
 FROM test_like_index_vu_prepare_v_cias 
 WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_cias_col 
@@ -193,6 +261,14 @@ GO
 SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
 FROM test_like_index_vu_prepare_v_cias 
 WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -208,6 +284,16 @@ FROM test_like_index_vu_prepare_v_cias
 WHERE test_like_index_vu_prepare_v_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_v_cias_col3 LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_v_cias_col2 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_v_cias_col3 LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col2 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_v_cias_col3 LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_cias_col2 
@@ -222,6 +308,14 @@ SELECT test_like_index_vu_prepare_v_cias_col
 FROM test_like_index_vu_prepare_v_cias 
 WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_cias_col 
@@ -233,6 +327,14 @@ GO
 SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
 FROM test_like_index_vu_prepare_v_cias 
 WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_v_cias_col_no_idx 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
 GO
 
 -- Prefix match
@@ -248,6 +350,16 @@ FROM test_like_index_vu_prepare_v_cias
 WHERE test_like_index_vu_prepare_v_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_v_cias_col3 LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_v_cias_col2 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_v_cias_col3 LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_v_cias_col2 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_v_cias_col3 LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_cias_col2 
@@ -261,6 +373,14 @@ GO
 SELECT test_like_index_vu_prepare_v_cias_col 
 FROM test_like_index_vu_prepare_v_cias 
 WHERE test_like_index_vu_prepare_v_cias_col COLLATE latin1_general_cs_as LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col COLLATE latin1_general_cs_as LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_v_cias_col 
+FROM test_like_index_vu_prepare_v_cias 
+WHERE test_like_index_vu_prepare_v_cias_col COLLATE latin1_general_cs_as LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -338,6 +458,14 @@ SELECT test_like_index_vu_prepare_v_csai_col
 FROM test_like_index_vu_prepare_v_csai 
 WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csai_col 
@@ -349,6 +477,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csai_col_no_idx 
 FROM test_like_index_vu_prepare_v_csai 
 WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col_no_idx
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col_no_idx
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -364,6 +500,16 @@ FROM test_like_index_vu_prepare_v_csai
 WHERE test_like_index_vu_prepare_v_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_v_csai_col3 LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_v_csai_col2
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col2 LIKE 'csai1 '
+AND test_like_index_vu_prepare_v_csai_col3 LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col2
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col2 LIKE ' csai1'
+AND test_like_index_vu_prepare_v_csai_col3 LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csai_col2 
@@ -378,6 +524,14 @@ SELECT test_like_index_vu_prepare_v_csai_col
 FROM test_like_index_vu_prepare_v_csai 
 WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csai_col 
@@ -389,6 +543,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csai_col_no_idx 
 FROM test_like_index_vu_prepare_v_csai 
 WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_v_csai_col_no_idx
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_v_csai_col_no_idx
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
 GO
 
 -- Prefix match
@@ -404,6 +566,16 @@ FROM test_like_index_vu_prepare_v_csai
 WHERE test_like_index_vu_prepare_v_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_v_csai_col3 LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_v_csai_col2
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col2 LIKE 'csai1 '
+AND test_like_index_vu_prepare_v_csai_col3 LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_v_csai_col2
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col2 LIKE ' csai1'
+AND test_like_index_vu_prepare_v_csai_col3 LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_csai_col2 
@@ -417,6 +589,14 @@ GO
 SELECT test_like_index_vu_prepare_v_csai_col 
 FROM test_like_index_vu_prepare_v_csai 
 WHERE test_like_index_vu_prepare_v_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_csai_col
+FROM test_like_index_vu_prepare_v_csai
+WHERE test_like_index_vu_prepare_v_csai_col COLLATE latin1_general_ci_ai LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -494,6 +674,14 @@ SELECT test_like_index_vu_prepare_v_ciai_col
 FROM test_like_index_vu_prepare_v_ciai 
 WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_ciai_col 
@@ -505,6 +693,14 @@ GO
 SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_v_ciai 
 WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -520,6 +716,16 @@ FROM test_like_index_vu_prepare_v_ciai
 WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_v_ciai_col3 LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_v_ciai_col2 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_v_ciai_col3 LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col2 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_v_ciai_col3 LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_ciai_col2 
@@ -534,6 +740,14 @@ SELECT test_like_index_vu_prepare_v_ciai_col
 FROM test_like_index_vu_prepare_v_ciai 
 WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_ciai_col 
@@ -545,6 +759,14 @@ GO
 SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_v_ciai 
 WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
 GO
 
 -- Prefix match
@@ -560,6 +782,16 @@ FROM test_like_index_vu_prepare_v_ciai
 WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_v_ciai_col3 LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_v_ciai_col2 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_v_ciai_col3 LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col2 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_v_ciai_col3 LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_v_ciai_col2 
@@ -573,6 +805,14 @@ GO
 SELECT test_like_index_vu_prepare_v_ciai_col 
 FROM test_like_index_vu_prepare_v_ciai 
 WHERE test_like_index_vu_prepare_v_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_v_ciai_col 
+FROM test_like_index_vu_prepare_v_ciai 
+WHERE test_like_index_vu_prepare_v_ciai_col COLLATE latin1_general_cs_ai LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -651,6 +891,14 @@ SELECT test_like_index_vu_prepare_c_csas_col
 FROM test_like_index_vu_prepare_c_csas 
 WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csas_col 
@@ -662,6 +910,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csas_col_no_idx 
 FROM test_like_index_vu_prepare_c_csas 
 WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col_no_idx
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col_no_idx
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -677,6 +933,16 @@ FROM test_like_index_vu_prepare_c_csas
 WHERE test_like_index_vu_prepare_c_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_c_csas_col3 LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_c_csas_col2
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col2 LIKE 'cs1 '
+AND test_like_index_vu_prepare_c_csas_col3 LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col2
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col2 LIKE ' cs1'
+AND test_like_index_vu_prepare_c_csas_col3 LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csas_col2 
@@ -691,6 +957,14 @@ SELECT test_like_index_vu_prepare_c_csas_col
 FROM test_like_index_vu_prepare_c_csas 
 WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csas_col 
@@ -702,6 +976,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csas_col_no_idx 
 FROM test_like_index_vu_prepare_c_csas 
 WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_c_csas_col_no_idx
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_c_csas_col_no_idx
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
 GO
 
 -- Prefix match
@@ -717,6 +999,16 @@ FROM test_like_index_vu_prepare_c_csas
 WHERE test_like_index_vu_prepare_c_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_c_csas_col3 LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_c_csas_col2
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col2 LIKE 'cs1 '
+AND test_like_index_vu_prepare_c_csas_col3 LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_c_csas_col2
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col2 LIKE ' cs1'
+AND test_like_index_vu_prepare_c_csas_col3 LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csas_col2 
@@ -730,6 +1022,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csas_col 
 FROM test_like_index_vu_prepare_c_csas 
 WHERE test_like_index_vu_prepare_c_csas_col COLLATE latin1_general_ci_as LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col COLLATE latin1_general_ci_as LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csas_col
+FROM test_like_index_vu_prepare_c_csas
+WHERE test_like_index_vu_prepare_c_csas_col COLLATE latin1_general_ci_as LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -807,6 +1107,14 @@ SELECT test_like_index_vu_prepare_c_cias_col
 FROM test_like_index_vu_prepare_c_cias 
 WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_cias_col 
@@ -818,6 +1126,14 @@ GO
 SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
 FROM test_like_index_vu_prepare_c_cias 
 WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -833,6 +1149,16 @@ FROM test_like_index_vu_prepare_c_cias
 WHERE test_like_index_vu_prepare_c_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_c_cias_col3 LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_c_cias_col2 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_c_cias_col3 LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col2 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_c_cias_col3 LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_cias_col2 
@@ -847,6 +1173,14 @@ SELECT test_like_index_vu_prepare_c_cias_col
 FROM test_like_index_vu_prepare_c_cias 
 WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_cias_col 
@@ -858,6 +1192,14 @@ GO
 SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
 FROM test_like_index_vu_prepare_c_cias 
 WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_c_cias_col_no_idx 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
 GO
 
 -- Prefix match
@@ -873,6 +1215,16 @@ FROM test_like_index_vu_prepare_c_cias
 WHERE test_like_index_vu_prepare_c_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_c_cias_col3 LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_c_cias_col2 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_c_cias_col3 LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_c_cias_col2 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_c_cias_col3 LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_cias_col2 
@@ -886,6 +1238,14 @@ GO
 SELECT test_like_index_vu_prepare_c_cias_col 
 FROM test_like_index_vu_prepare_c_cias 
 WHERE test_like_index_vu_prepare_c_cias_col COLLATE latin1_general_cs_as LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col COLLATE latin1_general_cs_as LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_c_cias_col 
+FROM test_like_index_vu_prepare_c_cias 
+WHERE test_like_index_vu_prepare_c_cias_col COLLATE latin1_general_cs_as LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -963,6 +1323,14 @@ SELECT test_like_index_vu_prepare_c_csai_col
 FROM test_like_index_vu_prepare_c_csai 
 WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csai_col 
@@ -974,6 +1342,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csai_col_no_idx 
 FROM test_like_index_vu_prepare_c_csai 
 WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col_no_idx
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col_no_idx
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -989,6 +1365,16 @@ FROM test_like_index_vu_prepare_c_csai
 WHERE test_like_index_vu_prepare_c_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_c_csai_col3 LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_c_csai_col2
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col2 LIKE 'csai1 '
+AND test_like_index_vu_prepare_c_csai_col3 LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col2
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col2 LIKE ' csai1'
+AND test_like_index_vu_prepare_c_csai_col3 LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csai_col2 
@@ -1003,6 +1389,14 @@ SELECT test_like_index_vu_prepare_c_csai_col
 FROM test_like_index_vu_prepare_c_csai 
 WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csai_col 
@@ -1014,6 +1408,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csai_col_no_idx 
 FROM test_like_index_vu_prepare_c_csai 
 WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_c_csai_col_no_idx
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_c_csai_col_no_idx
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
 GO
 
 -- Prefix match
@@ -1029,6 +1431,16 @@ FROM test_like_index_vu_prepare_c_csai
 WHERE test_like_index_vu_prepare_c_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_c_csai_col3 LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_c_csai_col2
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col2 LIKE 'csai1 '
+AND test_like_index_vu_prepare_c_csai_col3 LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_c_csai_col2
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col2 LIKE ' csai1'
+AND test_like_index_vu_prepare_c_csai_col3 LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_csai_col2 
@@ -1042,6 +1454,14 @@ GO
 SELECT test_like_index_vu_prepare_c_csai_col 
 FROM test_like_index_vu_prepare_c_csai 
 WHERE test_like_index_vu_prepare_c_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_csai_col
+FROM test_like_index_vu_prepare_c_csai
+WHERE test_like_index_vu_prepare_c_csai_col COLLATE latin1_general_ci_ai LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -1119,6 +1539,14 @@ SELECT test_like_index_vu_prepare_c_ciai_col
 FROM test_like_index_vu_prepare_c_ciai 
 WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_ciai_col 
@@ -1130,6 +1558,14 @@ GO
 SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_c_ciai 
 WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -1145,6 +1581,16 @@ FROM test_like_index_vu_prepare_c_ciai
 WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_c_ciai_col3 LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_c_ciai_col2 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_c_ciai_col3 LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col2 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_c_ciai_col3 LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_ciai_col2 
@@ -1159,6 +1605,14 @@ SELECT test_like_index_vu_prepare_c_ciai_col
 FROM test_like_index_vu_prepare_c_ciai 
 WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_ciai_col 
@@ -1170,6 +1624,14 @@ GO
 SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_c_ciai 
 WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
 GO
 
 -- Prefix match
@@ -1185,6 +1647,16 @@ FROM test_like_index_vu_prepare_c_ciai
 WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_c_ciai_col3 LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_c_ciai_col2 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_c_ciai_col3 LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col2 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_c_ciai_col3 LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_c_ciai_col2 
@@ -1198,6 +1670,14 @@ GO
 SELECT test_like_index_vu_prepare_c_ciai_col 
 FROM test_like_index_vu_prepare_c_ciai 
 WHERE test_like_index_vu_prepare_c_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_c_ciai_col 
+FROM test_like_index_vu_prepare_c_ciai 
+WHERE test_like_index_vu_prepare_c_ciai_col COLLATE latin1_general_cs_ai LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -1277,6 +1757,14 @@ SELECT test_like_index_vu_prepare_nv_csas_col
 FROM test_like_index_vu_prepare_nv_csas 
 WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csas_col 
@@ -1288,6 +1776,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csas_col_no_idx 
 FROM test_like_index_vu_prepare_nv_csas 
 WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col_no_idx
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col_no_idx
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -1303,6 +1799,16 @@ FROM test_like_index_vu_prepare_nv_csas
 WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_nv_csas_col3 LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_nv_csas_col2
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE 'cs1 '
+AND test_like_index_vu_prepare_nv_csas_col3 LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col2
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE ' cs1'
+AND test_like_index_vu_prepare_nv_csas_col3 LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csas_col2 
@@ -1317,6 +1823,14 @@ SELECT test_like_index_vu_prepare_nv_csas_col
 FROM test_like_index_vu_prepare_nv_csas 
 WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csas_col 
@@ -1328,6 +1842,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csas_col_no_idx 
 FROM test_like_index_vu_prepare_nv_csas 
 WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col_no_idx
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col_no_idx
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
 GO
 
 -- Prefix match
@@ -1343,6 +1865,16 @@ FROM test_like_index_vu_prepare_nv_csas
 WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_nv_csas_col3 LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_nv_csas_col2
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE 'cs1 '
+AND test_like_index_vu_prepare_nv_csas_col3 LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col2
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col2 LIKE ' cs1'
+AND test_like_index_vu_prepare_nv_csas_col3 LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csas_col2 
@@ -1356,6 +1888,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csas_col 
 FROM test_like_index_vu_prepare_nv_csas 
 WHERE test_like_index_vu_prepare_nv_csas_col COLLATE latin1_general_ci_as LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col COLLATE latin1_general_ci_as LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csas_col
+FROM test_like_index_vu_prepare_nv_csas
+WHERE test_like_index_vu_prepare_nv_csas_col COLLATE latin1_general_ci_as LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -1434,6 +1974,14 @@ SELECT test_like_index_vu_prepare_nv_cias_col
 FROM test_like_index_vu_prepare_nv_cias 
 WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_cias_col 
@@ -1445,6 +1993,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
 FROM test_like_index_vu_prepare_nv_cias 
 WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -1460,6 +2016,16 @@ FROM test_like_index_vu_prepare_nv_cias
 WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_nv_cias_col3 LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_nv_cias_col2 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_nv_cias_col3 LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col2 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_nv_cias_col3 LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_cias_col2 
@@ -1474,6 +2040,14 @@ SELECT test_like_index_vu_prepare_nv_cias_col
 FROM test_like_index_vu_prepare_nv_cias 
 WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_cias_col 
@@ -1485,6 +2059,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
 FROM test_like_index_vu_prepare_nv_cias 
 WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col_no_idx 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
 GO
 
 -- Prefix match
@@ -1500,6 +2082,16 @@ FROM test_like_index_vu_prepare_nv_cias
 WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_nv_cias_col3 LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_nv_cias_col2 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_nv_cias_col3 LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col2 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_nv_cias_col3 LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_cias_col2 
@@ -1513,6 +2105,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_cias_col 
 FROM test_like_index_vu_prepare_nv_cias 
 WHERE test_like_index_vu_prepare_nv_cias_col COLLATE latin1_general_cs_as LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col COLLATE latin1_general_cs_as LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_cias_col 
+FROM test_like_index_vu_prepare_nv_cias 
+WHERE test_like_index_vu_prepare_nv_cias_col COLLATE latin1_general_cs_as LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -1590,6 +2190,14 @@ SELECT test_like_index_vu_prepare_nv_csai_col
 FROM test_like_index_vu_prepare_nv_csai 
 WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csai_col 
@@ -1601,6 +2209,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
 FROM test_like_index_vu_prepare_nv_csai 
 WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -1616,6 +2232,16 @@ FROM test_like_index_vu_prepare_nv_csai
 WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_nv_csai_col3 LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_nv_csai_col2 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE 'csai1 ' 
+AND test_like_index_vu_prepare_nv_csai_col3 LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col2 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE ' csai1' 
+AND test_like_index_vu_prepare_nv_csai_col3 LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csai_col2 
@@ -1630,6 +2256,14 @@ SELECT test_like_index_vu_prepare_nv_csai_col
 FROM test_like_index_vu_prepare_nv_csai 
 WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csai_col 
@@ -1641,6 +2275,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
 FROM test_like_index_vu_prepare_nv_csai 
 WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col_no_idx 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
 GO
 
 -- Prefix match
@@ -1656,6 +2298,16 @@ FROM test_like_index_vu_prepare_nv_csai
 WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_nv_csai_col3 LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_nv_csai_col2 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE 'csai1 ' 
+AND test_like_index_vu_prepare_nv_csai_col3 LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col2 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col2 LIKE ' csai1' 
+AND test_like_index_vu_prepare_nv_csai_col3 LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_csai_col2 
@@ -1669,6 +2321,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_csai_col 
 FROM test_like_index_vu_prepare_nv_csai 
 WHERE test_like_index_vu_prepare_nv_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_csai_col 
+FROM test_like_index_vu_prepare_nv_csai 
+WHERE test_like_index_vu_prepare_nv_csai_col COLLATE latin1_general_ci_ai LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -1746,6 +2406,14 @@ SELECT test_like_index_vu_prepare_nv_ciai_col
 FROM test_like_index_vu_prepare_nv_ciai 
 WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_ciai_col 
@@ -1757,6 +2425,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_nv_ciai 
 WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -1772,6 +2448,16 @@ FROM test_like_index_vu_prepare_nv_ciai
 WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_nv_ciai_col3 LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_nv_ciai_col2
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE 'ciai1 '
+AND test_like_index_vu_prepare_nv_ciai_col3 LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col2
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE ' ciai1'
+AND test_like_index_vu_prepare_nv_ciai_col3 LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_ciai_col2 
@@ -1786,6 +2472,14 @@ SELECT test_like_index_vu_prepare_nv_ciai_col
 FROM test_like_index_vu_prepare_nv_ciai 
 WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_ciai_col 
@@ -1797,6 +2491,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_nv_ciai 
 WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col_no_idx
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
 GO
 
 -- Prefix match
@@ -1812,6 +2514,16 @@ FROM test_like_index_vu_prepare_nv_ciai
 WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_nv_ciai_col3 LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_nv_ciai_col2
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE 'ciai1 '
+AND test_like_index_vu_prepare_nv_ciai_col3 LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col2
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col2 LIKE ' ciai1'
+AND test_like_index_vu_prepare_nv_ciai_col3 LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_nv_ciai_col2 
@@ -1825,6 +2537,14 @@ GO
 SELECT test_like_index_vu_prepare_nv_ciai_col 
 FROM test_like_index_vu_prepare_nv_ciai 
 WHERE test_like_index_vu_prepare_nv_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_nv_ciai_col
+FROM test_like_index_vu_prepare_nv_ciai
+WHERE test_like_index_vu_prepare_nv_ciai_col COLLATE latin1_general_cs_ai LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -1903,6 +2623,14 @@ SELECT test_like_index_vu_prepare_t_csas_col
 FROM test_like_index_vu_prepare_t_csas 
 WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csas_col 
@@ -1914,6 +2642,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
 FROM test_like_index_vu_prepare_t_csas 
 WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -1929,6 +2665,16 @@ FROM test_like_index_vu_prepare_t_csas
 WHERE test_like_index_vu_prepare_t_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_t_csas_col3 LIKE 'cs1';
 GO
+SELECT test_like_index_vu_prepare_t_csas_col2 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col2 LIKE 'cs1 ' 
+AND test_like_index_vu_prepare_t_csas_col3 LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col2 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col2 LIKE ' cs1' 
+AND test_like_index_vu_prepare_t_csas_col3 LIKE ' cs1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csas_col2 
@@ -1943,6 +2689,14 @@ SELECT test_like_index_vu_prepare_t_csas_col
 FROM test_like_index_vu_prepare_t_csas 
 WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csas_col 
@@ -1954,6 +2708,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
 FROM test_like_index_vu_prepare_t_csas 
 WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_t_csas_col_no_idx 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col LIKE ' cs1' COLLATE latin1_general_cs_as;
 GO
 
 -- Prefix match
@@ -1969,6 +2731,16 @@ FROM test_like_index_vu_prepare_t_csas
 WHERE test_like_index_vu_prepare_t_csas_col2 LIKE 'cs1' 
 AND test_like_index_vu_prepare_t_csas_col3 LIKE 'cs1' COLLATE latin1_general_cs_as;
 GO
+SELECT test_like_index_vu_prepare_t_csas_col2 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col2 LIKE 'cs1 ' 
+AND test_like_index_vu_prepare_t_csas_col3 LIKE 'cs1 ' COLLATE latin1_general_cs_as;
+GO
+SELECT test_like_index_vu_prepare_t_csas_col2 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col2 LIKE ' cs1' 
+AND test_like_index_vu_prepare_t_csas_col3 LIKE ' cs1' COLLATE latin1_general_cs_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csas_col2 
@@ -1982,6 +2754,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csas_col 
 FROM test_like_index_vu_prepare_t_csas 
 WHERE test_like_index_vu_prepare_t_csas_col COLLATE latin1_general_ci_as LIKE 'cs1';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col COLLATE latin1_general_ci_as LIKE 'cs1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csas_col 
+FROM test_like_index_vu_prepare_t_csas 
+WHERE test_like_index_vu_prepare_t_csas_col COLLATE latin1_general_ci_as LIKE ' cs1';
 GO
 
 -- Prefix match
@@ -2059,6 +2839,14 @@ SELECT test_like_index_vu_prepare_t_cias_col
 FROM test_like_index_vu_prepare_t_cias 
 WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_cias_col 
@@ -2070,6 +2858,14 @@ GO
 SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
 FROM test_like_index_vu_prepare_t_cias 
 WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -2085,6 +2881,16 @@ FROM test_like_index_vu_prepare_t_cias
 WHERE test_like_index_vu_prepare_t_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_t_cias_col3 LIKE 'ci1';
 GO
+SELECT test_like_index_vu_prepare_t_cias_col2 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_t_cias_col3 LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col2 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_t_cias_col3 LIKE ' ci1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_cias_col2 
@@ -2099,6 +2905,14 @@ SELECT test_like_index_vu_prepare_t_cias_col
 FROM test_like_index_vu_prepare_t_cias 
 WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_cias_col 
@@ -2110,6 +2924,14 @@ GO
 SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
 FROM test_like_index_vu_prepare_t_cias 
 WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_t_cias_col_no_idx 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col LIKE ' ci1' COLLATE latin1_general_ci_as;
 GO
 
 -- Prefix match
@@ -2125,6 +2947,16 @@ FROM test_like_index_vu_prepare_t_cias
 WHERE test_like_index_vu_prepare_t_cias_col2 LIKE 'ci1' 
 AND test_like_index_vu_prepare_t_cias_col3 LIKE 'ci1' COLLATE latin1_general_ci_as;
 GO
+SELECT test_like_index_vu_prepare_t_cias_col2 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col2 LIKE 'ci1 ' 
+AND test_like_index_vu_prepare_t_cias_col3 LIKE 'ci1 ' COLLATE latin1_general_ci_as;
+GO
+SELECT test_like_index_vu_prepare_t_cias_col2 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col2 LIKE ' ci1' 
+AND test_like_index_vu_prepare_t_cias_col3 LIKE ' ci1' COLLATE latin1_general_ci_as;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_cias_col2 
@@ -2138,6 +2970,14 @@ GO
 SELECT test_like_index_vu_prepare_t_cias_col 
 FROM test_like_index_vu_prepare_t_cias 
 WHERE test_like_index_vu_prepare_t_cias_col COLLATE latin1_general_cs_as LIKE 'ci1';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col COLLATE latin1_general_cs_as LIKE 'ci1 ';
+GO
+SELECT test_like_index_vu_prepare_t_cias_col 
+FROM test_like_index_vu_prepare_t_cias 
+WHERE test_like_index_vu_prepare_t_cias_col COLLATE latin1_general_cs_as LIKE ' ci1';
 GO
 
 -- Prefix match
@@ -2215,6 +3055,14 @@ SELECT test_like_index_vu_prepare_t_csai_col
 FROM test_like_index_vu_prepare_t_csai 
 WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csai_col 
@@ -2226,6 +3074,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
 FROM test_like_index_vu_prepare_t_csai 
 WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -2241,6 +3097,16 @@ FROM test_like_index_vu_prepare_t_csai
 WHERE test_like_index_vu_prepare_t_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_t_csai_col3 LIKE 'csai1';
 GO
+SELECT test_like_index_vu_prepare_t_csai_col2 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col2 LIKE 'csai1 ' 
+AND test_like_index_vu_prepare_t_csai_col3 LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col2 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col2 LIKE ' csai1' 
+AND test_like_index_vu_prepare_t_csai_col3 LIKE ' csai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csai_col2 
@@ -2255,6 +3121,14 @@ SELECT test_like_index_vu_prepare_t_csai_col
 FROM test_like_index_vu_prepare_t_csai 
 WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csai_col 
@@ -2266,6 +3140,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
 FROM test_like_index_vu_prepare_t_csai 
 WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_t_csai_col_no_idx 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col LIKE ' csai1' COLLATE latin1_general_cs_ai;
 GO
 
 -- Prefix match
@@ -2281,6 +3163,16 @@ FROM test_like_index_vu_prepare_t_csai
 WHERE test_like_index_vu_prepare_t_csai_col2 LIKE 'csai1' 
 AND test_like_index_vu_prepare_t_csai_col3 LIKE 'csai1' COLLATE latin1_general_cs_ai;
 GO
+SELECT test_like_index_vu_prepare_t_csai_col2 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col2 LIKE 'csai1 ' 
+AND test_like_index_vu_prepare_t_csai_col3 LIKE 'csai1 ' COLLATE latin1_general_cs_ai;
+GO
+SELECT test_like_index_vu_prepare_t_csai_col2 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col2 LIKE ' csai1' 
+AND test_like_index_vu_prepare_t_csai_col3 LIKE ' csai1' COLLATE latin1_general_cs_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_csai_col2 
@@ -2294,6 +3186,14 @@ GO
 SELECT test_like_index_vu_prepare_t_csai_col 
 FROM test_like_index_vu_prepare_t_csai 
 WHERE test_like_index_vu_prepare_t_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col COLLATE latin1_general_ci_ai LIKE 'csai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_csai_col 
+FROM test_like_index_vu_prepare_t_csai 
+WHERE test_like_index_vu_prepare_t_csai_col COLLATE latin1_general_ci_ai LIKE ' csai1';
 GO
 
 -- Prefix match
@@ -2371,6 +3271,14 @@ SELECT test_like_index_vu_prepare_t_ciai_col
 FROM test_like_index_vu_prepare_t_ciai 
 WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_ciai_col 
@@ -2382,6 +3290,14 @@ GO
 SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_t_ciai 
 WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE ' ciai1';
 GO
 
 -- Prefix match
@@ -2397,6 +3313,16 @@ FROM test_like_index_vu_prepare_t_ciai
 WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_t_ciai_col3 LIKE 'ciai1';
 GO
+SELECT test_like_index_vu_prepare_t_ciai_col2 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_t_ciai_col3 LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col2 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_t_ciai_col3 LIKE ' ciai1';
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_ciai_col2 
@@ -2411,6 +3337,14 @@ SELECT test_like_index_vu_prepare_t_ciai_col
 FROM test_like_index_vu_prepare_t_ciai 
 WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_ciai_col 
@@ -2422,6 +3356,14 @@ GO
 SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
 FROM test_like_index_vu_prepare_t_ciai 
 WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col_no_idx 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col LIKE ' ciai1' COLLATE latin1_general_ci_ai;
 GO
 
 -- Prefix match
@@ -2437,6 +3379,16 @@ FROM test_like_index_vu_prepare_t_ciai
 WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE 'ciai1' 
 AND test_like_index_vu_prepare_t_ciai_col3 LIKE 'ciai1' COLLATE latin1_general_ci_ai;
 GO
+SELECT test_like_index_vu_prepare_t_ciai_col2 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE 'ciai1 ' 
+AND test_like_index_vu_prepare_t_ciai_col3 LIKE 'ciai1 ' COLLATE latin1_general_ci_ai;
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col2 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col2 LIKE ' ciai1' 
+AND test_like_index_vu_prepare_t_ciai_col3 LIKE ' ciai1' COLLATE latin1_general_ci_ai;
+GO
 
 -- Prefix match
 SELECT test_like_index_vu_prepare_t_ciai_col2 
@@ -2450,6 +3402,14 @@ GO
 SELECT test_like_index_vu_prepare_t_ciai_col 
 FROM test_like_index_vu_prepare_t_ciai 
 WHERE test_like_index_vu_prepare_t_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col COLLATE latin1_general_cs_ai LIKE 'ciai1 ';
+GO
+SELECT test_like_index_vu_prepare_t_ciai_col 
+FROM test_like_index_vu_prepare_t_ciai 
+WHERE test_like_index_vu_prepare_t_ciai_col COLLATE latin1_general_cs_ai LIKE ' ciai1';
 GO
 
 -- Prefix match
