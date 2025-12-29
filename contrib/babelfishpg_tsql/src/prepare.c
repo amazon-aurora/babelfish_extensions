@@ -186,6 +186,7 @@ is_exec_stmt_on_scalar_func(const char *stmt, int *first_arg_location, const cha
 	bool		func_variadic;
 	Oid			arg_types[FUNC_MAX_ARGS];
 	FuncDetailCode fdresult;
+	int			fgc_flags;		/* not used */
 	Oid			funcid;
 	Oid			rettype;		/* not used */
 	bool		retset;			/* used to detect table-valued functions */
@@ -220,6 +221,7 @@ is_exec_stmt_on_scalar_func(const char *stmt, int *first_arg_location, const cha
 							   NIL, NIL,
 							   nargs, arg_types,
 							   func_variadic, true, false,
+							   &fgc_flags,
 							   &funcid, &rettype, &retset,
 							   &nvargs, &vatype,
 							   &typeids, NULL);

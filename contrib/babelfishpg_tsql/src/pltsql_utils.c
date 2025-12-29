@@ -707,7 +707,7 @@ pltsql_read_procedure_info(StringInfo inout_str,
 	 * Parse the name into components and see if it matches any pg_proc
 	 * entries in the current search path.
 	 */
-	clist = FuncnameGetCandidates(funccall->funcname, -1, NIL, false, false, false, false);
+	clist = FuncnameGetCandidates(funccall->funcname, -1, NIL, false, false, false, false, NULL);
 
 	if (clist == NULL)
 	{

@@ -3432,7 +3432,7 @@ sp_babelfish_volatility(PG_FUNCTION_ARGS)
 
 		/* get function id from function name */
 		function_name_list = list_make2(makeString(physical_schema_name), makeString(function_name));
-		candidates = FuncnameGetCandidates(function_name_list, -1, NIL, false, false, false, true);
+		candidates = FuncnameGetCandidates(function_name_list, -1, NIL, false, false, false, true, NULL);
 
 		/* if no function is found */
 		if (candidates == NULL)
