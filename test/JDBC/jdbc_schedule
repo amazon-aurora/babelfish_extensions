@@ -8,10 +8,7 @@
 #    new line
 # 6. If you want the framework to not run certain files, use: ignore#!#<test name>
 
-# all
-test_like_index-vu-prepare
-# test_like_index-vu-verify
-# test_like_index-vu-cleanup
+all
 
 # FIX ME: Crash in vector extension. Ignoring to Unblock Dev
 # branches. Will be fixed with jira: BABEL-6260
