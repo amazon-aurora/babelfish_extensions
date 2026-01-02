@@ -2900,6 +2900,13 @@ get_resolved_expr_type(Node *expr)
 	if (expr == NULL)
 		return InvalidOid;
 
+	/*
+	 * expr_type need to be set to sys.varchar only if the expression is string
+	 * constant and the dialect is TSQL, for PG dialect it should be expression
+	 * type. expr_type need to be set to sys.varchar during dump restore as during
+	 * dump string literal in objects created in TSQL dialect gets casted to
+	 * sys.varchar.
+	 */
 	if (sql_dialect == SQL_DIALECT_TSQL && is_tsql_str_const(expr))
 		expr_type = get_sys_varcharoid();
 	else
