@@ -86,8 +86,11 @@ runs:
       if: always() && steps.build-postgis-extension.outcome == 'success'
       run: |
         cd ~
-        # Disable checksums only when explicitly requested
-        if [[ "${{ inputs.disable_checksums }}" == "true" ]]; then
+        # Disable checksums when:
+        # 1. Explicitly requested (disable_checksums=true)
+        # 2. target.latest EXCEPT when base_version is source.latest (both should have checksums enabled)
+        if [[ "${{ inputs.disable_checksums }}" == "true" ]] || \
+           [[ "${{ inputs.engine_version }}" == "target.latest" && "${{ inputs.base_version }}" != "source.latest" ]]; then
             ~/${{ inputs.pg_new_dir }}/bin/initdb --no-data-checksums -D ~/${{ inputs.pg_new_dir }}/data
         else
             ~/${{ inputs.pg_new_dir }}/bin/initdb -D ~/${{ inputs.pg_new_dir }}/data

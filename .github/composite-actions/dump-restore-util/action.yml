@@ -41,10 +41,6 @@ inputs:
     description: 'Engine version'
     required: no
     default: 'target.latest'
-  disable_checksums:
-    description: "Disable data checksums during initdb"
-    required: false
-    default: 'true'
 
 runs:
   using: "composite"
@@ -59,7 +55,6 @@ runs:
         pg_new_dir: ${{ inputs.pg_new_dir }}
         antlr_version: ${{ inputs.antlr_version }}
         engine_version: ${{ inputs.engine_version }}
-        disable_checksums: ${{ inputs.disable_checksums }}
 
     - name: Build latest dump/restore utilities
       id: build-dump-utils
