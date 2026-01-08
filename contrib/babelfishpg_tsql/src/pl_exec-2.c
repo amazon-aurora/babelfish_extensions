@@ -3895,6 +3895,17 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 	Oid		schemaOid;
 	char		*user = GetUserNameFromId(GetUserId(), false);
 	const char	*db_owner = get_owner_of_db(dbname);
+	char		*db_owner_name = get_db_owner_name(dbname);
+	const char 	*grantor;
+	HeapTuple	tup;
+	Form_pg_namespace nspForm;
+	const char 	*suffix = "_bbfobj";
+	int 		grantor_len;
+	int 		suffix_len = strlen(suffix);
+	const char 	*grantor_suffix = NULL;
+	Relation	bbf_schema_perm_rel;
+	ScanKeyData	scanKey[6];
+	// SysScanDesc	scan;
 
 	login_is_db_owner = 0 == strcmp(login, db_owner);
 	schema_name = get_physical_schema_name(dbname, stmt->schema_name);
@@ -3914,6 +3925,43 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 					 errmsg("An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \"\" or [] are not allowed. Change the alias to a valid name.")));
 	}
 
+	tup = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaOid));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for namespace %u", schemaOid);
+
+	nspForm = (Form_pg_namespace) GETSTRUCT(tup);
+
+	/* 
+	 * Grantor for schema-level grants will be schema owner 
+	 */
+	grantor = GetUserNameFromId(nspForm->nspowner, false);
+	
+	/*
+	 * If the grantor is db_owner, set it as dbo to match TSQL 
+	 */
+	if (strcmp(schema_name, psprintf("%s_dbo", dbname)) == 0 && strcmp(grantor, psprintf("%s_db_owner", dbname)) == 0)
+	{
+		grantor = psprintf("%s_dbo", dbname);
+	}
+
+	/*
+	 * If grantor ends with "_bbfobj", remove the suffix as this is an internal BBF role. 
+	 */
+	grantor_len = strlen(grantor);
+	grantor_suffix = grantor + grantor_len - suffix_len;
+	if (grantor_len >= suffix_len && strcmp(grantor_suffix, suffix) == 0)
+	{
+		const char 	*temp = pnstrdup(grantor, grantor_len - suffix_len);
+		Oid 		temp_oid = get_role_oid(temp, true);
+		Oid 		db_owner_oid = get_role_oid(db_owner_name, true);
+
+		if (OidIsValid(temp_oid) && OidIsValid(db_owner_oid) && is_member_of_role(temp_oid, db_owner_oid))
+		{
+			grantor = temp;
+		}
+	}
+
+	ReleaseSysCache(tup);
 	foreach(lc, stmt->grantees)
 	{
 		int i;
@@ -3971,28 +4019,76 @@ exec_stmt_grantschema(PLtsql_execstate *estate, PLtsql_stmt_grantschema *stmt)
 				exec_grantschema_subcmds(schema_name, rolname, stmt->is_grant, stmt->with_grant_option, permissions[i]);
 		}
 
+		bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
+
+		ScanKeyInit(&scanKey[0],
+				Anum_bbf_schema_perms_dbid,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(get_cur_db_id()));
+		ScanKeyEntryInitialize(&scanKey[1], 0,
+					Anum_bbf_schema_perms_schema_name,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(stmt->schema_name));
+		ScanKeyEntryInitialize(&scanKey[2], 0,
+					Anum_bbf_schema_perms_object_name,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA));
+		ScanKeyEntryInitialize(&scanKey[3], 0,
+					Anum_bbf_schema_perms_grantee,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(rolname));
+		ScanKeyEntryInitialize(&scanKey[4], 0,
+					Anum_bbf_schema_perms_object_type,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(OBJ_SCHEMA));
+		ScanKeyEntryInitialize(&scanKey[5], 0,
+					Anum_bbf_schema_perms_grantor,
+					BTEqualStrategyNumber,
+					InvalidOid,
+					tsql_get_database_or_server_collation_oid_internal(false),
+					F_TEXTEQ,
+					CStringGetTextDatum(grantor));
+		// scan = systable_beginscan(bbf_schema_perm_rel,
+		// 		get_bbf_schema_perms_idx_oid(),
+		// 		true, NULL, 6, scanKey);	
+
 		if (stmt->is_grant)
 		{
 			/* For GRANT statement, add or update privileges in the catalog. */
-			add_or_update_object_in_bbf_schema(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL);
+			add_or_update_object_in_bbf_schema(bbf_schema_perm_rel, scanKey, stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, true, NULL, grantor, false);
 		}
 		else
 		{
 			/* For REVOKE statement, update privileges in the catalog. */
-			if (privilege_exists_in_bbf_schema_permissions(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rolname, OBJ_SCHEMA))
+			if (privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rolname, OBJ_SCHEMA, grantor, false))
 			{
 				/* If any object in the schema has the OBJECT level permission. Then, internally grant that permission back. */
 				for (i = 0; i < NUMBER_OF_PERMISSIONS; i++)
 				{
 					if (stmt->privileges & permissions[i])
-						grant_perms_to_objects_in_schema(stmt->schema_name, permissions[i], rolname);
+						grant_perms_to_objects_in_schema(stmt->schema_name, permissions[i], rolname, grantor);
 				}
-				update_privileges_of_object(stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false);
+				update_privileges_of_object(bbf_schema_perm_rel, scanKey, stmt->schema_name, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, stmt->privileges, rolname, OBJ_SCHEMA, false, grantor, false);
 			}
 		}
 		pfree(rolname);
+		// systable_endscan(scan);
+		table_close(bbf_schema_perm_rel, RowExclusiveLock);
 	}
 	pfree(user);
+	pfree(db_owner_name);
 	pfree(schema_name);
 	pfree(dbname);
 	pfree(login);

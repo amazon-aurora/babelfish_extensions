@@ -3588,21 +3588,120 @@ SELECT
 WHERE FALSE;
 GRANT SELECT ON sys.sql_expression_dependencies TO PUBLIC;
 
-CREATE OR REPLACE VIEW sys.database_permissions
-AS
+CREATE OR REPLACE VIEW sys.database_permissions  
+AS  
+WITH current_db AS (  
+    SELECT sys.db_name() AS dbname, sys.db_id() AS current_db_id  
+),  
+permission_mapping AS (  
+    SELECT * FROM (VALUES  
+        (1,    'INSERT',     'IN'),  
+        (2,    'SELECT',     'SL'),  
+        (4,    'UPDATE',     'UP'),  
+        (8,    'DELETE',     'DL'),  
+        (32,   'REFERENCES', 'RF'),  
+        (128,  'EXECUTE',    'EX'),  
+        (2048, 'CONNECT',    'CO')  
+    ) AS pm(bit, permission_name, type_code)  
+)  
+SELECT  
+    CASE bsp.object_type  
+        WHEN 'd' THEN CAST(0 AS sys.tinyint)  
+        WHEN 's' THEN CAST(3 AS sys.tinyint)  
+        ELSE CAST(1 AS sys.tinyint)  
+    END AS class,  
+  
+    CASE bsp.object_type  
+        WHEN 'd' THEN CAST('DATABASE' AS sys.NVARCHAR(60)) COLLATE sys."bbf_unicode_cp1_ci_as"  
+        WHEN 's' THEN CAST('SCHEMA' AS sys.NVARCHAR(60)) COLLATE sys."bbf_unicode_cp1_ci_as"  
+        ELSE CAST('OBJECT_OR_COLUMN' AS sys.NVARCHAR(60)) COLLATE sys."bbf_unicode_cp1_ci_as"  
+    END AS class_desc,  
+  
+    CASE bsp.object_type  
+        WHEN 'd' THEN CAST(0 AS sys.int)  
+        WHEN 's' THEN CAST(s.schema_id AS sys.int)  
+        ELSE CAST(o.object_id AS sys.int)  
+    END AS major_id,  
+  
+    CAST(0 AS sys.int) AS minor_id,  
+  
+    CAST(
+        CASE 
+            WHEN bsp.grantee = 'public' THEN sys.USER_ID('public')
+            ELSE sys.USER_ID(SUBSTRING(bsp.grantee FROM LENGTH(db.dbname) + 2))
+        END AS sys.int
+    ) AS grantee_principal_id,
+
+    CAST(
+        CASE 
+            WHEN bsp.grantor = 'public' THEN sys.USER_ID('public')
+            ELSE sys.USER_ID(SUBSTRING(bsp.grantor FROM LENGTH(db.dbname) + 2))
+        END AS sys.int
+    ) AS grantor_principal_id,  
+  
+    CAST(pm.type_code AS sys.BPCHAR(4)) COLLATE sys."bbf_unicode_cp1_ci_as" AS type,  
+    CAST(pm.permission_name AS sys.NVARCHAR(128)) COLLATE sys."bbf_unicode_cp1_ci_as" AS permission_name,  
+  
+    CAST(  
+        CASE  
+            WHEN (bsp.permission & 256) != 0 THEN 'W'  
+            ELSE 'G'  
+        END AS sys.BPCHAR(1)  
+    ) COLLATE sys."bbf_unicode_cp1_ci_as" AS state,  
+  
+    CAST(  
+        CASE  
+            WHEN (bsp.permission & 256) != 0 THEN 'GRANT_WITH_GRANT_OPTION'  
+            ELSE 'GRANT'  
+        END AS sys.NVARCHAR(60)  
+    ) COLLATE sys."bbf_unicode_cp1_ci_as" AS state_desc  
+  
+FROM sys.babelfish_schema_permissions bsp  
+CROSS JOIN current_db db  
+LEFT JOIN sys.schemas s  
+    ON bsp.schema_name = s.name AND bsp.object_type = 's'  
+LEFT JOIN sys.objects o  
+    ON bsp.object_name = o.name AND bsp.object_type NOT IN ('d', 's')  
+JOIN LATERAL (  
+    SELECT permission_name, type_code  
+    FROM permission_mapping  
+    WHERE (bsp.permission & bit) != 0  
+) pm ON TRUE  
+WHERE bsp.dbid = db.current_db_id  
+  AND (
+      pg_has_role(current_user, db.dbname || '_dbo', 'MEMBER')
+      OR pg_has_role(current_user, db.dbname || '_db_owner', 'MEMBER')
+      OR pg_has_role(current_user, db.dbname || '_db_securityadmin', 'MEMBER')
+      OR pg_has_role(current_user, db.dbname || '_db_accessadmin', 'MEMBER')
+      OR bsp.grantee COLLATE sys."bbf_unicode_cp1_ci_as" = CURRENT_USER
+      OR bsp.grantor COLLATE sys."bbf_unicode_cp1_ci_as" = CURRENT_USER
+      OR bsp.grantee = 'public'
+      OR bsp.grantor = 'public'
+  )
+
+UNION ALL
+
 SELECT
-    CAST(0 as sys.tinyint) AS class,
-    CAST('' as sys.NVARCHAR(60)) AS class_desc,
-    CAST(0 as sys.int) AS major_id,
-    CAST(0 as sys.int) AS minor_id,
-    CAST(0 as sys.int) AS grantee_principal_id,
-    CAST(0 as sys.int) AS grantor_principal_id,
-    CAST('a' as sys.BPCHAR(4)) AS type,
-    CAST('' as sys.NVARCHAR(128)) AS permission_name,
-    CAST('G' as sys.BPCHAR(1)) AS state,
-    CAST('' as sys.NVARCHAR(60)) AS state_desc
-WHERE FALSE;
+    CAST(0 AS sys.tinyint) AS class,
+    CAST('DATABASE' AS sys.NVARCHAR(60)) COLLATE sys."bbf_unicode_cp1_ci_as" AS class_desc,
+    CAST(0 AS sys.int) AS major_id,
+    CAST(0 AS sys.int) AS minor_id,
+    CAST(sys.USER_ID('dbo') AS sys.int) AS grantee_principal_id,
+    CAST(sys.USER_ID('dbo') AS sys.int) AS grantor_principal_id,
+    CAST('CO' AS sys.BPCHAR(4)) COLLATE sys."bbf_unicode_cp1_ci_as" AS type,
+    CAST('CONNECT' AS sys.NVARCHAR(128)) COLLATE sys."bbf_unicode_cp1_ci_as" AS permission_name,
+    CAST('G' AS sys.BPCHAR(1)) COLLATE sys."bbf_unicode_cp1_ci_as" AS state,
+    CAST('GRANT' AS sys.NVARCHAR(60)) COLLATE sys."bbf_unicode_cp1_ci_as" AS state_desc
+WHERE EXISTS (
+    SELECT 1
+    FROM current_db db
+    WHERE pg_has_role(current_user, db.dbname || '_dbo', 'MEMBER')
+       OR pg_has_role(current_user, db.dbname || '_db_owner', 'MEMBER')
+       OR pg_has_role(current_user, db.dbname || '_db_securityadmin', 'MEMBER')
+);
+
 GRANT SELECT ON sys.database_permissions TO PUBLIC;
+
 
 CREATE OR REPLACE VIEW sys.availability_replicas 
 AS SELECT  

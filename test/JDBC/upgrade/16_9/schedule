@@ -534,7 +534,7 @@ babel-4517
 babel_table_type
 alter-procedure
 alter-function
-1_GRANT_SCHEMA
+1_GRANT_SCHEMA-before-17_6
 BABEL-4707
 BABEL_4817
 upper_lower
@@ -599,7 +599,7 @@ test_conv_string_to_datetime2-before-17_4
 test_conv_string_to_datetimeoffset-before-17_4
 test_conv_string_to_smalldatetime
 test_conv_string_to_time-before-17_4
-db_owner
+db_owner-before-17_6
 BABEL-5031
 test_conv_money_to_varchar
 fixeddecimal_modulo

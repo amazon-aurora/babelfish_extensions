@@ -64,6 +64,7 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc_tables.h"
+#include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/plancache.h"
@@ -2968,6 +2969,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				    strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
 				{
 					CreateRoleStmt *stmt = (CreateRoleStmt *) parsetree;
+					Relation	bbf_schema_perm_rel;
 					List	   *login_options = NIL;
 					List	   *user_options = NIL;
 					ListCell   *option;
@@ -3344,6 +3346,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 					PG_TRY();
 					{
+						const char 	*current_db_name = get_cur_db_name();
+						const char 	*grantor = psprintf("%s_dbo", current_db_name);
 						/*
 						 * We have performed all the permissions checks.
 						 * Set current user to bbf_role_admin for create permissions.
@@ -3383,8 +3387,16 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							 * our babelfish catalog. These roles are meant to be internal
 							 * and not be visible to customer from Babelfish endpoint.
 							 */
+							bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
 							if (strcmp(queryString, INTERNAL_ALTER_ROLE) != 0)
+							{	
 								create_bbf_authid_user_ext(stmt, isuser, isuser, from_windows);
+
+								/* Add connect privillege entry into the bbf_schema_permissions, which is granted by default when a user is created. */
+								if(isuser)
+									add_entry_to_bbf_schema_perms(bbf_schema_perm_rel, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, ACL_CONNECT, stmt->role, OBJ_DATABASE, NULL, grantor, false);
+							}
+							table_close(bbf_schema_perm_rel, RowExclusiveLock);
 						}
 
 					}
@@ -4022,6 +4034,71 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 									 errmsg("Could not drop login '%s' as the user is currently logged in.", role_name)));
 					}
 
+					/* Remove the CONNECT privilege entry from bbf_schema_permissions when a user is dropped. */
+					foreach(item, stmt->roles)
+					{
+						RoleSpec 	*rolspec = lfirst(item);
+						const char 	*current_db_name = get_cur_db_name();
+						const char 	*grantee = GetUserNameFromId(get_role_oid(rolspec->rolename, false), false);
+						const char 	*grantor = psprintf("%s_dbo", current_db_name);
+						Relation 	bbf_schema_perm_rel;
+						ScanKeyData	scanKey[6];
+						// SysScanDesc	scan;
+
+						bbf_schema_perm_rel = table_open(get_bbf_schema_perms_oid(), RowExclusiveLock);
+
+						ScanKeyInit(&scanKey[0],
+								Anum_bbf_schema_perms_dbid,
+								BTEqualStrategyNumber, F_INT2EQ,
+								Int16GetDatum(get_cur_db_id()));
+						ScanKeyEntryInitialize(&scanKey[1], 0,
+									Anum_bbf_schema_perms_schema_name,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(PERMISSIONS_FOR_DATABASE));
+						ScanKeyEntryInitialize(&scanKey[2], 0,
+									Anum_bbf_schema_perms_object_name,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA));
+						ScanKeyEntryInitialize(&scanKey[3], 0,
+									Anum_bbf_schema_perms_grantee,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(grantee));
+						ScanKeyEntryInitialize(&scanKey[4], 0,
+									Anum_bbf_schema_perms_object_type,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(OBJ_DATABASE));
+						ScanKeyEntryInitialize(&scanKey[5], 0,
+									Anum_bbf_schema_perms_grantor,
+									BTEqualStrategyNumber,
+									InvalidOid,
+									tsql_get_database_or_server_collation_oid_internal(false),
+									F_TEXTEQ,
+									CStringGetTextDatum(grantor));
+						// scan = systable_beginscan(bbf_schema_perm_rel,
+						// 		get_bbf_schema_perms_idx_oid(),
+						// 		true, NULL, 6, scanKey);
+
+
+						if(privilege_exists_in_bbf_schema_permissions(bbf_schema_perm_rel, scanKey, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, grantee, OBJ_DATABASE, grantor, false))
+						{
+							update_privileges_of_object(bbf_schema_perm_rel, scanKey, PERMISSIONS_FOR_DATABASE, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, ACL_CONNECT, grantee, OBJ_DATABASE, false, grantor, false);
+						}
+						// systable_endscan(scan);
+						table_close(bbf_schema_perm_rel, RowExclusiveLock);
+					}
+
 					/*
 					 * We have performed all the permissions checks.
 					 * Set current user to bbf_role_admin for drop permissions.
@@ -4647,206 +4724,9 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				Assert(list_length(grant->objects) == 1);
 				if (grant->objtype == OBJECT_SCHEMA)
 						break;
-				else if (grant->objtype == OBJECT_TABLE && strcmp(CREATE_LOGICAL_DATABASE, queryString) != 0 && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0)
+				else if ((grant->objtype == OBJECT_TABLE && strcmp(CREATE_LOGICAL_DATABASE, queryString) != 0 && strcmp(queryString, CREATE_FIXED_DB_ROLES) != 0) || (grant->objtype == OBJECT_PROCEDURE) || (grant->objtype == OBJECT_FUNCTION))
 				{
-					/*
-					 * Ignore GRANT statements that are executed implicitly as a part of
-					 * CREATE database statements. Refer: create_bbf_db_internal().
-					 * These GRANT statement are just executed at the end, without checking any
-					 * schema permission or adding catalog entry.
-					 */
-					RangeVar   *rv = (RangeVar *) linitial(grant->objects);
-					const char *current_user = GetUserNameFromId(GetUserId(), false);
-					const char *logical_schema = NULL;
-					char	   *obj = rv->relname;
-					bool exec_pg_command = false;
-					ListCell   *lc;
-					ListCell	*lc1;
-					if (rv->schemaname != NULL)
-						logical_schema = get_logical_schema_name(rv->schemaname, false);
-					else
-						logical_schema = get_authid_user_ext_schema_name(dbname, current_user);
-
-					/* If ALL PRIVILEGES is granted/revoked. */
-					if (list_length(grant->privileges) == 0)
-					{
-						if (grant->is_grant)
-						{
-							foreach(lc, grant->grantees)
-							{
-								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-								/* Special database roles should throw an error. */
-								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-								add_or_update_object_in_bbf_schema(logical_schema, obj, ALL_PERMISSIONS_ON_RELATION, rol_spec->rolename, OBJ_RELATION, true, NULL);
-							}
-						}
-						else
-						{
-							foreach(lc, grant->grantees)
-							{
-								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-								/* Special database roles should throw an error. */
-								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-								/*
-								 * 1. If permission on schema exists, don't revoke any permission from the object.
-								 * 2. If permission on object exists, update the privilege in the catalog and revoke permission.
-								 */
-								update_privileges_of_object(logical_schema, obj, ALL_PERMISSIONS_ON_RELATION, rol_spec->rolename, OBJ_RELATION, false);
-								if (privilege_exists_in_bbf_schema_permissions(logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rol_spec->rolename, OBJ_SCHEMA))
-									return;
-							}
-						}
-						exec_pg_command = true;
-					}
-					foreach(lc1, grant->privileges)
-					{
-						AccessPriv *ap = (AccessPriv *) lfirst(lc1);
-						AclMode privilege = string_to_privilege(ap->priv_name);
-						if (grant->is_grant)
-						{
-							exec_pg_command = true;
-							/* Don't add/update an entry, if the permission is granted on column list.*/
-							if (ap->cols == NULL)
-							{
-								foreach(lc, grant->grantees)
-								{
-									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-									/* Special database roles should throw an error. */
-									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-									add_or_update_object_in_bbf_schema(logical_schema, obj, privilege, rol_spec->rolename, OBJ_RELATION, true, NULL);
-								}
-							}
-						}
-						else
-						{
-							/* Don't update an entry, if the permission is granted on column list.*/
-							if (ap->cols == NULL)
-							{
-								foreach(lc, grant->grantees)
-								{
-									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-									/* Special database roles should throw an error. */
-									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-									/*
-									 * If permission on schema exists, don't revoke any permission from the object.
-									 */
-									if (!exec_pg_command && !privilege_exists_in_bbf_schema_permissions(logical_schema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rol_spec->rolename, OBJ_SCHEMA))
-										exec_pg_command = true;
-
-									update_privileges_of_object(logical_schema, obj, privilege, rol_spec->rolename, OBJ_RELATION, false);
-								}
-							}
-						}
-					}
-					if (exec_pg_command)
-						call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
-					return;
-				}
-				else if ((grant->objtype == OBJECT_PROCEDURE) || (grant->objtype == OBJECT_FUNCTION))
-				{
-					ObjectWithArgs  *ob = (ObjectWithArgs *) linitial(grant->objects);
-					const char *current_user = GetUserNameFromId(GetUserId(), false);
-					ListCell   *lc;
-					ListCell	*lc1;
-					bool exec_pg_command = false;
-					const char *logicalschema = NULL;
-					char *funcname = NULL;
-					const char *obj_type = NULL;
-					Oid func_oid = LookupFuncWithArgs(OBJECT_ROUTINE, ob, true);
-					const char *func_args = NULL;
-					if (OidIsValid(func_oid))
-						func_args = gen_func_arg_list(func_oid);
-					if (grant->objtype == OBJECT_FUNCTION)
-						obj_type = OBJ_FUNCTION;
-					else
-						obj_type = OBJ_PROCEDURE;
-					if (list_length(ob->objname) == 1)
-					{
-						Node *func = (Node *) linitial(ob->objname);
-						funcname = strVal(func);
-						logicalschema = get_authid_user_ext_schema_name(dbname, current_user);
-					}
-					else
-					{
-						Node *schema = (Node *) linitial(ob->objname);
-						char *schemaname = strVal(schema);
-						Node *func = (Node *) lsecond(ob->objname);
-						logicalschema = get_logical_schema_name(schemaname, true);
-						funcname = strVal(func);
-					}
-
-					/* If ALL PRIVILEGES is granted/revoked. */
-					if (list_length(grant->privileges) == 0)
-					{
-						if (grant->is_grant)
-						{
-							foreach(lc, grant->grantees)
-							{
-								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-								/* Special database roles should throw an error. */
-								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-								add_or_update_object_in_bbf_schema(logicalschema, funcname, ALL_PERMISSIONS_ON_FUNCTION, rol_spec->rolename, obj_type, true, func_args);
-							}
-						}
-						else
-						{
-							foreach(lc, grant->grantees)
-							{
-								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-								/* Special database roles should throw an error. */
-								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-								/*
-								 * 1. If permission on schema exists, don't revoke any permission from the object.
-								 * 2. If permission on object exists, update the privilege in the catalog and revoke permission.
-								 */
-								update_privileges_of_object(logicalschema, funcname, ALL_PERMISSIONS_ON_FUNCTION, rol_spec->rolename, obj_type, false);
-								if (privilege_exists_in_bbf_schema_permissions(logicalschema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rol_spec->rolename, OBJ_SCHEMA))
-									return;
-							}
-						}
-						exec_pg_command = true;
-					}
-					foreach(lc1, grant->privileges)
-					{
-						AccessPriv *ap = (AccessPriv *) lfirst(lc1);
-						AclMode privilege = string_to_privilege(ap->priv_name);
-						if (grant->is_grant)
-						{
-							exec_pg_command = true;
-							if (strcmp(INTERNAL_GRANT_STATEMENT, queryString) != 0)
-							{
-								/*
-								 * If it is an implicit GRANT issued by exec_internal_grant_on_function, then we should not add catalog
-								 * entry. Catalog entry is supposed to be added only by explicit GRANTs.
-								 */
-								foreach(lc, grant->grantees)
-								{
-									RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-									/* Special database roles should throw an error. */
-									throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-									add_or_update_object_in_bbf_schema(logicalschema, funcname, privilege, rol_spec->rolename, obj_type, true, func_args);
-								}
-							}
-						}
-						else
-						{
-							foreach(lc, grant->grantees)
-							{
-								RoleSpec	   *rol_spec = (RoleSpec *) lfirst(lc);
-								/* Special database roles should throw an error. */
-								throw_error_for_fixed_db_role(rol_spec->rolename, dbname);
-								/*
-								 * If permission on schema exists, don't revoke any permission from the object.
-								 */
-								if (!exec_pg_command && !privilege_exists_in_bbf_schema_permissions(logicalschema, PERMISSIONS_FOR_ALL_OBJECTS_IN_SCHEMA, rol_spec->rolename, OBJ_SCHEMA))
-									exec_pg_command = true;
-								/* Update the privilege in the catalog. */
-								update_privileges_of_object(logicalschema, funcname, privilege, rol_spec->rolename, obj_type, false);
-							}
-						}
-					}
-					if (exec_pg_command)
-						call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
+					call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
 					return;
 				}
 				pfree(db_datareader);
