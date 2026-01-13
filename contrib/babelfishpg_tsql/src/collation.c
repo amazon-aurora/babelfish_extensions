@@ -1661,7 +1661,7 @@ pltsql_strpos_non_determinstic(text *src_text, text *substr_text, Oid collid, in
 										substr_ulen,
 										src_uchar,
 										src_ulen,
-										mylocale->info.icu.ucol,
+										mylocale->icu.ucol,
 										NULL,
 										&status);
 
@@ -1705,7 +1705,7 @@ pltsql_strpos_non_determinstic(text *src_text, text *substr_text, Oid collid, in
 			pos_prev_loop = u16_pos;
 
 			/* for CS_AI collations usearch can give false positives so we double check the results here */
-			if (!(is_CS_AI && icu_compare_utf8_coll(mylocale->info.icu.ucol, &src_uchar[usearch_getMatchedStart(usearch)], usearch_getMatchedLength(usearch), substr_uchar, substr_ulen, false) != 0))
+			if (!(is_CS_AI && icu_compare_utf8_coll(mylocale->icu.ucol, &src_uchar[usearch_getMatchedStart(usearch)], usearch_getMatchedLength(usearch), substr_uchar, substr_ulen, false) != 0))
 			{
 				u8_pos = translate_char_pos(VARDATA_ANY(src_text), src_len_utf8,
 										src_uchar, src_ulen, u16_pos,
@@ -1779,7 +1779,7 @@ pltsql_replace_non_determinstic(text *src_text, text *from_text, text *to_text, 
 										from_ulen,
 										src_uchar, /* haystack */
 										src_ulen,
-										mylocale->info.icu.ucol,
+										mylocale->icu.ucol,
 										NULL,
 										&status);
 
@@ -1823,7 +1823,7 @@ pltsql_replace_non_determinstic(text *src_text, text *from_text, text *to_text, 
 			pos_prev_loop = pos;
 
 			/* for CS_AI collations usearch can give false positives so we double check the results here */
-			if (is_CS_AI && icu_compare_utf8_coll(mylocale->info.icu.ucol, &src_uchar[usearch_getMatchedStart(usearch)], usearch_getMatchedLength(usearch), from_uchar, from_ulen, false) != 0)
+			if (is_CS_AI && icu_compare_utf8_coll(mylocale->icu.ucol, &src_uchar[usearch_getMatchedStart(usearch)], usearch_getMatchedLength(usearch), from_uchar, from_ulen, false) != 0)
 				continue;
 
 			/* reject if overlaps with the last successful match */
@@ -2049,7 +2049,7 @@ icu_find_matched_length(char *src_text, int src_len, char *substr_text, int subs
 										substr_ulen,
 										src_uchar,
 										src_ulen,
-										mylocale->info.icu.ucol,
+										mylocale->icu.ucol,
 										NULL,
 										&status);
 		if (U_FAILURE(status))
@@ -2061,7 +2061,7 @@ icu_find_matched_length(char *src_text, int src_len, char *substr_text, int subs
 		/* substr should start matching from the first position in src string */
 		u16_pos = usearch_first(usearch, &status);
 		if (!U_FAILURE(status) && u16_pos != USEARCH_DONE && u16_pos == 0 && (!is_cs_ai ||
-		    icu_compare_utf8_coll(mylocale->info.icu.ucol, src_uchar, usearch_getMatchedLength(usearch), substr_uchar, substr_ulen, false) == 0))
+		    icu_compare_utf8_coll(mylocale->icu.ucol, src_uchar, usearch_getMatchedLength(usearch), substr_uchar, substr_ulen, false) == 0))
 		{
 			/* u16 position will only be zero */
 			matched_length_u16 = usearch_getMatchedLength(usearch);
@@ -2183,8 +2183,8 @@ patindex_ai_match_text(pg_locale_t mylocale, char *input_str, char *pattern, Oid
 						prev_ulen = icu_to_uchar(&prev_uchar, prev, pg_mblen(prev));
 						p_ulen = icu_to_uchar(&p_uchar, p, pg_mblen(p));
 
-						if (icu_compare_utf8_coll(mylocale->info.icu.ucol, t_uchar, t_ulen, prev_uchar, prev_ulen, is_cs_ai) >= 0 &&
-						    icu_compare_utf8_coll(mylocale->info.icu.ucol, t_uchar, t_ulen, p_uchar, p_ulen, is_cs_ai) <= 0)
+						if (icu_compare_utf8_coll(mylocale->icu.ucol, t_uchar, t_ulen, prev_uchar, prev_ulen, is_cs_ai) >= 0 &&
+						    icu_compare_utf8_coll(mylocale->icu.ucol, t_uchar, t_ulen, p_uchar, p_ulen, is_cs_ai) <= 0)
 						{
 							find_match = true; 
 						}

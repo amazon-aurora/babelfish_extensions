@@ -1981,10 +1981,10 @@ hashvarchar(PG_FUNCTION_ARGS)
 
 			ulen = icu_to_uchar(&uchar, keydata, keylen);
 
-			bsize = ucol_getSortKey(mylocale->info.icu.ucol,
+			bsize = ucol_getSortKey(mylocale->icu.ucol,
 									uchar, ulen, NULL, 0);
 			buf = palloc(bsize);
-			ucol_getSortKey(mylocale->info.icu.ucol,
+			ucol_getSortKey(mylocale->icu.ucol,
 							uchar, ulen, buf, bsize);
 
 			result = hash_any(buf, bsize);
