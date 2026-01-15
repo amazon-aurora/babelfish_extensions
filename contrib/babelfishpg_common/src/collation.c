@@ -1,6 +1,7 @@
 #include "postgres.h"
 #include "varatt.h"
 
+#include "access/htup_details.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"

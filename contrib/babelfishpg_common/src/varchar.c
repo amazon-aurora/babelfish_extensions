@@ -16,6 +16,7 @@
 #include "varatt.h"
 
 #include "access/hash.h"
+#include "access/htup_details.h"
 #include "collation.h"
 #include "common/shortest_dec.h"
 #include "catalog/pg_collation.h"
