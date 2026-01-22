@@ -272,7 +272,7 @@ static bool is_bbf_db_ddladmin_operation(Oid namespaceId);
 /*****************************************
  * 			Planner Hook
  *****************************************/
-static PlannedStmt *pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams);
+static PlannedStmt *pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams, ExplainState *es);
 
 /*****************************************
  * 			parser Hook
@@ -6010,7 +6010,7 @@ update_rte_perms_info_walker(Node *node, void *context)
 }
 
 static PlannedStmt *
-pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams)
+pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams, ExplainState *es)
 {
 	PlannedStmt *plan;
 	PLtsql_execstate *estate = NULL;
@@ -6025,9 +6025,9 @@ pltsql_planner_hook(Query *parse, const char *query_string, int cursorOptions, P
 		INSTR_TIME_SET_CURRENT(estate->planning_start);
 	}
 	if (prev_planner_hook)
-		plan = prev_planner_hook(parse, query_string, cursorOptions, boundParams);
+		plan = prev_planner_hook(parse, query_string, cursorOptions, boundParams, es);
 	else
-		plan = standard_planner(parse, query_string, cursorOptions, boundParams);
+		plan = standard_planner(parse, query_string, cursorOptions, boundParams, es);
 	if (pltsql_explain_analyze)
 	{
 		INSTR_TIME_SET_CURRENT(estate->planning_end);
