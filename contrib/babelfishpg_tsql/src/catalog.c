@@ -135,6 +135,12 @@ Oid	bbf_partition_scheme_seq_oid = InvalidOid;
 Oid	bbf_partition_depend_oid = InvalidOid;
 Oid	bbf_partition_depend_idx_oid = InvalidOid;
 
+/*****************************************
+ *			TRUNCATED_IDENTIFIER
+ *****************************************/
+Oid	bbf_truncated_ident_oid = InvalidOid;
+Oid	bbf_truncated_ident_idx_oid = InvalidOid;
+
 
 /*****************************************
  * 			Catalog General
@@ -207,6 +213,17 @@ static struct cachedesc my_cacheinfo[] = {
 			0
 		},
 		16
+	},
+	{-1,						/* TRUNCATEDIDENTNAME */
+		-1,
+		4,
+		{
+			Anum_bbf_truncated_ident_truncated_name,
+			Anum_bbf_truncated_ident_dbid,
+			Anum_bbf_truncated_ident_schema_name,
+			Anum_bbf_truncated_ident_object_type
+		},
+		128
 	}
 };
 
@@ -250,6 +267,8 @@ init_catalog(PG_FUNCTION_ARGS)
 	my_cacheinfo[3].indoid = namespace_ext_idx_oid_oid;
 	my_cacheinfo[4].reloid = bbf_authid_user_ext_oid;
 	my_cacheinfo[4].indoid = bbf_authid_user_ext_idx_oid;
+	my_cacheinfo[5].reloid = bbf_truncated_ident_oid;
+	my_cacheinfo[5].indoid = bbf_truncated_ident_idx_oid;
 
 	/* login ext */
 	bbf_authid_login_ext_oid = get_relname_relid(BBF_AUTHID_LOGIN_EXT_TABLE_NAME,
@@ -302,6 +321,10 @@ init_catalog(PG_FUNCTION_ARGS)
 	bbf_partition_depend_oid = get_bbf_partition_depend_oid();
 	bbf_partition_depend_idx_oid = get_bbf_partition_depend_idx_oid();
 
+	/* bbf_truncated_identifier */
+	bbf_truncated_ident_oid = get_bbf_truncated_ident_oid();
+	bbf_truncated_ident_idx_oid = get_bbf_truncated_ident_idx_oid();
+
 	if (sysdatabases_oid != InvalidOid)
 		initTsqlSyscache();
 
@@ -315,7 +338,7 @@ initTsqlSyscache()
 	/* Initialize info for catcache */
 	if (!tsql_syscache_inited)
 	{
-		InitExtensionCatalogCache(my_cacheinfo, SYSDATABASEOID, 5);
+		InitExtensionCatalogCache(my_cacheinfo, SYSDATABASEOID, 6);
 		tsql_syscache_inited = true;
 	}
 }
@@ -341,7 +364,7 @@ IsPLtsqlExtendedCatalog(Oid relationId)
 		relationId == bbf_syslanguages_oid || relationId == bbf_service_settings_oid ||
 		relationId == spt_datatype_info_table_oid || relationId == bbf_versions_oid ||
 		relationId == bbf_partition_function_oid || relationId == bbf_partition_scheme_oid ||
-		relationId == bbf_partition_depend_oid))
+		relationId == bbf_partition_depend_oid || relationId == bbf_truncated_ident_oid))
 		return true;
 	if (PrevIsExtendedCatalogHook)
 		return (*PrevIsExtendedCatalogHook) (relationId);
@@ -1922,6 +1945,163 @@ get_bbf_partition_depend_idx_oid()
 									get_namespace_oid("sys", false));
 
 	return bbf_partition_depend_idx_oid;
+}
+
+/*****************************************
+ *			TRUNCATED_IDENTIFIER
+ *****************************************/
+Oid
+get_bbf_truncated_ident_oid(void)
+{
+	if (!OidIsValid(bbf_truncated_ident_oid))
+		bbf_truncated_ident_oid = get_relname_relid(BBF_TRUNCATED_IDENT_TABLE_NAME,
+													 get_namespace_oid("sys", false));
+
+	return bbf_truncated_ident_oid;
+}
+
+Oid
+get_bbf_truncated_ident_idx_oid(void)
+{
+	if (!OidIsValid(bbf_truncated_ident_idx_oid))
+		bbf_truncated_ident_idx_oid = get_relname_relid(BBF_TRUNCATED_IDENT_IDX_NAME,
+														 get_namespace_oid("sys", false));
+
+	return bbf_truncated_ident_idx_oid;
+}
+
+void
+insert_bbf_truncated_ident(const char *truncated_name,
+						   const char *original_name,
+						   int16 dbid,
+						   const char *schema_name,
+						   const char *object_type,
+						   const char *parent_name)
+{
+	Relation	rel;
+	TupleDesc	dsc;
+	HeapTuple	tuple;
+	Datum		new_record[BBF_TRUNCATED_IDENT_NUM_COLS];
+	bool		new_record_nulls[BBF_TRUNCATED_IDENT_NUM_COLS];
+
+	MemSet(new_record, 0, sizeof(new_record));
+	MemSet(new_record_nulls, false, sizeof(new_record_nulls));
+
+	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
+	dsc = RelationGetDescr(rel);
+
+	new_record[Anum_bbf_truncated_ident_truncated_name - 1] =
+		CStringGetTextDatum(truncated_name);
+	new_record[Anum_bbf_truncated_ident_original_name - 1] =
+		CStringGetTextDatum(original_name);
+	new_record[Anum_bbf_truncated_ident_dbid - 1] = Int16GetDatum(dbid);
+	new_record[Anum_bbf_truncated_ident_schema_name - 1] =
+		DirectFunctionCall1(namein, CStringGetDatum(schema_name));
+	new_record[Anum_bbf_truncated_ident_object_type - 1] =
+		CStringGetTextDatum(object_type);
+	new_record[Anum_bbf_truncated_ident_parent_name - 1] =
+		CStringGetTextDatum(parent_name ? parent_name : "");
+
+	tuple = heap_form_tuple(dsc, new_record, new_record_nulls);
+
+	CatalogTupleInsert(rel, tuple);
+
+	heap_freetuple(tuple);
+	table_close(rel, RowExclusiveLock);
+
+	CommandCounterIncrement();
+}
+
+char *
+lookup_bbf_truncated_ident(const char *truncated_name,
+						   int16 dbid,
+						   const char *schema_name,
+						   const char *object_type)
+{
+	HeapTuple	tuple;
+	char	   *result = NULL;
+
+	tuple = SearchSysCache4(TRUNCATEDIDENTNAME,
+							CStringGetTextDatum(truncated_name),
+							Int16GetDatum(dbid),
+							DirectFunctionCall1(namein, CStringGetDatum(schema_name)),
+							CStringGetTextDatum(object_type));
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isnull;
+		Datum	datum;
+
+		datum = SysCacheGetAttr(TRUNCATEDIDENTNAME, tuple,
+								Anum_bbf_truncated_ident_original_name, &isnull);
+		if (!isnull)
+			result = TextDatumGetCString(datum);
+
+		ReleaseSysCache(tuple);
+	}
+
+	return result;
+}
+
+void
+clean_up_bbf_truncated_ident_for_schema(const char *schema_name)
+{
+	SysScanDesc scan;
+	Relation	rel;
+	HeapTuple	tuple;
+	ScanKeyData scanKey[2];
+	int16		dbid = get_cur_db_id();
+
+	if (schema_name == NULL)
+		return;
+
+	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0],
+				Anum_bbf_truncated_ident_dbid,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(dbid));
+	ScanKeyInit(&scanKey[1],
+				Anum_bbf_truncated_ident_schema_name,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				DirectFunctionCall1(namein, CStringGetDatum(schema_name)));
+
+	scan = systable_beginscan(rel, InvalidOid, false, NULL, 2, scanKey);
+
+	while ((tuple = systable_getnext(scan)) != NULL)
+	{
+		if (HeapTupleIsValid(tuple))
+			CatalogTupleDelete(rel, &tuple->t_self);
+	}
+
+	systable_endscan(scan);
+	table_close(rel, RowExclusiveLock);
+}
+
+void
+clean_up_bbf_truncated_ident_for_db(int16 dbid)
+{
+	SysScanDesc scan;
+	Relation	rel;
+	HeapTuple	tuple;
+	ScanKeyData scanKey[1];
+
+	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0],
+				Anum_bbf_truncated_ident_dbid,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(dbid));
+
+	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, scanKey);
+
+	while ((tuple = systable_getnext(scan)) != NULL)
+	{
+		if (HeapTupleIsValid(tuple))
+			CatalogTupleDelete(rel, &tuple->t_self);
+	}
+
+	systable_endscan(scan);
+	table_close(rel, RowExclusiveLock);
 }
 
 /*****************************************

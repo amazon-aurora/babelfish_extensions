@@ -18,27 +18,23 @@ with tt_internal as MATERIALIZED
   select * from sys.table_types_internal
 )
 select
-  CAST(t.relname as sys._ci_sysname) as name
+  CAST(COALESCE(
+    (SELECT ti.original_identifier_name
+     FROM sys.babelfish_truncated_identifier ti
+     WHERE CAST(t.relname AS sys.NVARCHAR(128)) = ti.truncated_identifier_name
+       AND ti.dbid = sys.db_id()
+       AND ti.schema_name = sch.name COLLATE sys.database_default
+       AND ti.object_type = 'TABLE'),
+    CAST(t.relname AS sys.NVARCHAR(128))
+  ) as sys._ci_sysname) as name
   , CAST(t.oid as int) as object_id
   , CAST(NULL as int) as principal_id
   , CAST(t.relnamespace  as int) as schema_id
   , 0 as parent_object_id
   , CAST('U' as sys.bpchar(2)) as type
   , CAST('USER_TABLE' as sys.nvarchar(60)) as type_desc
-  , CAST((select PG_CATALOG.string_agg(
-                  case
-                  when option like 'bbf_rel_create_date=%%' then substring(option, 21)
-                  else NULL
-                  end, ',')
-          from unnest(t.reloptions) as option)
-        as sys.datetime) as create_date
-  , CAST((select PG_CATALOG.string_agg(
-                  case
-                  when option like 'bbf_rel_create_date=%%' then substring(option, 21)
-                  else NULL
-                  end, ',')
-          from unnest(t.reloptions) as option)
-        as sys.datetime) as modify_date
+  , CAST(cd.create_date as sys.datetime) as create_date
+  , CAST(cd.create_date as sys.datetime) as modify_date
   , CAST(0 as sys.bit) as is_ms_shipped
   , CAST(0 as sys.bit) as is_published
   , CAST(0 as sys.bit) as is_schema_published
@@ -69,6 +65,12 @@ select
 from pg_class t
 inner join sys.schemas sch on sch.schema_id = t.relnamespace
 left join tt_internal tt on t.oid = tt.typrelid
+left join lateral (
+  select PG_CATALOG.string_agg(
+    case when option like 'bbf_rel_create_date=%%' then substring(option, 21) else NULL end, ',')
+    as create_date
+  from unnest(t.reloptions) as option
+) cd on true
 where tt.typrelid is null
 and (t.relkind = 'r' or t.relkind = 'p')
 and t.relispartition = false

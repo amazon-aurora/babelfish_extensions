@@ -2775,6 +2775,16 @@ tsql_CreatePartitionStmt:
 					n->oncommit = ONCOMMIT_NOOP;
 					n->tablespacename = NULL;
 					n->if_not_exists = false;
+					if (sql_dialect == SQL_DIALECT_TSQL && extract_identifier_hook)
+					{
+						base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+						char *original_name = (*extract_identifier_hook)(yyextra->core_yy_extra.scanbuf + @4, NULL);
+						if (original_name)
+							n->options = lappend(n->options,
+									makeDefElem("original_table_name",
+										(Node *)makeString(original_name),
+										@4));
+					}
 					$$ = (Node *) n;
 				}
 		;

@@ -4685,6 +4685,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						 * of drop database command.
 						 */
 						clean_up_bbf_schema_permissions(logicalschema, NULL, true);
+						clean_up_bbf_truncated_ident_for_schema(schemaname);
 					}
 
 					if (prev_ProcessUtility)
@@ -4936,6 +4937,110 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				else
 					standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
 											queryEnv, dest, qc);
+
+				/* Store original name if identifier was truncated */
+				if (sql_dialect == SQL_DIALECT_TSQL)
+				{
+					ListCell   *lc_opt;
+					const char *schema_name = rel->schemaname;
+					int16		dbid = get_cur_db_id();
+
+					if (!schema_name)
+					{
+						Oid nspid = RangeVarGetAndCheckCreationNamespace(rel, NoLock, NULL);
+						schema_name = get_namespace_name(nspid);
+					}
+					schema_name = get_logical_schema_name(schema_name, true);
+
+					/* Store original table name if truncated */
+					foreach(lc_opt, create_stmt->options)
+					{
+						DefElem *defel = (DefElem *) lfirst(lc_opt);
+
+						if (strcmp(defel->defname, "original_table_name") == 0)
+						{
+							insert_bbf_truncated_ident(rel->relname,
+													  strVal(defel->arg),
+													  dbid,
+													  schema_name,
+													  BBF_TRUNCATED_IDENT_OBJ_TABLE,
+													  NULL);
+							break;
+						}
+					}
+
+					/* Store original constraint names if truncated */
+					foreach(lc_opt, create_stmt->tableElts)
+					{
+						Node *elt = (Node *) lfirst(lc_opt);
+
+						if (IsA(elt, ColumnDef))
+						{
+							ColumnDef  *col = (ColumnDef *) elt;
+							ListCell   *lc_con;
+
+							if (col->location >= 0)
+							{
+								char *original_name = extract_identifier(queryString + col->location, NULL);
+								if (original_name)
+									insert_bbf_truncated_ident(col->colname,
+															  original_name,
+															  dbid,
+															  schema_name,
+															  BBF_TRUNCATED_IDENT_OBJ_COLUMN,
+															  rel->relname);
+							}
+
+							foreach(lc_con, col->constraints)
+							{
+								Node *con_node = (Node *) lfirst(lc_con);
+
+								if (IsA(con_node, Constraint))
+								{
+									Constraint *con = (Constraint *) con_node;
+									ListCell   *lc_con_opt;
+
+									foreach(lc_con_opt, con->options)
+									{
+										DefElem *defel = (DefElem *) lfirst(lc_con_opt);
+
+										if (strcmp(defel->defname, "original_constraint_name") == 0)
+										{
+											insert_bbf_truncated_ident(con->conname,
+																		  strVal(defel->arg),
+																		  dbid,
+																		  schema_name,
+																		  BBF_TRUNCATED_IDENT_OBJ_CONSTRAINT,
+																		  NULL);
+											break;
+										}
+									}
+								}
+							}
+						}
+						else if (IsA(elt, Constraint))
+						{
+							Constraint *con = (Constraint *) elt;
+							ListCell   *lc_con_opt;
+
+							foreach(lc_con_opt, con->options)
+							{
+								DefElem *defel = (DefElem *) lfirst(lc_con_opt);
+
+								if (strcmp(defel->defname, "original_constraint_name") == 0)
+								{
+									insert_bbf_truncated_ident(con->conname,
+															  strVal(defel->arg),
+															  dbid,
+															  schema_name,
+															  BBF_TRUNCATED_IDENT_OBJ_CONSTRAINT,
+															  NULL);
+									break;
+								}
+							}
+						}
+					}
+				}
 
 				/*
 				 * Create partitions of babelfish partitioned table
@@ -7592,11 +7697,25 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 	AlterTableStmt *altstmt;
 	IntoClause *into;
 	Node *n;
+	const char *orig_select_into_name = NULL;
+	ListCell *option;
 
 	n = stmt->query;
 	into = stmt->into;
 	result = NIL;
 	altstmt = NULL;
+
+	foreach(option, into->options)
+	{
+		DefElem *defel = (DefElem *) lfirst(option);
+		if (strcmp(defel->defname, "original_select_into_name") == 0)
+		{
+			if (defel->arg){
+				orig_select_into_name = strVal(defel->arg);
+				into->rel->relname = pstrdup(orig_select_into_name);
+			}
+		}
+	}
 
 	if (n && n->type == T_Query)
 	{
@@ -7633,6 +7752,8 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 		altstmt->relation = into->rel;
 		altstmt->objtype = OBJECT_TABLE;
 		altstmt->cmds = NIL;
+
+
 
 		foreach (elements, q->targetList)
 		{

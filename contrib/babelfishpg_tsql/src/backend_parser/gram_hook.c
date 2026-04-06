@@ -24,6 +24,7 @@ install_backend_gram_hooks()
 	validate_numeric_typmods_hook = TsqlValidateNumericTypmods;
 	check_recursive_cte_hook = tsql_is_recursive_cte;
 	fix_domain_typmods_hook = fix_tsql_domain_typmods;
+	extract_identifier_hook = extract_identifier;
 }
 
 /*

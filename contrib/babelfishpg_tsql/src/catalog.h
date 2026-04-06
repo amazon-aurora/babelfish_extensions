@@ -535,6 +535,61 @@ typedef struct FormData_bbf_extended_properties
 typedef FormData_bbf_extended_properties *Form_bbf_extended_properties;
 
 /*****************************************
+ *			TRUNCATED_IDENTIFIER
+ *****************************************/
+#define BBF_TRUNCATED_IDENT_TABLE_NAME "babelfish_truncated_identifier"
+#define BBF_TRUNCATED_IDENT_IDX_NAME "babelfish_truncated_identifier_pkey"
+
+#define BBF_TRUNCATED_IDENT_OBJ_TABLE "TABLE"
+#define BBF_TRUNCATED_IDENT_OBJ_TEMP_TABLE "TEMP_TABLE"
+#define BBF_TRUNCATED_IDENT_OBJ_VIEW "VIEW"
+#define BBF_TRUNCATED_IDENT_OBJ_INDEX "INDEX"
+#define BBF_TRUNCATED_IDENT_OBJ_TRIGGER "TRIGGER"
+#define BBF_TRUNCATED_IDENT_OBJ_PROCEDURE "PROCEDURE"
+#define BBF_TRUNCATED_IDENT_OBJ_FUNCTION "FUNCTION"
+#define BBF_TRUNCATED_IDENT_OBJ_TYPE "TYPE"
+#define BBF_TRUNCATED_IDENT_OBJ_COLUMN "COLUMN"
+#define BBF_TRUNCATED_IDENT_OBJ_CONSTRAINT "CONSTRAINT"
+
+#define Anum_bbf_truncated_ident_truncated_name 1
+#define Anum_bbf_truncated_ident_original_name 2
+#define Anum_bbf_truncated_ident_dbid 3
+#define Anum_bbf_truncated_ident_schema_name 4
+#define Anum_bbf_truncated_ident_object_type 5
+#define Anum_bbf_truncated_ident_parent_name 6
+#define BBF_TRUNCATED_IDENT_NUM_COLS 6
+
+extern Oid	bbf_truncated_ident_oid;
+extern Oid	bbf_truncated_ident_idx_oid;
+
+extern Oid	get_bbf_truncated_ident_oid(void);
+extern Oid	get_bbf_truncated_ident_idx_oid(void);
+extern void	insert_bbf_truncated_ident(const char *truncated_name,
+									   const char *original_name,
+									   int16 dbid,
+									   const char *schema_name,
+									   const char *object_type,
+									   const char *parent_name);
+extern char	*lookup_bbf_truncated_ident(const char *truncated_name,
+									   int16 dbid,
+									   const char *schema_name,
+									   const char *object_type);
+extern void	clean_up_bbf_truncated_ident_for_schema(const char *schema_name);
+extern void	clean_up_bbf_truncated_ident_for_db(int16 dbid);
+
+typedef struct FormData_bbf_truncated_ident
+{
+	VarChar		truncated_name;
+	VarChar		original_name;
+	int16		dbid;
+	NameData	schema_name;
+	VarChar		object_type;
+	VarChar		parent_name;
+} FormData_bbf_truncated_ident;
+
+typedef FormData_bbf_truncated_ident *Form_bbf_truncated_ident;
+
+/*****************************************
  *			Metadata Check Rule
  *****************************************/
 

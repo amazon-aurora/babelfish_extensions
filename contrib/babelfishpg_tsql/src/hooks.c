@@ -3639,6 +3639,7 @@ bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int s
 	{
 		revoke_func_permission_from_public(objectId);
 		exec_internal_grant_on_function(objectId);
+		//store_truncated_identifier(objectId);
 	}
 
 	if (access == OAT_POST_CREATE)

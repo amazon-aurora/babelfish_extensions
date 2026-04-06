@@ -299,6 +299,18 @@ BEGIN
 END
 $$;
 
+CREATE TABLE sys.babelfish_truncated_identifier (
+  truncated_identifier_name sys.NVARCHAR(128) NOT NULL,
+  original_identifier_name sys.NVARCHAR(128) NOT NULL,
+  dbid smallint NOT NULL,
+  schema_name name NOT NULL,
+  object_type sys.varchar(50) NOT NULL,
+  parent_name sys.NVARCHAR(128) NOT NULL DEFAULT '',
+  PRIMARY KEY (truncated_identifier_name, dbid, schema_name, object_type, parent_name)
+);
+
+GRANT SELECT on sys.babelfish_truncated_identifier TO PUBLIC;
+
 -- LOGIN EXT
 -- Note: change here requires change in FormData_authid_login_ext too
 CREATE TABLE sys.babelfish_authid_login_ext (
