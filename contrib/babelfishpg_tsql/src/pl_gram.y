@@ -1037,9 +1037,9 @@ decl_statement	: decl_varname opt_as decl_const decl_datatype decl_collate decl_
 						cp1 = new->refname;
 						cp2 = buf + strlen(buf);
 						/*
-						 * Don't trust standard_conforming_strings here;
-						 * it might change before we use the string.
-						 */
+						* Since standard_conforming_strings is always TRUE, backslashes
+						* are treated literally and E'' syntax is not needed.
+						*/
 						if (strchr(cp1, '\\') != NULL)
 							*cp2++ = ESCAPE_STRING_SYNTAX;
 						*cp2++ = '\'';
@@ -1646,8 +1646,8 @@ stmt_assign		: K_SET assign_var '='
 							cp1 = new_curvar->refname;
 							cp2 = buf + strlen(buf);
 							/*
-							 * Don't trust standard_conforming_strings here;
-							* it might change before we use the string.
+							* Since standard_conforming_strings is always TRUE, backslashes
+							* are treated literally and E'' syntax is not needed.
 							*/
 							if (strchr(cp1, '\\') != NULL)
 								*cp2++ = ESCAPE_STRING_SYNTAX;
