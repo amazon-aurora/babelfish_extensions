@@ -516,7 +516,7 @@ serverproperty(PG_FUNCTION_ARGS)
 	}
 	else if (strcasecmp(property, "SqlCharSet") == 0 || strcasecmp(property, "SqlSortOrder") == 0)
 	{
-		Datum		data = Int8GetDatum(0);
+		Datum		data = UInt8GetDatum(0);
 
 		/*
 		 * bytea        *result  =
