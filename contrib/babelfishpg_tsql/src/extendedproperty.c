@@ -26,6 +26,7 @@
 #include "utils/syscache.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
+#include "utils/tuplestore.h"
 
 #include "catalog.h"
 #include "extendedproperty.h"

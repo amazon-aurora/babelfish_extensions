@@ -23,6 +23,7 @@
 
 #include "postgres.h"
 #include "access/xact.h"
+#include "portability/instr_time.h"
 #include "catalog/pg_collation.h"
 #include "commands/defrem.h"
 #include "parser/parse_func.h"

@@ -20,6 +20,7 @@
 #include "utils/formatting.h"
 
 #include "collation.h"
+#include "utils/tuplestore.h"
 #include "encoding/encoding.h"
 #include "typecode.h"
 #include "sqlvariant.h"

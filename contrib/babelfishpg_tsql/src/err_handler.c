@@ -6,6 +6,7 @@
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
+#include "utils/tuplestore.h"
 
 #define FN_MAPPED_SYSTEM_ERROR_LIST_COLS 4
 PG_FUNCTION_INFO_V1(babel_list_mapped_error);
