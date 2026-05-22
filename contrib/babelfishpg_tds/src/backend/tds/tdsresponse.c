@@ -1233,8 +1233,6 @@ PrepareRowDescription(TupleDesc typeinfo, PlannedStmt *plannedstmt, List *target
 		 * Fill in column info that is common to all data types
 		 */
 		SetParamMetadataCommonInfo(col, finfo);
-		initStringInfo(&(col->colName));
-		appendStringInfoString(&col->colName, NameStr(att->attname));
 
 		/* Do we have a non-resjunk tlist item? */
 		while (tlist_item &&
@@ -1255,6 +1253,17 @@ PrepareRowDescription(TupleDesc typeinfo, PlannedStmt *plannedstmt, List *target
 			col->relOid = 0;
 			col->attrNum = 0;
 		}
+
+		/*
+		 * Use tle->resname for column name when available, as it can
+		 * hold the full original alias name beyond NAMEDATALEN limit.
+		 * att->attname is NameData (max 63 chars) and may be truncated.
+		 */
+		initStringInfo(&(col->colName));
+		if (tle && tle->resname)
+			appendStringInfoString(&col->colName, tle->resname);
+		else
+			appendStringInfoString(&col->colName, NameStr(att->attname));
 
 		SetAttributesForColmetada(col);
 

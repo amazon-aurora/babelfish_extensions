@@ -2380,7 +2380,7 @@ extract_identifier(const char *start, int *last_pos)
  *    is given as 'start'. This helper function basically returns the
  *    last part of the multipart identifier.
  */
-static char *
+char *
 extract_multipart_identifier_name(const char *start)
 {
 	int 	identifier_len = strlen(start);
@@ -2495,22 +2495,14 @@ pltsql_post_transform_table_definition(ParseState *pstate, RangeVar *relation, c
 	stmt->objtype = OBJECT_TABLE;
 
 	/*
-	 * Only store original_name if there's a difference, and if the difference
-	 * is only in capitalization
+	 * Store original_name in pg_class.reloptions as bbf_original_rel_name.
 	 */
-	if (strncmp(relname, original_name, strlen(relname)) != 0 && strncasecmp(relname, original_name, strlen(relname)) == 0)
-	{
-		/*
-		 * add "ALTER TABLE SET (bbf_original_table_name=<original_name>)" to
-		 * alist so that original_name will be stored in pg_class.reloptions
-		 */
-		cmd_orig_name = makeNode(AlterTableCmd);
-		cmd_orig_name->subtype = AT_SetRelOptions;
-		cmd_orig_name->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(original_name)), -1));
-		cmd_orig_name->behavior = DROP_RESTRICT;
-		cmd_orig_name->missing_ok = false;
-		stmt->cmds = lappend(stmt->cmds, cmd_orig_name);
-	}
+	cmd_orig_name = makeNode(AlterTableCmd);
+	cmd_orig_name->subtype = AT_SetRelOptions;
+	cmd_orig_name->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(original_name)), -1));
+	cmd_orig_name->behavior = DROP_RESTRICT;
+	cmd_orig_name->missing_ok = false;
+	stmt->cmds = lappend(stmt->cmds, cmd_orig_name);
 
 	/*
 	 * add "ALTER TABLE SET (bbf_rel_create_date=<datetime>)" to alist so that
@@ -2845,16 +2837,15 @@ pre_transform_target_entry(ResTarget *res, ParseState *pstate,
 				/* Sanity checks */
 				Assert(actual_alias_len > alias_len && alias_len >= 32);
 
-				/* First 32 characters of original_name are assigned to alias. */
-				/* cppcheck-suppress invalidFunctionArg */
-				memcpy(alias, original_name, (alias_len - 32));
-
-				/* Last 32 characters of identifier_name are assigned to alias, as actual alias is truncated. */
-				memcpy(alias + (alias_len - 32),
-					   identifier_name + (alias_len - 32), 
-	   				   32);
-
-				alias[alias_len] = '\0';
+				/*
+				 * Store the full original name as the alias. The TDS
+				 * response layer will use tle->resname (which is char *
+				 * and can hold any length) to send the full column name,
+				 * while att->attname (NameData, max 63 chars) will still
+				 * contain the truncated+MD5 version.
+				 */
+				pfree(alias);
+				alias = pstrdup(original_name);
 			}
 			else
 			{
@@ -3639,7 +3630,6 @@ bbf_object_access_hook(ObjectAccessType access, Oid classId, Oid objectId, int s
 	{
 		revoke_func_permission_from_public(objectId);
 		exec_internal_grant_on_function(objectId);
-		//store_truncated_identifier(objectId);
 	}
 
 	if (access == OAT_POST_CREATE)
@@ -4354,6 +4344,14 @@ pltsql_store_func_default_positions(ObjectAddress address, List *parameters, con
 		index.objectSubId = 0;
 		recordDependencyOn(&address, &index, DEPENDENCY_NORMAL);
 	}
+
+	/* Store truncated identifier for function/procedure if name was truncated */
+	if (original_name && strlen(original_name) >= NAMEDATALEN)
+		insert_bbf_truncated_ident(NameStr(form_proctup->proname),
+								  original_name,
+								  physical_schemaname,
+								  ProcedureRelationId,
+								  NULL);
 
 	pfree(func_signature);
 	pfree(physical_schemaname);

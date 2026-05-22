@@ -2187,6 +2187,7 @@ extern int	pltsql_yyparse(void);
 
 /* functions in hooks.c */
 extern char *extract_identifier(const char *start, int *last_pos);
+extern char *extract_multipart_identifier_name(const char *start);
 
 /* functions in pltsql_utils.c */
 extern char *gen_createfulltextindex_cmds(const char *table_name, const char *schema_name, const List *column_name, const char *index_name);
@@ -2201,6 +2202,7 @@ extern char *replace_special_chars_fts_impl(char *input_str);
 extern bool is_unique_index(Oid relid, const char *index_name);
 extern void exec_grantschema_subcmds(const char *schema, const char *rolname, bool is_grant, bool with_grant_option, AclMode privilege);
 extern void exec_add_original_index_name(char *idxname, char *schemaname, char *original_name);
+extern void exec_alter_sequence_set_original_name(RangeVar *seq, char *original_name);
 extern int	TsqlUTF8LengthInUTF16(const void *vin, int len);
 extern void TsqlCheckUTF16Length_bpchar(const char *s, int32 len, int32 maxlen, int charlen, bool isExplicit);
 extern void TsqlCheckUTF16Length_varchar(const char *s, int32 len, int32 maxlen, bool isExplicit);

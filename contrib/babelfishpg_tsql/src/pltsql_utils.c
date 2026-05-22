@@ -1944,6 +1944,53 @@ exec_add_original_index_name(char *idxname, char *schemaname, char *original_nam
 	CommandCounterIncrement();
 }
 
+void
+exec_alter_sequence_set_original_name(RangeVar *seq, char *original_name)
+{
+	List	   *parsetree_list;
+	Node	   *stmt;
+	PlannedStmt *wrapper;
+	AlterTableStmt *atstmt;
+	AlterTableCmd *cmd_orig_name;
+	char *query_str = "ALTER SEQUENCE dummy SET (dummy=dummy)";
+
+	parsetree_list = raw_parser(query_str, RAW_PARSE_DEFAULT);
+
+	if (list_length(parsetree_list) != 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("Expected 1 statement but get %d statements after parsing",
+						list_length(parsetree_list))));
+
+	/* Update the dummy statement with real values */
+	stmt = parsetree_nth_stmt(parsetree_list, 0);
+	atstmt = castNode(AlterTableStmt, stmt);
+	atstmt->relation->relname = seq->relname;
+	if (seq->schemaname != NULL)
+		atstmt->relation->schemaname = seq->schemaname;
+	cmd_orig_name = castNode(AlterTableCmd, linitial(atstmt->cmds));
+	cmd_orig_name->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(original_name)), -1));
+
+	/* Run the built query */
+	wrapper = makeNode(PlannedStmt);
+	wrapper->commandType = CMD_UTILITY;
+	wrapper->canSetTag = false;
+	wrapper->utilityStmt = stmt;
+	wrapper->stmt_location = 0;
+	wrapper->stmt_len = strlen(query_str);
+
+	ProcessUtility(wrapper,
+				   "(ALTER SEQUENCE )",
+				   false,
+				   PROCESS_UTILITY_QUERY,
+				   NULL,
+				   NULL,
+				   None_Receiver,
+				   NULL);
+
+	CommandCounterIncrement();
+}
+
 Oid get_sys_varcharoid(void)
 {
 	Oid sys_oid;

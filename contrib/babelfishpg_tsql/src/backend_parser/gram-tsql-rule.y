@@ -1077,9 +1077,23 @@ DefineStmt:
 			| CREATE TYPE_P any_name FROM Typename
 				{
 					CreateDomainStmt *n = makeNode(CreateDomainStmt);
+					Constraint *c = makeNode(Constraint);
+
 					n->domainname = $3;
 					n->typeName = $5;
-					n->constraints = NIL;
+					c->contype = CONSTR_NULL;
+					c->location = @3;
+					if (sql_dialect == SQL_DIALECT_TSQL && extract_identifier_hook)
+					{
+						base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+						char *original_name = (*extract_identifier_hook)(yyextra->core_yy_extra.scanbuf + @3, NULL);
+						if (original_name)
+							c->options = lappend(c->options,
+									makeDefElem("original_type_name",
+										(Node *)makeString(original_name),
+										@3));
+					}
+					n->constraints = list_make1(c);
 
 					$$ = (Node *)n;
 				}
@@ -1090,10 +1104,19 @@ DefineStmt:
 
 					n->domainname = $3;
 					n->typeName = $5;
-					n->constraints = list_make1(c);
-
 					c->contype = CONSTR_NOTNULL;
 					c->location = @6;
+					if (sql_dialect == SQL_DIALECT_TSQL && extract_identifier_hook)
+					{
+						base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+						char *original_name = (*extract_identifier_hook)(yyextra->core_yy_extra.scanbuf + @3, NULL);
+						if (original_name)
+							c->options = lappend(c->options,
+									makeDefElem("original_type_name",
+										(Node *)makeString(original_name),
+										@3));
+					}
+					n->constraints = list_make1(c);
 
 					$$ = (Node *)n;
 
@@ -1105,10 +1128,19 @@ DefineStmt:
 
 					n->domainname = $3;
 					n->typeName = $5;
-					n->constraints = list_make1(c);
-
 					c->contype = CONSTR_NULL;
 					c->location = @6;
+					if (sql_dialect == SQL_DIALECT_TSQL && extract_identifier_hook)
+					{
+						base_yy_extra_type *yyextra = pg_yyget_extra(yyscanner);
+						char *original_name = (*extract_identifier_hook)(yyextra->core_yy_extra.scanbuf + @3, NULL);
+						if (original_name)
+							c->options = lappend(c->options,
+									makeDefElem("original_type_name",
+										(Node *)makeString(original_name),
+										@3));
+					}
+					n->constraints = list_make1(c);
 
 					$$ = (Node *)n;
 

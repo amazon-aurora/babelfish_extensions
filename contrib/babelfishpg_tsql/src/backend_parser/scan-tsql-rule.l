@@ -151,8 +151,10 @@
 				}
 
 <tsql>{tsql_ttname}	{
+					char *ident;
 					SET_YYLLOC();
-					yylval->str = pstrdup(yytext);
+					ident = downcase_identifier(yytext, yyleng, false, false);
+					yylval->str = ident;
 					return IDENT;
 				}
 

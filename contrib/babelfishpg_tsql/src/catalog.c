@@ -34,6 +34,7 @@
 #include "utils/array.h"
 #include "utils/timestamp.h"
 #include "nodes/execnodes.h"
+#include "partitioning/partdesc.h"
 #include "catalog.h"
 #include "dbcmds.h"
 #include "guc.h"
@@ -216,12 +217,12 @@ static struct cachedesc my_cacheinfo[] = {
 	},
 	{-1,						/* TRUNCATEDIDENTNAME */
 		-1,
-		4,
+		1,
 		{
 			Anum_bbf_truncated_ident_truncated_name,
-			Anum_bbf_truncated_ident_dbid,
-			Anum_bbf_truncated_ident_schema_name,
-			Anum_bbf_truncated_ident_object_type
+			0,
+			0,
+			0
 		},
 		128
 	}
@@ -1970,12 +1971,57 @@ get_bbf_truncated_ident_idx_oid(void)
 	return bbf_truncated_ident_idx_oid;
 }
 
+/*
+ * Partition helper functions - commented out for now.
+ * These were used when babelfish_truncated_identifier was partitioned
+ * by pg_catalog_type. Kept for reference.
+ */
+// static const char *
+// get_truncated_ident_partition_name(Oid pg_catalog_type)
+// {
+// 	if (pg_catalog_type == RelationRelationId)
+// 		return "babelfish_truncated_identifier_pg_class";
+// 	else if (pg_catalog_type == ProcedureRelationId)
+// 		return "babelfish_truncated_identifier_pg_proc";
+// 	else if (pg_catalog_type == TypeRelationId)
+// 		return "babelfish_truncated_identifier_pg_type";
+// 	else if (pg_catalog_type == AttributeRelationId)
+// 		return "babelfish_truncated_identifier_pg_attribute";
+// 	else if (pg_catalog_type == ConstraintRelationId)
+// 		return "babelfish_truncated_identifier_pg_constraint";
+// 	else
+// 		return "babelfish_truncated_identifier_default";
+// }
+//
+// static Oid
+// get_truncated_ident_partition_oid(Oid pg_catalog_type)
+// {
+// 	const char *partition_name = get_truncated_ident_partition_name(pg_catalog_type);
+// 	return get_relname_relid(partition_name, get_namespace_oid("sys", false));
+// }
+//
+// static int
+// get_truncated_ident_syscache_id(Oid pg_catalog_type)
+// {
+// 	if (pg_catalog_type == RelationRelationId)
+// 		return TRUNCATEDIDENTNAME_PG_CLASS;
+// 	else if (pg_catalog_type == ProcedureRelationId)
+// 		return TRUNCATEDIDENTNAME_PG_PROC;
+// 	else if (pg_catalog_type == TypeRelationId)
+// 		return TRUNCATEDIDENTNAME_PG_TYPE;
+// 	else if (pg_catalog_type == AttributeRelationId)
+// 		return TRUNCATEDIDENTNAME_PG_ATTRIBUTE;
+// 	else if (pg_catalog_type == ConstraintRelationId)
+// 		return TRUNCATEDIDENTNAME_PG_CONSTRAINT;
+// 	else
+// 		return TRUNCATEDIDENTNAME_DEFAULT;
+// }
+
 void
 insert_bbf_truncated_ident(const char *truncated_name,
 						   const char *original_name,
-						   int16 dbid,
-						   const char *schema_name,
-						   const char *object_type,
+						   const char *nspname,
+						   Oid pg_catalog_type,
 						   const char *parent_name)
 {
 	Relation	rel;
@@ -1990,15 +2036,14 @@ insert_bbf_truncated_ident(const char *truncated_name,
 	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
 	dsc = RelationGetDescr(rel);
 
+	new_record[Anum_bbf_truncated_ident_nspname - 1] =
+		DirectFunctionCall1(namein, CStringGetDatum(nspname));
+	new_record[Anum_bbf_truncated_ident_pg_catalog_type - 1] =
+		ObjectIdGetDatum(pg_catalog_type);
 	new_record[Anum_bbf_truncated_ident_truncated_name - 1] =
-		CStringGetTextDatum(truncated_name);
+		DirectFunctionCall1(namein, CStringGetDatum(truncated_name));
 	new_record[Anum_bbf_truncated_ident_original_name - 1] =
 		CStringGetTextDatum(original_name);
-	new_record[Anum_bbf_truncated_ident_dbid - 1] = Int16GetDatum(dbid);
-	new_record[Anum_bbf_truncated_ident_schema_name - 1] =
-		DirectFunctionCall1(namein, CStringGetDatum(schema_name));
-	new_record[Anum_bbf_truncated_ident_object_type - 1] =
-		CStringGetTextDatum(object_type);
 	new_record[Anum_bbf_truncated_ident_parent_name - 1] =
 		CStringGetTextDatum(parent_name ? parent_name : "");
 
@@ -2014,58 +2059,109 @@ insert_bbf_truncated_ident(const char *truncated_name,
 
 char *
 lookup_bbf_truncated_ident(const char *truncated_name,
-						   int16 dbid,
-						   const char *schema_name,
-						   const char *object_type)
+						   const char *nspname,
+						   Oid pg_catalog_type,
+						   const char *parent_name)
 {
-	HeapTuple	tuple;
+	CatCList   *catlist;
 	char	   *result = NULL;
+	int			i;
 
-	tuple = SearchSysCache4(TRUNCATEDIDENTNAME,
-							CStringGetTextDatum(truncated_name),
-							Int16GetDatum(dbid),
-							DirectFunctionCall1(namein, CStringGetDatum(schema_name)),
-							CStringGetTextDatum(object_type));
-	if (HeapTupleIsValid(tuple))
+	catlist = SearchSysCacheList3(TRUNCATEDIDENTNAME,
+								 DirectFunctionCall1(namein, CStringGetDatum(truncated_name)),
+								 DirectFunctionCall1(namein, CStringGetDatum(nspname)),
+								 ObjectIdGetDatum(pg_catalog_type));
+
+	for (i = 0; i < catlist->n_members; i++)
 	{
-		bool	isnull;
-		Datum	datum;
+		HeapTuple	tuple = &catlist->members[i]->tuple;
+		bool		isnull;
+		Datum		datum;
+		char	   *entry_val;
+
+		/* Post-filter on pg_catalog_type */
+		datum = SysCacheGetAttr(TRUNCATEDIDENTNAME, tuple,
+								Anum_bbf_truncated_ident_parent_name, &isnull);
+		entry_val = isnull ? "" : TextDatumGetCString(datum);
+		if (strcmp(entry_val, parent_name ? parent_name : "") != 0)
+			continue;
 
 		datum = SysCacheGetAttr(TRUNCATEDIDENTNAME, tuple,
 								Anum_bbf_truncated_ident_original_name, &isnull);
 		if (!isnull)
 			result = TextDatumGetCString(datum);
 
-		ReleaseSysCache(tuple);
+		break;
 	}
+
+	ReleaseCatCacheList(catlist);
 
 	return result;
 }
 
-void
-clean_up_bbf_truncated_ident_for_schema(const char *schema_name)
+PG_FUNCTION_INFO_V1(bbf_get_original_identifier_name);
+Datum
+bbf_get_original_identifier_name(PG_FUNCTION_ARGS)
 {
-	SysScanDesc scan;
+	Name		truncated_name = PG_GETARG_NAME(0);
+	text	   *schema_name = PG_GETARG_TEXT_PP(1);
+	Oid			pg_catalog_type = PG_GETARG_OID(2);
 	Relation	rel;
+	SysScanDesc scan;
 	HeapTuple	tuple;
-	ScanKeyData scanKey[2];
-	int16		dbid = get_cur_db_id();
-
-	if (schema_name == NULL)
-		return;
-
-	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
+	ScanKeyData scanKey[3];
+	Datum		result;
+	bool		found = false;
 
 	ScanKeyInit(&scanKey[0],
-				Anum_bbf_truncated_ident_dbid,
-				BTEqualStrategyNumber, F_INT2EQ,
-				Int16GetDatum(dbid));
-	ScanKeyInit(&scanKey[1],
-				Anum_bbf_truncated_ident_schema_name,
+				Anum_bbf_truncated_ident_truncated_name,
 				BTEqualStrategyNumber, F_NAMEEQ,
-				DirectFunctionCall1(namein, CStringGetDatum(schema_name)));
+				NameGetDatum(truncated_name));
+	ScanKeyInit(&scanKey[1],
+				Anum_bbf_truncated_ident_nspname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				DirectFunctionCall1(namein, PointerGetDatum(text_to_cstring(schema_name))));
+	ScanKeyInit(&scanKey[2],
+				Anum_bbf_truncated_ident_pg_catalog_type,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(pg_catalog_type));
 
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 2, scanKey);
+	rel = RelationIdGetRelation(get_bbf_truncated_ident_oid());
+	scan = systable_beginscan(rel, get_bbf_truncated_ident_idx_oid(), true, NULL, 3, scanKey);
+
+	tuple = systable_getnext(scan);
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isnull;
+		Datum	datum;
+
+		datum = heap_getattr(tuple, Anum_bbf_truncated_ident_original_name,
+							 RelationGetDescr(rel), &isnull);
+		if (!isnull)
+		{
+			result = PointerGetDatum(PG_DETOAST_DATUM_COPY(datum));
+			found = true;
+		}
+	}
+
+	systable_endscan(scan);
+	RelationClose(rel);
+
+	if (!found)
+		PG_RETURN_NULL();
+
+	PG_RETURN_DATUM(result);
+}
+
+static void
+clean_up_bbf_truncated_ident_internal(int nkeys, ScanKeyData *scanKeys)
+{
+	Relation	rel;
+	SysScanDesc scan;
+	HeapTuple	tuple;
+
+	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
+	scan = systable_beginscan(rel, InvalidOid, false, NULL, nkeys, scanKeys);
 
 	while ((tuple = systable_getnext(scan)) != NULL)
 	{
@@ -2075,33 +2171,57 @@ clean_up_bbf_truncated_ident_for_schema(const char *schema_name)
 
 	systable_endscan(scan);
 	table_close(rel, RowExclusiveLock);
+}
+
+void
+clean_up_bbf_truncated_ident_for_schema(const char *nspname)
+{
+	ScanKeyData scanKey[1];
+
+	if (nspname == NULL)
+		return;
+
+	ScanKeyInit(&scanKey[0],
+				Anum_bbf_truncated_ident_nspname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				DirectFunctionCall1(namein, CStringGetDatum(nspname)));
+
+	clean_up_bbf_truncated_ident_internal(1, scanKey);
 }
 
 void
 clean_up_bbf_truncated_ident_for_db(int16 dbid)
 {
-	SysScanDesc scan;
-	Relation	rel;
-	HeapTuple	tuple;
-	ScanKeyData scanKey[1];
+	Relation	ext_rel;
+	SysScanDesc ext_scan;
+	HeapTuple	ext_tuple;
+	ScanKeyData ext_scanKey[1];
 
-	rel = table_open(get_bbf_truncated_ident_oid(), RowExclusiveLock);
-
-	ScanKeyInit(&scanKey[0],
-				Anum_bbf_truncated_ident_dbid,
+	/* Scan babelfish_namespace_ext for all nspnames with this dbid */
+	ext_rel = table_open(namespace_ext_oid, AccessShareLock);
+	ScanKeyInit(&ext_scanKey[0],
+				Anum_namespace_ext_dbid,
 				BTEqualStrategyNumber, F_INT2EQ,
 				Int16GetDatum(dbid));
+	ext_scan = systable_beginscan(ext_rel, InvalidOid, false, NULL, 1, ext_scanKey);
 
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, scanKey);
-
-	while ((tuple = systable_getnext(scan)) != NULL)
+	while ((ext_tuple = systable_getnext(ext_scan)) != NULL)
 	{
-		if (HeapTupleIsValid(tuple))
-			CatalogTupleDelete(rel, &tuple->t_self);
+		bool	isnull;
+		Datum	datum;
+		char   *nspname;
+
+		datum = heap_getattr(ext_tuple, Anum_namespace_ext_namespace,
+							 RelationGetDescr(ext_rel), &isnull);
+		if (isnull)
+			continue;
+
+		nspname = NameStr(*DatumGetName(datum));
+		clean_up_bbf_truncated_ident_for_schema(nspname);
 	}
 
-	systable_endscan(scan);
-	table_close(rel, RowExclusiveLock);
+	systable_endscan(ext_scan);
+	table_close(ext_rel, AccessShareLock);
 }
 
 /*****************************************

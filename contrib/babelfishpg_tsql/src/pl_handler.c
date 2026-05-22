@@ -25,6 +25,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_proc.h"
@@ -111,6 +112,7 @@ extern int  escape_hatch_set_transaction_isolation_level;
 extern bool pltsql_recursive_triggers;
 extern bool restore_tsql_tabletype;
 extern bool babelfish_dump_restore;
+extern const char *ATTOPTION_BBF_ORIGINAL_TABLE_NAME;
 extern bool pltsql_nocount;
 
 extern List *babelfishpg_tsql_raw_parser(const char *str, RawParseMode mode);
@@ -3310,6 +3312,36 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							EventTriggerEndCompleteQuery();
 					}
 					PG_END_TRY();
+
+					/* Store original view name if truncated */
+					{
+						ListCell   *lc_opt;
+						const char *nspname = stmt->view->schemaname;
+
+						if (!nspname)
+						{
+							Oid nspid = RangeVarGetAndCheckCreationNamespace(stmt->view, NoLock, NULL);
+							nspname = get_namespace_name(nspid);
+						}
+
+						foreach(lc_opt, stmt->options)
+						{
+							DefElem *defel = (DefElem *) lfirst(lc_opt);
+
+							if (strcmp(defel->defname, "original_view_name") == 0)
+							{
+								char *original_name = strVal(defel->arg);
+
+								if (strlen(original_name) >= NAMEDATALEN)
+									insert_bbf_truncated_ident(stmt->view->relname,
+															  original_name,
+															  nspname,
+															  RelationRelationId,
+															  NULL);
+								break;
+							}
+						}
+					}
 					return; 
 				}
 				else if(sql_dialect == SQL_DIALECT_TSQL)
@@ -3325,6 +3357,36 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 						pltsql_current_query_is_view_definition = false;
 					}
 					PG_END_TRY();
+
+					/* Store original view name if truncated */
+					{
+						ListCell   *lc_opt;
+						const char *nspname = stmt->view->schemaname;
+
+						if (!nspname)
+						{
+							Oid nspid = RangeVarGetAndCheckCreationNamespace(stmt->view, NoLock, NULL);
+							nspname = get_namespace_name(nspid);
+						}
+
+						foreach(lc_opt, stmt->options)
+						{
+							DefElem *defel = (DefElem *) lfirst(lc_opt);
+
+							if (strcmp(defel->defname, "original_view_name") == 0)
+							{
+								char *original_name = strVal(defel->arg);
+
+								if (strlen(original_name) >= NAMEDATALEN)
+									insert_bbf_truncated_ident(stmt->view->relname,
+															  original_name,
+															  nspname,
+															  RelationRelationId,
+															  NULL);
+								break;
+							}
+						}
+					}
 					return;
 				}
 				break;
@@ -4942,15 +5004,13 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				if (sql_dialect == SQL_DIALECT_TSQL)
 				{
 					ListCell   *lc_opt;
-					const char *schema_name = rel->schemaname;
-					int16		dbid = get_cur_db_id();
+					const char *nspname = rel->schemaname;
 
-					if (!schema_name)
+					if (!nspname)
 					{
 						Oid nspid = RangeVarGetAndCheckCreationNamespace(rel, NoLock, NULL);
-						schema_name = get_namespace_name(nspid);
+						nspname = get_namespace_name(nspid);
 					}
-					schema_name = get_logical_schema_name(schema_name, true);
 
 					/* Store original table name if truncated */
 					foreach(lc_opt, create_stmt->options)
@@ -4959,12 +5019,14 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 						if (strcmp(defel->defname, "original_table_name") == 0)
 						{
-							insert_bbf_truncated_ident(rel->relname,
-													  strVal(defel->arg),
-													  dbid,
-													  schema_name,
-													  BBF_TRUNCATED_IDENT_OBJ_TABLE,
-													  NULL);
+							char *original_name = strVal(defel->arg);
+
+							if (strlen(original_name) >= NAMEDATALEN)
+								insert_bbf_truncated_ident(rel->relname,
+														  original_name,
+														  nspname,
+														  RelationRelationId,
+														  NULL);
 							break;
 						}
 					}
@@ -4982,12 +5044,11 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 							if (col->location >= 0)
 							{
 								char *original_name = extract_identifier(queryString + col->location, NULL);
-								if (original_name)
+								if (strlen(original_name) >= NAMEDATALEN)
 									insert_bbf_truncated_ident(col->colname,
 															  original_name,
-															  dbid,
-															  schema_name,
-															  BBF_TRUNCATED_IDENT_OBJ_COLUMN,
+															  nspname,
+															  AttributeRelationId,
 															  rel->relname);
 							}
 
@@ -5008,9 +5069,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 										{
 											insert_bbf_truncated_ident(con->conname,
 																		  strVal(defel->arg),
-																		  dbid,
-																		  schema_name,
-																		  BBF_TRUNCATED_IDENT_OBJ_CONSTRAINT,
+																		  nspname,
+																		  ConstraintRelationId,
 																		  NULL);
 											break;
 										}
@@ -5031,9 +5091,8 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 								{
 									insert_bbf_truncated_ident(con->conname,
 															  strVal(defel->arg),
-															  dbid,
-															  schema_name,
-															  BBF_TRUNCATED_IDENT_OBJ_CONSTRAINT,
+															  nspname,
+															  ConstraintRelationId,
 															  NULL);
 									break;
 								}
@@ -5067,6 +5126,34 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 				}
 
 				return;
+			}
+		case T_CreateSeqStmt:
+			{
+				CreateSeqStmt *create_seq_stmt = (CreateSeqStmt *) parsetree;
+
+				if (sql_dialect == SQL_DIALECT_TSQL)
+				{
+					call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
+
+					/* Store original sequence name in bbf_original_rel_name reloption */
+					if (!babelfish_dump_restore)
+					{
+						RangeVar   *seq = create_seq_stmt->sequence;
+
+						if (seq->location >= 0)
+						{
+							char *original_name = extract_multipart_identifier_name(queryString + seq->location);
+
+							if (original_name)
+							{
+								exec_alter_sequence_set_original_name(seq, original_name);
+							}
+						}
+					}
+
+					return;
+				}
+				break;
 			}
 		case T_IndexStmt:
 			{
@@ -5159,6 +5246,42 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 											queryEnv, dest, qc);
 
 				revoke_type_permission_from_public(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc, create_domain->domainname);
+
+				/* Store original type name if truncated */
+				if (sql_dialect == SQL_DIALECT_TSQL)
+				{
+					ListCell   *lc_con;
+					char	   *objname;
+					Oid			nspoid;
+					const char *nspname;
+
+					nspoid = QualifiedNameGetCreationNamespace(create_domain->domainname, &objname);
+					nspname = get_namespace_name(nspoid);
+
+					foreach(lc_con, create_domain->constraints)
+					{
+						Constraint *con = (Constraint *) lfirst(lc_con);
+						ListCell   *lc_opt;
+
+						foreach(lc_opt, con->options)
+						{
+							DefElem *defel = (DefElem *) lfirst(lc_opt);
+
+							if (strcmp(defel->defname, "original_type_name") == 0)
+							{
+								char *original_name = strVal(defel->arg);
+
+								if (strlen(original_name) >= NAMEDATALEN)
+									insert_bbf_truncated_ident(objname,
+															  original_name,
+															  nspname,
+															  TypeRelationId,
+															  NULL);
+								break;
+							}
+						}
+					}
+				}
 				return;
 			}
 		case T_CreateFunctionStmt:
@@ -5521,6 +5644,7 @@ bbf_ProcessUtility(PlannedStmt *pstmt,
 
 	call_prev_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
 
+
 	/* Cleanup babelfish_server_options catalog when tds_fdw extension is dropped */
 	if (sql_dialect == SQL_DIALECT_PG && nodeTag(parsetree) == T_DropStmt)
 	{
@@ -5862,6 +5986,14 @@ pltsql_truncate_identifier(char *ident, int len, bool warn)
 		return false;			/* will rely on existing PG behavior */
 
 	Assert(len >= NAMEDATALEN); /* should be already checked */
+
+	 /* Restrict TSQL identifier length to 128 characters */
+	if (pg_mbstrlen_with_len(ident, len) > 128)
+		ereport(ERROR,
+			(errcode(ERRCODE_NAME_TOO_LONG),
+			errmsg("The identifier that starts with '%.*s' is too long. Maximum length is 128.",
+				128, ident)));
+
 
 	if (tsql_is_database_or_server_collation_CI())
 	{
@@ -7752,6 +7884,17 @@ transformSelectIntoStmt(CreateTableAsStmt *stmt)
 		altstmt->relation = into->rel;
 		altstmt->objtype = OBJECT_TABLE;
 		altstmt->cmds = NIL;
+
+		/* Store original name in bbf_original_rel_name reloption */
+		if (orig_select_into_name && !babelfish_dump_restore)
+		{
+			AlterTableCmd *cmd_orig_name = makeNode(AlterTableCmd);
+			cmd_orig_name->subtype = AT_SetRelOptions;
+			cmd_orig_name->def = (Node *) list_make1(makeDefElem(pstrdup(ATTOPTION_BBF_ORIGINAL_TABLE_NAME), (Node *) makeString(pstrdup(orig_select_into_name)), -1));
+			cmd_orig_name->behavior = DROP_RESTRICT;
+			cmd_orig_name->missing_ok = false;
+			altstmt->cmds = lappend(altstmt->cmds, cmd_orig_name);
+		}
 
 
 

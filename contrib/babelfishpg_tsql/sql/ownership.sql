@@ -300,14 +300,21 @@ END
 $$;
 
 CREATE TABLE sys.babelfish_truncated_identifier (
-  truncated_identifier_name sys.NVARCHAR(128) NOT NULL,
-  original_identifier_name sys.NVARCHAR(128) NOT NULL,
-  dbid smallint NOT NULL,
-  schema_name name NOT NULL,
-  object_type sys.varchar(50) NOT NULL,
-  parent_name sys.NVARCHAR(128) NOT NULL DEFAULT '',
-  PRIMARY KEY (truncated_identifier_name, dbid, schema_name, object_type, parent_name)
+  nspname NAME NOT NULL,
+  pg_catalog_type OID NOT NULL,
+  truncated_identifier_name NAME NOT NULL,
+  original_identifier_name sys.NVARCHAR(128) NOT NULL COLLATE sys.database_default,
+  parent_name NAME NOT NULL DEFAULT '',
+  PRIMARY KEY (truncated_identifier_name, nspname, pg_catalog_type, parent_name)
 );
+-- PARTITION BY LIST (pg_catalog_type);
+
+-- CREATE TABLE sys.babelfish_truncated_identifier_pg_class PARTITION OF sys.babelfish_truncated_identifier FOR VALUES IN ('pg_class'::regclass);
+-- CREATE TABLE sys.babelfish_truncated_identifier_pg_proc PARTITION OF sys.babelfish_truncated_identifier FOR VALUES IN ('pg_proc'::regclass);
+-- CREATE TABLE sys.babelfish_truncated_identifier_pg_type PARTITION OF sys.babelfish_truncated_identifier FOR VALUES IN ('pg_type'::regclass);
+-- CREATE TABLE sys.babelfish_truncated_identifier_pg_attribute PARTITION OF sys.babelfish_truncated_identifier FOR VALUES IN ('pg_attribute'::regclass);
+-- CREATE TABLE sys.babelfish_truncated_identifier_pg_constraint PARTITION OF sys.babelfish_truncated_identifier FOR VALUES IN ('pg_constraint'::regclass);
+-- CREATE TABLE sys.babelfish_truncated_identifier_default PARTITION OF sys.babelfish_truncated_identifier DEFAULT;
 
 GRANT SELECT on sys.babelfish_truncated_identifier TO PUBLIC;
 

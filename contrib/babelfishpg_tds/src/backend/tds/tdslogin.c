@@ -1193,23 +1193,24 @@ ProcessLoginInternal(Port *port)
 	ValidateLoginRequest(request);
 
 	/*
-	 * Downcase and copy the username and database name in port structure so
-	 * that no one messes up with the local copy.
+	 * Downcase, truncate and copy the username and database name in port
+	 * structure so that no one messes up with the local copy.
+	 * Use downcase_truncate_identifier so that overlength names are
+	 * truncated using the same substr+md5 scheme as CREATE LOGIN,
+	 * matching what is stored in pg_roles.
 	 */
 	if (request->username != NULL)
 	{
-		request->username = downcase_identifier(request->username,
-												strlen(request->username),
-												false,
-												false);
+		request->username = downcase_truncate_identifier(request->username,
+														  strlen(request->username),
+														  false);
 		port->user_name = pstrdup(request->username);
 	}
 	if (request->database != NULL)
 	{
-		request->database = downcase_identifier(request->database,
-												strlen(request->database),
-												false,
-												false);
+		request->database = downcase_truncate_identifier(request->database,
+														  strlen(request->database),
+														  false);
 		port->database_name = pstrdup(request->database);
 	}
 
@@ -1250,14 +1251,7 @@ ProcessLoginInternal(Port *port)
 	/* save the login information for the entire session */
 	loginInfo = request;
 
-	/*
-	 * Truncate given database and user names to length of a Postgres name.
-	 * This avoids lookup failures when overlength names are given.
-	 */
-	if (strlen(port->database_name) >= NAMEDATALEN)
-		port->database_name[NAMEDATALEN - 1] = '\0';
-	if (strlen(port->user_name) >= NAMEDATALEN)
-		port->user_name[NAMEDATALEN - 1] = '\0';
+
 
 	/*
 	 * Done putting stuff in TopMemoryContext.

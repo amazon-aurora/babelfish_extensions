@@ -16,6 +16,16 @@ RETURNS TEXT
 AS 'babelfishpg_tsql', 'get_current_physical_schema_name'
 LANGUAGE C STABLE STRICT;
 
+CREATE OR REPLACE FUNCTION sys.bbf_get_original_identifier_name(IN truncated_name NAME, IN schema_name TEXT, IN pg_catalog_type OID)
+RETURNS TEXT
+AS 'babelfishpg_tsql', 'bbf_get_original_identifier_name'
+LANGUAGE C STABLE STRICT;
+
+-- CREATE OR REPLACE FUNCTION sys.bbf_get_original_identifier_name(IN truncated_name NAME, IN schema_name TEXT, IN parent_name TEXT, IN pg_catalog_type OID)
+-- RETURNS TEXT
+-- AS 'babelfishpg_tsql', 'bbf_get_original_identifier_name_with_parent'
+-- LANGUAGE C STABLE STRICT;
+
 CREATE OR REPLACE FUNCTION sys.babelfish_set_role(IN role_name TEXT)
 RETURNS INT4
 AS 'babelfishpg_tsql', 'babelfish_set_role'
