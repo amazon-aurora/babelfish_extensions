@@ -2622,7 +2622,7 @@ extern bool 	is_namespace_sys_or_pg_catalog(Oid nspoid);
 /*
  * Function in pltsql_ruleutils.c
  */
-extern char *tsql_format_type_extended(Oid type_oid, int32 typemod, bits16 flags);
+extern char *tsql_format_type_extended(Oid type_oid, int32 typemod, uint16 flags);
 
 /*
  * INSERT EXEC functions (pl_insert_exec.c)
