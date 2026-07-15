@@ -32,6 +32,9 @@
 #include "session.h"
 #include "parser/scansup.h"
 #include "parser/parse_oper.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_type.h"
+#include "utils/builtins.h"
 #include "src/include/lib/qunique.h"
 #include "utils/varlena.h"
 
@@ -73,6 +76,7 @@ static int	exec_stmt_partition_scheme(PLtsql_execstate *estate, PLtsql_stmt_part
 static int	exec_stmt_insert_bulk(PLtsql_execstate *estate, PLtsql_stmt_insert_bulk *expr);
 static int	exec_stmt_dbcc(PLtsql_execstate *estate, PLtsql_stmt_dbcc *stmt);
 extern Datum pltsql_inline_handler(PG_FUNCTION_ARGS);
+static void cleanup_bulk_copy_stmt(bool aborted);
 
 static char *transform_tsql_temp_tables(char *dynstmt);
 static char *next_word(char *dyntext);
@@ -3219,6 +3223,9 @@ exec_stmt_insert_bulk(PLtsql_execstate *estate, PLtsql_stmt_insert_bulk *stmt)
 	MemoryContext oldContext;
 	Oid			schema_oid = InvalidOid;
 
+	/* Discard any still-pending INSERT BULK before starting a new one. */
+	cleanup_insert_bulk_if_pending();
+
 	oldContext = MemoryContextSwitchTo(TopMemoryContext);
 
 	/*
@@ -3264,6 +3271,108 @@ exec_stmt_insert_bulk(PLtsql_execstate *estate, PLtsql_stmt_insert_bulk *stmt)
 	}
 
 	MemoryContextSwitchTo(oldContext);
+
+	/*
+	 * Reject if a declared column type is not implicitly convertible to its
+	 * target column type. Keep the resolved Oids/typmods on cstmt for the wire
+	 * metadata check and per-value coercion.
+	 */
+	if (stmt->column_types != NIL &&
+		list_length(stmt->column_types) == list_length(stmt->column_refs))
+	{
+		Relation	rel;
+		TupleDesc	tupDesc;
+		ListCell   *lc_name;
+		ListCell   *lc_type;
+		int			ncols = list_length(stmt->column_refs);
+		int			idx = 0;
+		Oid		   *declared_oids;
+		int32	   *declared_typmods;
+		MemoryContext oldctx;
+
+		rel = table_openrv(cstmt->relation, AccessShareLock);
+		tupDesc = RelationGetDescr(rel);
+
+		/* Persist the resolved arrays for the lifetime of cstmt. */
+		oldctx = MemoryContextSwitchTo(TopMemoryContext);
+		declared_oids = (Oid *) palloc0(ncols * sizeof(Oid));
+		declared_typmods = (int32 *) palloc0(ncols * sizeof(int32));
+		MemoryContextSwitchTo(oldctx);
+
+		forboth(lc_name, stmt->column_refs, lc_type, stmt->column_types)
+		{
+			char	   *colname = (char *) lfirst(lc_name);
+			char	   *typestr = (char *) lfirst(lc_type);
+			Oid			declared_oid = InvalidOid;
+			int32		declared_typmod = -1;
+			Oid			target_oid = InvalidOid;
+			int			i;
+
+			/* Resolve the declared type string to an Oid + typmod. */
+			if (typestr && typestr[0] != '\0')
+			{
+				TypeName   *tname = typeStringToTypeName(typestr, NULL);
+
+				typenameTypeIdAndMod(NULL, tname, &declared_oid, &declared_typmod);
+			}
+
+			/* Look up the target column's type by name. */
+			for (i = 0; i < tupDesc->natts; i++)
+			{
+				Form_pg_attribute att = TupleDescAttr(tupDesc, i);
+
+				if (att->attisdropped)
+					continue;
+				if (namestrcmp(&(att->attname), colname) == 0)
+				{
+					target_oid = att->atttypid;
+					break;
+				}
+			}
+
+			/*
+			 * If the declared type is neither identical to the target nor
+			 * implicitly convertible to it, reject before reading any data.
+			 */
+			if (OidIsValid(declared_oid) && OidIsValid(target_oid) &&
+				declared_oid != target_oid &&
+				!can_coerce_type(1, &declared_oid, &target_oid, COERCION_IMPLICIT))
+			{
+				char	   *tgt_name = format_type_be(target_oid);
+				char	   *src_name = pstrdup(typestr);
+				char	   *paren = strchr(src_name, '(');
+				int			slen;
+
+				/* Report the base type name without the length/precision. */
+				if (paren)
+					*paren = '\0';
+				slen = strlen(src_name);
+				while (slen > 0 && src_name[slen - 1] == ' ')
+					src_name[--slen] = '\0';
+
+				table_close(rel, AccessShareLock);
+				pfree(declared_oids);
+				pfree(declared_typmods);
+				/* Statement failed; drop the pending bulk state. */
+				cleanup_bulk_copy_stmt(true);
+				ereport(ERROR,
+						(errcode(ERRCODE_DATATYPE_MISMATCH),
+						 errmsg("Implicit conversion from data type %s to %s is not allowed. "
+								"Use the CONVERT function to run this query.",
+								src_name, tgt_name)));
+			}
+
+			declared_oids[idx] = declared_oid;
+			declared_typmods[idx] = declared_typmod;
+			idx++;
+		}
+
+		table_close(rel, AccessShareLock);
+
+		cstmt->ncoltypes = ncols;
+		cstmt->declared_typeoids = declared_oids;
+		cstmt->declared_typmods = declared_typmods;
+	}
 
 	/* Set the Insert Bulk Options for the session. */
 	if (stmt->rows_per_batch)
@@ -3654,6 +3763,42 @@ void exec_stmt_dbcc_checkident(PLtsql_stmt_dbcc *stmt)
 }
 
 
+/*
+ * cleanup_bulk_copy_stmt - release the in-progress INSERT BULK (global cstmt).
+ */
+static void
+cleanup_bulk_copy_stmt(bool aborted)
+{
+	BulkCopyStmt *stmt = cstmt;
+
+	cstmt = NULL;
+
+	insert_bulk_keep_nulls = prev_insert_bulk_keep_nulls;
+	insert_bulk_check_constraints = prev_insert_bulk_check_constraints;
+	insert_bulk_rows_per_batch = prev_insert_bulk_rows_per_batch;
+	insert_bulk_kilobytes_per_batch = prev_insert_bulk_kilobytes_per_batch;
+
+	if (stmt == NULL)
+		return;
+
+	EndBulkCopy(stmt->cstate, aborted);
+	if (stmt->attlist)
+		list_free_deep(stmt->attlist);
+	if (stmt->declared_typeoids)
+		pfree(stmt->declared_typeoids);
+	if (stmt->declared_typmods)
+		pfree(stmt->declared_typmods);
+	if (stmt->relation)
+	{
+		if (stmt->relation->schemaname)
+			pfree(stmt->relation->schemaname);
+		if (stmt->relation->relname)
+			pfree(stmt->relation->relname);
+		pfree(stmt->relation);
+	}
+	pfree(stmt);
+}
+
 uint64
 execute_bulk_load_insert(int ncol, int nrow,
 						 Datum *Values, bool *Nulls)
@@ -3667,33 +3812,17 @@ execute_bulk_load_insert(int ncol, int nrow,
 	 */
 	if (nrow == 0 && ncol == 0)
 	{
-		/* Cleanup all the pointers. */
-		if (cstmt)
-		{
-			EndBulkCopy(cstmt->cstate, false);
-			if (cstmt->attlist)
-				list_free_deep(cstmt->attlist);
-			if (cstmt->relation)
-			{
-				if (cstmt->relation->schemaname)
-					pfree(cstmt->relation->schemaname);
-				if (cstmt->relation->relname)
-					pfree(cstmt->relation->relname);
-				pfree(cstmt->relation);
-			}
-			pfree(cstmt);
-			cstmt = NULL;
-		}
-
-		/* Reset Insert-Bulk Options. */
-		insert_bulk_keep_nulls = prev_insert_bulk_keep_nulls;
-		insert_bulk_check_constraints = prev_insert_bulk_check_constraints;
-		insert_bulk_rows_per_batch = prev_insert_bulk_rows_per_batch;
-		insert_bulk_kilobytes_per_batch = prev_insert_bulk_kilobytes_per_batch;
-
+		/* Normal end-of-bulk cleanup. */
+		cleanup_bulk_copy_stmt(false);
 		return 0;
 	}
 
+	/* Bulk Load data with no preceding INSERT BULK. */
+	if (cstmt == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROTOCOL_VIOLATION),
+				 errmsg("The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. "
+						"Bulk Load data was received without a preceding INSERT BULK statement.")));
 
 	PG_TRY();
 	{
@@ -3712,21 +3841,10 @@ execute_bulk_load_insert(int ncol, int nrow,
 	}
 	PG_CATCH();
 	{
-		/*
-		 * In an error condition, the caller calls the function again to do
-		 * the cleanup.
-		 */
-		/* Cleanup cstate. */
-		EndBulkCopy(cstmt->cstate, true);
+		cleanup_bulk_copy_stmt(true);
 
 		if (ActiveSnapshotSet() && GetActiveSnapshot() == snap)
 			PopActiveSnapshot();
-
-		/* Reset Insert-Bulk Options. */
-		insert_bulk_keep_nulls = prev_insert_bulk_keep_nulls;
-		insert_bulk_check_constraints = prev_insert_bulk_check_constraints;
-		insert_bulk_rows_per_batch = prev_insert_bulk_rows_per_batch;
-		insert_bulk_kilobytes_per_batch = prev_insert_bulk_kilobytes_per_batch;
 
 		PG_RE_THROW();
 	}
@@ -3825,6 +3943,43 @@ int
 get_insert_bulk_kilobytes_per_batch()
 {
 	return insert_bulk_kilobytes_per_batch;
+}
+
+/*
+ * Expose the pending INSERT BULK's declared column types to the TDS layer.
+ * Sets *ncol = 0 when none were declared.
+ */
+void
+get_insert_bulk_expected_colmeta(int *ncol, Oid **typeoids, int32 **typmods)
+{
+	if (cstmt != NULL && cstmt->ncoltypes > 0)
+	{
+		*ncol = cstmt->ncoltypes;
+		*typeoids = cstmt->declared_typeoids;
+		*typmods = cstmt->declared_typmods;
+	}
+	else
+	{
+		*ncol = 0;
+		*typeoids = NULL;
+		*typmods = NULL;
+	}
+}
+
+/*
+ * Discard a pending INSERT BULK (Bulk Load data never arrived) via the
+ * (ncol/nrow = 0) cleanup path, which frees cstmt and restores the insert-bulk
+ * session options. Returns true if a pending bulk was discarded.
+ */
+bool
+cleanup_insert_bulk_if_pending(void)
+{
+	if (cstmt != NULL)
+	{
+		cleanup_bulk_copy_stmt(true);
+		return true;
+	}
+	return false;
 }
 
 static int

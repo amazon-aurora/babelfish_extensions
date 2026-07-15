@@ -18,6 +18,7 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "common/int.h"
 #include "utils/guc.h"
 #include "lib/stringinfo.h"
 #include "pgstat.h"
@@ -238,6 +239,9 @@ GetBulkLoadRequest(StringInfo message)
 	uint16_t	colCount;
 	BulkLoadColMetaData *colmetadata;
 	uint32_t	collation;
+	int			expectedColCount = 0;
+	Oid		   *expectedTypeOids = NULL;
+	int32	   *expectedTypmods = NULL;
 
 	TdsErrorContext->err_text = "Fetching Bulk Load Request";
 
@@ -261,6 +265,20 @@ GetBulkLoadRequest(StringInfo message)
 	request->colCount = colCount;
 	request->colMetaData = colmetadata;
 	bcpOffset += sizeof(uint16);
+
+	/* Declared column types (empty if no explicit list), for the checks below. */
+	if (pltsql_plugin_handler_ptr->get_insert_bulk_expected_colmeta != NULL)
+		pltsql_plugin_handler_ptr->get_insert_bulk_expected_colmeta(&expectedColCount,
+																	&expectedTypeOids,
+																	&expectedTypmods);
+
+	/* Wire column count must match the declared column list. */
+	if (expectedColCount > 0 && expectedColCount != (int) colCount)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROTOCOL_VIOLATION),
+				 errmsg("The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. "
+						"The client sent %d column(s) but %d were declared by INSERT BULK.",
+						(int) colCount, expectedColCount)));
 
 	for (int currentColumn = 0; currentColumn < colCount; currentColumn++)
 	{
@@ -488,7 +506,33 @@ GetBulkLoadRequest(StringInfo message)
 		colmetadata[currentColumn].colName[colmetadata[currentColumn].colNameLen * 2] = '\0';
 
 		bcpOffset += colmetadata[currentColumn].colNameLen * 2;
+
+		/*
+		 * Reject a wire type that doesn't match the declared column type.
+		 * numeric/decimal share a wire representation; xml is sent as nvarchar.
+		 */
+		if (expectedColCount == (int) colCount && expectedTypeOids != NULL &&
+			expectedTypmods != NULL &&
+			OidIsValid(expectedTypeOids[currentColumn]))
+		{
+			int32				typmod = expectedTypmods[currentColumn];
+			TdsIoFunctionInfo	finfo = TdsLookupTypeFunctionsByOid(expectedTypeOids[currentColumn], &typmod);
+			int					expectedTdsType = (finfo != NULL) ? finfo->ttmtdstypeid : -1;
+			uint8_t				wireTdsType = colmetadata[currentColumn].columnTdsType;
+			bool				matches = (expectedTdsType == wireTdsType) ||
+				((expectedTdsType == TDS_TYPE_NUMERICN || expectedTdsType == TDS_TYPE_DECIMALN) &&
+				 (wireTdsType == TDS_TYPE_NUMERICN || wireTdsType == TDS_TYPE_DECIMALN)) ||
+				(expectedTdsType == TDS_TYPE_XML &&
+				 (wireTdsType == TDS_TYPE_XML || wireTdsType == TDS_TYPE_NVARCHAR));
+
+			if (finfo != NULL && !matches)
+				ereport(ERROR,
+						(errcode(ERRCODE_PROTOCOL_VIOLATION),
+						 errmsg("Invalid column type from bcp client for colid %d.",
+								currentColumn + 1)));
+		}
 	}
+
 	request->firstMessage = makeStringInfo();
 	appendBinaryStringInfo(request->firstMessage, message->data, message->len);
 	return (TDSRequest) request;
@@ -1043,7 +1087,11 @@ ProcessBCPRequest(TDSRequest request)
 		 */
 		if (req->rowCount > 0)
 		{
-			nargs = req->colCount * req->rowCount;
+			/* Guard colCount * rowCount against int32 overflow before allocating. */
+			if (pg_mul_s32_overflow(req->colCount, req->rowCount, &nargs))
+				ereport(ERROR,
+						(errcode(ERRCODE_PROTOCOL_VIOLATION),
+						 errmsg("bulk load row/column count too large")));
 			values = palloc0(nargs * sizeof(Datum));
 			nulls = palloc0(nargs * sizeof(bool));
 

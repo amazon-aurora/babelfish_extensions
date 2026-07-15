@@ -1,10 +1,14 @@
---INSERT BULK queries are no-op query, we are just handling the syntax from antlr parser side.
+-- A raw INSERT BULK statement expects a following TDS Bulk Load stream; any non-bulk request
+-- (the dummy SELECT below) is therefore a protocol violation. The subsequent SELECT then runs
+-- normally and verifies the table is unchanged.
 SELECT * FROM BABEL_4217_vu_prepare_t1;
 GO
 INSERT BULK BABEL_4217_vu_prepare_t1 (
     ID INT PRIMARY KEY NOT NULL IDENTITY(1,1),
     FIRSTNAME VARCHAR(50)
 );
+GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
 GO
 SELECT * FROM BABEL_4217_vu_prepare_t1;
 GO
@@ -16,6 +20,8 @@ INSERT BULK BABEL_4217_vu_prepare_t2 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
 SELECT * FROM BABEL_4217_vu_prepare_t2;
 GO
 
@@ -25,6 +31,8 @@ INSERT BULK BABEL_4217_vu_prepare_t3 (
     ID INT NOT NULL PRIMARY KEY IDENTITY(1,1),
     FIRSTNAME VARCHAR(50)
 );
+GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
 GO
 SELECT * FROM BABEL_4217_vu_prepare_t3;
 GO
@@ -57,6 +65,8 @@ INSERT BULK BABEL_4217_vu_prepare_t7 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
 SELECT * FROM BABEL_4217_vu_prepare_t7;
 GO
 
@@ -67,6 +77,8 @@ INSERT BULK BABEL_4217_vu_prepare_t8 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
 SELECT * FROM BABEL_4217_vu_prepare_t8;
 GO
 
@@ -76,6 +88,8 @@ INSERT BULK BABEL_4217_vu_prepare_t9 (
     ID INT NOT NULL UNIQUE IDENTITY(1,1),
     FIRSTNAME VARCHAR(50)
 );
+GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
 GO
 SELECT * FROM BABEL_4217_vu_prepare_t9;
 GO
@@ -107,6 +121,8 @@ INSERT BULK BABEL_4217_vu_prepare_t13 (
     ID INT PRIMARY KEY NOT NULL CHECK(ID < 5) IDENTITY(1,1),
     FIRSTNAME VARCHAR(50)
 );
+GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
 GO
 SELECT * FROM BABEL_4217_vu_prepare_t13;
 GO

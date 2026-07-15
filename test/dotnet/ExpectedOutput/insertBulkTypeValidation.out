@@ -1,0 +1,106 @@
+#Q#Create table src_int(a int, b int)
+#Q#Create table dst_bigint(a bigint, b bigint)
+#Q#Insert into src_int values (12345, 1)
+#Q#Insert into src_int values (NULL, 2)
+#Q#Select * from dst_bigint
+#D#bigint#!#bigint
+12345#!#1
+#!#2
+#Q#drop table src_int
+#Q#drop table dst_bigint
+#Q#Create table src_smallint(a smallint)
+#Q#Create table dst_bigint2(a bigint)
+#Q#Insert into src_smallint values (100)
+#Q#Insert into src_smallint values (-100)
+#Q#Select * from dst_bigint2
+#D#bigint
+100
+-100
+#Q#drop table src_smallint
+#Q#drop table dst_bigint2
+#Q#Create table src_bigint3(a bigint, b bigint)
+#Q#Create table dst_smallint(a smallint, b smallint)
+#Q#Insert into src_bigint3 values (100, 1)
+#Q#Insert into src_bigint3 values (-100, 2)
+#Q#Select * from dst_smallint
+#D#smallint#!#smallint
+100#!#1
+-100#!#2
+#Q#drop table src_bigint3
+#Q#drop table dst_smallint
+#Q#Create table src_vc10(a varchar(10))
+#Q#Create table dst_vc50(a varchar(50))
+#Q#Insert into src_vc10 values ('hello')
+#Q#Insert into src_vc10 values (NULL)
+#Q#Select * from dst_vc50
+#D#varchar
+hello
+
+#Q#drop table src_vc10
+#Q#drop table dst_vc50
+#Q#Create table src_vc50(a varchar(50))
+#Q#Create table dst_vc10(a varchar(10))
+#Q#Insert into src_vc50 values ('0123456789ABCDEF')
+#Q#Insert into src_vc50 values (NULL)
+#Q#Select * from dst_vc10
+#Q#drop table src_vc50
+#Q#drop table dst_vc10
+#Q#Create table src_vb10(a varbinary(10))
+#Q#Create table dst_vb50(a varbinary(50))
+#Q#Insert into src_vb10 values (0x0102)
+#Q#Insert into src_vb10 values (NULL)
+#Q#Select * from dst_vb50
+#D#varbinary
+12
+
+#Q#drop table src_vb10
+#Q#drop table dst_vb50
+#Q#Create table src_ident(a int identity, b int)
+#Q#Create table dst_ident(a bigint identity, b bigint)
+#Q# set IDENTITY_INSERT src_ident ON
+#Q#Insert into src_ident (a, b) values (10, 1)
+#Q#Insert into src_ident (a, b) values (20, 2)
+#Q# set IDENTITY_INSERT src_ident OFF
+#Q#Select * from dst_ident
+#D#bigint#!#bigint
+1#!#1
+2#!#2
+#Q#Select Ident_CURRENT('dst_ident')
+#D#decimal
+2
+#Q#drop table src_ident
+#Q#drop table dst_ident
+#Q#CREATE TABLE gate_widen(a bigint)
+#Q#INSERT BULK gate_widen(a int)
+#Q#SELECT 1
+#E#The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.
+#Q#DROP TABLE gate_widen
+#Q#CREATE TABLE gate_narrow(a int NOT NULL)
+#Q#INSERT BULK gate_narrow(a bigint)
+#Q#SELECT 1
+#E#The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.
+#Q#DROP TABLE gate_narrow
+#Q#CREATE TABLE gate_reorder(a int, b varchar(50))
+#Q#INSERT BULK gate_reorder(b varchar(50), a int)
+#Q#SELECT 1
+#E#The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.
+#Q#DROP TABLE gate_reorder
+#Q#CREATE TABLE gate_len(a varchar(10))
+#Q#INSERT BULK gate_len(a varchar(50))
+#Q#SELECT 1
+#E#The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.
+#Q#DROP TABLE gate_len
+#Q#CREATE TABLE gate_rej1(a varbinary(50))
+#Q#INSERT BULK gate_rej1(a varchar(50))
+#E#Implicit conversion from data type varchar to varbinary is not allowed. Use the CONVERT function to run this query.
+#Q#SELECT 1
+#D#int
+1
+#Q#DROP TABLE gate_rej1
+#Q#CREATE TABLE gate_rej2(a int)
+#Q#INSERT BULK gate_rej2(a uniqueidentifier)
+#E#Implicit conversion from data type uniqueidentifier to integer is not allowed. Use the CONVERT function to run this query.
+#Q#SELECT 1
+#D#int
+1
+#Q#DROP TABLE gate_rej2

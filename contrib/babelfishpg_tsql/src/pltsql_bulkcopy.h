@@ -53,6 +53,10 @@ typedef struct BulkCopyStateData
 	int64		identity_col_incr_value;	/* increment value of identity column */
 	int			rv_index;		/* index for a rowversion datatype column */
 	List	   *rteperminfos;	/* single element list of RTEPermissionInfo */
+
+	/* Per-column cast declared type -> target type; NULL entry = stored as-is. */
+	int			coerce_ncols;
+	ExprState **coerce_exprs;
 } BulkCopyStateData;
 
 /* ----------------------
@@ -64,6 +68,11 @@ typedef struct BulkCopyStmt
 	RangeVar   *relation;		/* the relation to copy */
 	List	   *attlist;		/* List of column names (as Strings), or NIL
 								 * for all columns */
+
+	/* Declared column types (aligned with attlist), for wire check and coercion. */
+	int			ncoltypes;		/* number of declared columns (0 if none) */
+	Oid		   *declared_typeoids;	/* declared type Oid per column */
+	int32	   *declared_typmods;	/* declared typmod per column */
 
 	int			cur_batch_num;	/* Inserts can be batched implicitly depending
 								 * on protocol side, we should hold a counter

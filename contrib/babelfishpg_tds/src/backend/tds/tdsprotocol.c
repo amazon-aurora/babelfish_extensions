@@ -366,6 +366,21 @@ GetTDSRequest(bool *resetProtocol)
 	}
 
 	/*
+	 * A non-bulk request (other than attention/cancel) while an INSERT BULK
+	 * awaits its data is a protocol violation: discard the pending bulk and
+	 * reject.
+	 */
+	if (messageType != TDS_BULK_LOAD && messageType != TDS_ATTENTION &&
+		pltsql_plugin_handler_ptr->cleanup_insert_bulk_if_pending != NULL &&
+		pltsql_plugin_handler_ptr->cleanup_insert_bulk_if_pending())
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_PROTOCOL_VIOLATION),
+				 errmsg("The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. "
+						"Bulk Load data was expected for the pending INSERT BULK but a different request was received.")));
+	}
+
+	/*
 	 * Enable statement timeout. Note we add this function here to include
 	 * the time taken by the protocol in the timeout.
 	 */

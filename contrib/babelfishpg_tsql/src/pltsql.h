@@ -1038,6 +1038,7 @@ typedef struct PLtsql_stmt_insert_bulk
 	char	   *schema_name;
 	char	   *db_name;
 	List	   *column_refs;
+	List	   *column_types;
 
 	/* Insert Bulk Options. */
 	char	   *kilobytes_per_batch;
@@ -1962,6 +1963,11 @@ typedef struct PLtsql_protocol_plugin
 	int			datefirst;
 	int			lock_timeout;
 	const char *language;
+
+	void		(*get_insert_bulk_expected_colmeta) (int *ncol, Oid **typeoids,
+													 int32 **typmods);
+
+	bool		(*cleanup_insert_bulk_if_pending) (void);
 } PLtsql_protocol_plugin;
 
 /*
@@ -2249,6 +2255,9 @@ extern void pltsql_exec_get_datum_type_info(PLtsql_execstate *estate,
 
 extern int	get_insert_bulk_rows_per_batch(void);
 extern int	get_insert_bulk_kilobytes_per_batch(void);
+extern void	get_insert_bulk_expected_colmeta(int *ncol, Oid **typeoids,
+											 int32 **typmods);
+extern bool	cleanup_insert_bulk_if_pending(void);
 extern char *get_original_query_string(void);
 extern bool get_is_schemabinding_view(void);
 extern AclMode string_to_privilege(const char *privname);

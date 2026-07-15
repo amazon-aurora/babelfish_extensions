@@ -31,6 +31,8 @@
 #include "optimizer/optimizer.h"
 #include "miscadmin.h"
 #include "parser/parse_relation.h"
+#include "parser/parse_coerce.h"
+#include "nodes/primnodes.h"
 #include "pltsql_bulkcopy.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/builtins.h"
@@ -64,7 +66,10 @@ typedef struct CopyMultiInsertBuffer
 
 static BulkCopyState
 			BeginBulkCopy(Relation rel,
-						  List *attnamelist);
+						  List *attnamelist,
+						  int ncoltypes,
+						  Oid *declared_typeoids,
+						  int32 *declared_typmods);
 
 static uint64
 			ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
@@ -101,7 +106,9 @@ BulkCopy(BulkCopyStmt *stmt, uint64 *processed)
 	PG_TRY();
 	{
 		if (!stmt->cstate)
-			stmt->cstate = BeginBulkCopy(rel, attnums);
+			stmt->cstate = BeginBulkCopy(rel, attnums, stmt->ncoltypes,
+										 stmt->declared_typeoids,
+										 stmt->declared_typmods);
 		else
 			stmt->cstate->rel = rel;
 
@@ -725,15 +732,27 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
 						myslot->tts_isnull[col_index_to_insert] = Nulls[col_index_to_fetch];
 					else
 					{
-						myslot->tts_values[col_index_to_insert] = Values[col_index_to_fetch];
+						Datum		val = Values[col_index_to_fetch];
+
+						/* Cast to the target type when the declared type differs. */
+						if (cstate->coerce_exprs != NULL && j < cstate->coerce_ncols &&
+							cstate->coerce_exprs[j] != NULL)
+						{
+							econtext->caseValue_datum = val;
+							econtext->caseValue_isNull = false;
+							val = ExecEvalExpr(cstate->coerce_exprs[j], econtext,
+											   &myslot->tts_isnull[col_index_to_insert]);
+						}
+
+						myslot->tts_values[col_index_to_insert] = val;
 
 						/* In case of identity column, store the updated identity sequence value. */
-						if (cstate->seq_index == i)
+						if (cstate->seq_index == i && !myslot->tts_isnull[col_index_to_insert])
 						{
 							if (cstate->identity_col_incr_value > 0)
-								cstate->cur_identity_value = Max(cstate->cur_identity_value, DatumGetInt64(Values[col_index_to_fetch]));
+								cstate->cur_identity_value = Max(cstate->cur_identity_value, DatumGetInt64(val));
 							else
-								cstate->cur_identity_value = Min(cstate->cur_identity_value, DatumGetInt64(Values[col_index_to_fetch]));
+								cstate->cur_identity_value = Min(cstate->cur_identity_value, DatumGetInt64(val));
 						}
 					}
 					j++;
@@ -837,7 +856,10 @@ ExecuteBulkCopy(BulkCopyState cstate, int rowCount, int colCount,
  */
 static BulkCopyState
 BeginBulkCopy(Relation rel,
-			  List *attnums)
+			  List *attnums,
+			  int ncoltypes,
+			  Oid *declared_typeoids,
+			  int32 *declared_typmods)
 {
 	BulkCopyState cstate;
 	TupleDesc	tupDesc;
@@ -982,6 +1004,63 @@ BeginBulkCopy(Relation rel,
 	cstate->defmap = defmap;
 	cstate->defexprs = defexprs;
 	cstate->num_defaults = num_defaults;
+
+	/*
+	 * Per-column cast from the declared type to the target column type, applied
+	 * to each received value. NULL entry means declared == target (stored as-is).
+	 */
+	cstate->coerce_ncols = 0;
+	cstate->coerce_exprs = NULL;
+	if (ncoltypes > 0 && ncoltypes == list_length(attnums))
+	{
+		ListCell   *lc;
+		int			j = 0;
+
+		cstate->coerce_ncols = ncoltypes;
+		cstate->coerce_exprs = (ExprState **) palloc0(ncoltypes * sizeof(ExprState *));
+
+		foreach(lc, attnums)
+		{
+			int			tgt_attnum = lfirst_int(lc);
+			Form_pg_attribute att = TupleDescAttr(tupDesc, tgt_attnum - 1);
+			Oid			src_oid = declared_typeoids[j];
+			int32		src_typmod = declared_typmods[j];
+
+			if (OidIsValid(src_oid) &&
+				(src_oid != att->atttypid || src_typmod != att->atttypmod))
+			{
+				CaseTestExpr *placeholder = makeNode(CaseTestExpr);
+				Node	   *expr;
+
+				placeholder->typeId = src_oid;
+				placeholder->typeMod = src_typmod;
+				placeholder->collation = get_typcollation(src_oid);
+
+				expr = coerce_to_target_type(NULL,
+											 (Node *) placeholder,
+											 src_oid,
+											 att->atttypid,
+											 att->atttypmod,
+											 COERCION_IMPLICIT,
+											 COERCE_IMPLICIT_CAST,
+											 -1);
+
+				if (expr == (Node *) placeholder)
+				{
+					/* No cast node needed; value is stored as-is. */
+				}
+				else if (expr != NULL)
+					cstate->coerce_exprs[j] = ExecInitExpr((Expr *) expr, NULL);
+				else
+					ereport(ERROR,
+							(errcode(ERRCODE_DATATYPE_MISMATCH),
+							 errmsg("cannot coerce bulk-loaded column %d from type %s to %s",
+									j + 1, format_type_be(src_oid),
+									format_type_be(att->atttypid))));
+			}
+			j++;
+		}
+	}
 
 
 	cstate->estate = CreateExecutorState(); /* for ExecConstraints() */

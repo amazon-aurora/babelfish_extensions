@@ -1,4 +1,6 @@
---INSERT BULK queries are no-op query, we are just handling the syntax from antlr parser side.
+-- A raw INSERT BULK statement expects a following TDS Bulk Load stream; any non-bulk request
+-- (the dummy SELECT below) is therefore a protocol violation. The subsequent SELECT then runs
+-- normally and verifies the table is unchanged.
 SELECT * FROM BABEL_4217_vu_prepare_t1;
 GO
 ~~START~~
@@ -12,6 +14,12 @@ INSERT BULK BABEL_4217_vu_prepare_t1 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t1;
 GO
 ~~START~~
@@ -34,6 +42,12 @@ INSERT BULK BABEL_4217_vu_prepare_t2 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t2;
 GO
 ~~START~~
@@ -56,6 +70,12 @@ INSERT BULK BABEL_4217_vu_prepare_t3 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t3;
 GO
 ~~START~~
@@ -135,6 +155,12 @@ INSERT BULK BABEL_4217_vu_prepare_t7 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t7;
 GO
 ~~START~~
@@ -157,6 +183,12 @@ INSERT BULK BABEL_4217_vu_prepare_t8 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t8;
 GO
 ~~START~~
@@ -179,6 +211,12 @@ INSERT BULK BABEL_4217_vu_prepare_t9 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t9;
 GO
 ~~START~~
@@ -258,6 +296,12 @@ INSERT BULK BABEL_4217_vu_prepare_t13 (
     FIRSTNAME VARCHAR(50)
 );
 GO
+SELECT 'expected error since TSQL expects TDS BULK LOAD after running INSERT BULK';
+GO
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: The incoming tabular data stream (TDS) Bulk Load Request (BulkLoadBCP) protocol stream is incorrect. Bulk Load data was expected for the pending INSERT BULK but a different request was received.)~~
+
 SELECT * FROM BABEL_4217_vu_prepare_t13;
 GO
 ~~START~~

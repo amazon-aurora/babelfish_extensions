@@ -6483,6 +6483,7 @@ makeInsertBulkStatement(TSqlParser::Dml_statementContext *ctx)
 	char *schema_name = NULL;
 	char *db_name = NULL;
 	stmt->column_refs = NIL;
+	stmt->column_types = NIL;
 
 	if (!bulk_ctx)
 	{
@@ -6506,7 +6507,21 @@ makeInsertBulkStatement(TSqlParser::Dml_statementContext *ctx)
 				std::string column_refs;
 				column_refs = ::stripQuoteFromId(column_list[i]->simple_column_name()->id());
 				if (!column_refs.empty())
+				{
 					stmt->column_refs = lappend(stmt->column_refs , downcase_truncate_identifier(column_refs.c_str(), column_refs.length(), true));
+
+					/*
+					 * Capture the declared column type text (aligned with
+					 * column_refs); empty string for computed columns.
+					 */
+					if (column_list[i]->data_type())
+					{
+						std::string type_str = ::getFullText(column_list[i]->data_type());
+						stmt->column_types = lappend(stmt->column_types, pstrdup(type_str.c_str()));
+					}
+					else
+						stmt->column_types = lappend(stmt->column_types, pstrdup(""));
+				}
 			}
 		}
 
