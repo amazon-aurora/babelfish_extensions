@@ -1,0 +1,83 @@
+-- tsql
+
+-- Long identifiers func-trigger vu-verify: Verify system objects show original names
+
+-- sys.procedures
+SELECT name FROM sys.procedures WHERE name LIKE 'Very_Long_Procedure%FT_VU';
+GO
+~~START~~
+varchar
+Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU
+~~END~~
+
+
+-- sys.triggers
+SELECT name FROM sys.triggers WHERE name LIKE 'Very_Long_Trigger%FT_VU';
+GO
+~~START~~
+varchar
+Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU
+~~END~~
+
+
+-- Trigger rename preserves orig_name
+EXEC sp_rename 'Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'Very_Long_Trigger_Renamed_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'OBJECT';
+GO
+SELECT orig_name FROM sys.babelfish_function_ext WHERE orig_name LIKE 'Very_Long_Trigger_Renamed%FT_VU';
+GO
+~~START~~
+nvarchar
+Very_Long_Trigger_Renamed_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU
+~~END~~
+
+-- Rename back
+EXEC sp_rename 'Very_Long_Trigger_Renamed_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'OBJECT';
+GO
+
+-- Short mixed-case trigger rename
+EXEC sp_rename 'MixedCase_Trig_FT_VU', 'MixedCase_Trig_FT_VU_Renamed', 'OBJECT';
+GO
+SELECT name FROM sys.triggers WHERE name LIKE '%MixedCase_Trig_FT_VU%';
+GO
+~~START~~
+varchar
+MixedCase_Trig_FT_VU_Renamed
+~~END~~
+
+EXEC sp_rename 'MixedCase_Trig_FT_VU_Renamed', 'MixedCase_Trig_FT_VU', 'OBJECT';
+GO
+
+-- Error messages show original names
+-- Duplicate procedure
+CREATE PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU AS SELECT 1;
+GO
+~~ERROR (Code: 2714)~~
+
+~~ERROR (Message: Function 'very_long_procedure_name_that_exceeds_postgresql_limit_of_sixty_three_chars_ft_vu' already exists with the same name)~~
+
+
+-- Drop non-existent function
+DROP FUNCTION NonExist_Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU;
+GO
+~~ERROR (Code: 3701)~~
+
+~~ERROR (Message: could not find a function named "nonexist_very_long_function_name_that_exceeds_postgresql_limit_of_sixty_three_chars_ft_vu")~~
+
+
+-- sp_stored_procedures
+EXEC sp_stored_procedures @sp_name = 'Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU';
+GO
+~~START~~
+varchar#!#varchar#!#nvarchar#!#int#!#int#!#int#!#varchar#!#smallint
+master#!#dbo#!#Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU;1#!#-1#!#-1#!#-1#!#<NULL>#!#2
+~~END~~
+
+GO
+-- sp_stored_procedures with mixed case short name
+EXEC sp_stored_procedures @sp_name = 'Mixed_Case_Proc_FT_VU';
+GO
+~~START~~
+varchar#!#varchar#!#nvarchar#!#int#!#int#!#int#!#varchar#!#smallint
+master#!#dbo#!#mixed_case_proc_ft_vu;1#!#-1#!#-1#!#-1#!#<NULL>#!#2
+~~END~~
+

@@ -1,0 +1,35 @@
+-- tsql
+
+-- Long identifiers func-trigger vu-prepare: Create functions, procedures, triggers with long names
+
+-- Helper table for triggers
+CREATE TABLE babel5975_func_trig_vu_table (id INT NOT NULL, name NVARCHAR(100));
+GO
+
+-- Procedure with long name and long parameter
+CREATE PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU
+    @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU INT
+AS BEGIN SELECT @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU END;
+GO
+
+-- Procedure with mixed case (short name)
+CREATE PROCEDURE Mixed_Case_Proc_FT_VU
+AS SELECT 1;
+GO
+
+-- Function with long name
+CREATE FUNCTION Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU(@a INT)
+RETURNS INT AS BEGIN RETURN @a END;
+GO
+
+-- Trigger with long name
+CREATE TRIGGER Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU
+ON babel5975_func_trig_vu_table
+FOR INSERT AS BEGIN SELECT 1 END;
+GO
+
+-- Short mixed-case trigger
+CREATE TRIGGER MixedCase_Trig_FT_VU
+ON babel5975_func_trig_vu_table
+FOR INSERT AS BEGIN SELECT 1 END;
+GO

@@ -1,0 +1,249 @@
+
+-- tsql
+
+-- Long Identifier Tests: Functions, Procedures, and Triggers
+-- Tests storage of original names in babelfish_function_ext.orig_name
+-- and babelfish_identifier_mapping for parameters
+-- ===========================================
+-- SETUP: Helper tables needed for triggers
+-- ===========================================
+CREATE TABLE babel5975_func_trig_test (id INT NOT NULL, name NVARCHAR(100));
+GO
+
+-- ===========================================
+-- CREATION: Functions, procedures, triggers with long names
+-- ===========================================
+-- 1. CREATE FUNCTION with long name
+CREATE FUNCTION Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing(@a INT)
+RETURNS INT AS BEGIN RETURN @a + 1 END;
+GO
+
+-- 2. CREATE PROCEDURE with long name and long parameter
+CREATE PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+    @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters INT
+AS BEGIN SELECT @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters END;
+GO
+
+-- 3. CREATE TRIGGER with long name
+CREATE TRIGGER Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+ON babel5975_func_trig_test
+FOR INSERT AS BEGIN SELECT 1 END;
+GO
+
+-- 4. CREATE FUNCTION with multiple long parameters
+CREATE FUNCTION babel5975_multi_param_func(
+    @Very_Long_First_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters INT,
+    @Very_Long_Second_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters INT
+)
+RETURNS INT AS BEGIN RETURN @Very_Long_First_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters + @Very_Long_Second_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters END;
+GO
+
+-- 5. Bracket delimiters - function
+CREATE FUNCTION [Very Long Function Name With Spaces That Exceeds PostgreSQL Limit Of Sixty Three Characters](@a INT)
+RETURNS INT AS BEGIN RETURN @a END;
+GO
+
+-- ===========================================
+-- VERIFICATION: System views show original names
+-- ===========================================
+-- sys.procedures shows full original name
+SELECT name FROM sys.procedures WHERE name LIKE 'Very_Long_Procedure%';
+GO
+~~START~~
+varchar
+Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+~~END~~
+
+
+-- sys.triggers shows full trigger name
+SELECT name FROM sys.triggers WHERE name LIKE 'Very_Long_Trigger%';
+GO
+~~START~~
+varchar
+Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+~~END~~
+
+
+-- Verify functions/procedures/triggers in babelfish_function_ext.orig_name
+SELECT orig_name FROM sys.babelfish_function_ext
+WHERE orig_name LIKE 'Very_Long_Function%'
+   OR orig_name LIKE 'Very_Long_Procedure%'
+   OR orig_name LIKE 'Very_Long_Trigger%'
+ORDER BY orig_name;
+GO
+~~START~~
+nvarchar
+Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+~~END~~
+
+
+-- Verify parameters in babelfish_identifier_mapping
+SELECT original_identifier_name, parent_name FROM sys.babelfish_identifier_mapping
+WHERE pg_catalog_type = 1255
+ORDER BY original_identifier_name;
+GO
+~~START~~
+nvarchar#!#varchar
+@Very_Long_First_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters#!#babel5975_multi_param_func
+@Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters#!#very_long_procedure_name_that_e61b6230e662738953e607931c33a9021
+@Very_Long_Second_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters#!#babel5975_multi_param_func
+~~END~~
+
+
+-- Verify bracket identifiers stored in babelfish_function_ext
+SELECT orig_name FROM sys.babelfish_function_ext WHERE orig_name LIKE 'Very Long Function%';
+GO
+~~START~~
+nvarchar
+Very Long Function Name With Spaces That Exceeds PostgreSQL Limit Of Sixty Three Characters
+~~END~~
+
+
+-- Verify sp_stored_procedures works with long procedure name
+EXEC sp_stored_procedures @sp_name = 'Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing';
+GO
+~~START~~
+varchar#!#varchar#!#nvarchar#!#int#!#int#!#int#!#varchar#!#smallint
+master#!#dbo#!#Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing;1#!#-1#!#-1#!#-1#!#<NULL>#!#2
+~~END~~
+
+
+-- ===========================================
+-- sp_rename FUNCTION and PROCEDURE with long names
+-- ===========================================
+-- sp_rename FUNCTION with long name
+EXEC sp_rename 'Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing',
+    'Very_Long_Renamed_Func_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters', 'OBJECT';
+GO
+
+-- sp_rename PROCEDURE with long name
+EXEC sp_rename 'Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing',
+    'Very_Long_Renamed_Proc_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters', 'OBJECT';
+GO
+
+-- Rename back for cleanup
+EXEC sp_rename 'Very_Long_Renamed_Func_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters',
+    'Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing', 'OBJECT';
+GO
+EXEC sp_rename 'Very_Long_Renamed_Proc_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters',
+    'Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing', 'OBJECT';
+GO
+
+-- ===========================================
+-- ALTER PROCEDURE with long name
+-- ===========================================
+ALTER PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing
+    @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters INT
+AS BEGIN SELECT @Very_Long_Parameter_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters + 1 END;
+GO
+
+-- ===========================================
+-- DROP CLEANUP TESTS: Verify parameter entries removed on function drop
+-- ===========================================
+CREATE FUNCTION Very_Long_Drop_Test_Func_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters(
+    @Very_Long_Drop_Test_Param_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters INT
+) RETURNS INT AS BEGIN RETURN @Very_Long_Drop_Test_Param_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters END;
+GO
+
+-- Verify parameter entry exists
+SELECT COUNT(*) FROM sys.babelfish_identifier_mapping WHERE original_identifier_name LIKE 'Very_Long_Drop_Test_Param%';
+GO
+~~START~~
+int
+1
+~~END~~
+
+
+DROP FUNCTION Very_Long_Drop_Test_Func_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters;
+GO
+SELECT COUNT(*) FROM sys.babelfish_identifier_mapping WHERE original_identifier_name LIKE 'Very_Long_Drop_Test_Param%';
+GO
+~~START~~
+int
+0
+~~END~~
+
+
+-- ===========================================
+-- PROCEDURES AND TRIGGERS TESTS: Mixed case and multibyte
+-- ===========================================
+
+-- Mixed case procedure name
+CREATE PROCEDURE MixedCase_Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars AS SELECT 1;
+GO
+SELECT name FROM sys.procedures WHERE name LIKE 'MixedCase_Very_Long_Proc%';
+GO
+~~START~~
+varchar
+MixedCase_Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars
+~~END~~
+
+DROP PROCEDURE MixedCase_Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars;
+GO
+
+-- Multibyte procedure name
+CREATE PROCEDURE プロシージャ_非常に長い名前_PostgreSQLの制限を超える場合のテスト AS SELECT 1;
+GO
+SELECT name FROM sys.procedures WHERE name LIKE 'プロシージャ%';
+GO
+~~START~~
+varchar
+??????_???????_PostgreSQL?????????????
+~~END~~
+
+DROP PROCEDURE プロシージャ_非常に長い名前_PostgreSQLの制限を超える場合のテスト;
+GO
+
+-- Mixed case trigger name
+CREATE TABLE babel5975_trig_case_test (id INT);
+GO
+CREATE TRIGGER MixedCase_Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters
+ON babel5975_trig_case_test FOR INSERT AS BEGIN SELECT 1 END;
+GO
+SELECT name FROM sys.triggers WHERE name LIKE 'MixedCase_Very_Long_Trig%';
+GO
+~~START~~
+varchar
+MixedCase_Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters
+~~END~~
+
+DROP TRIGGER MixedCase_Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters;
+GO
+DROP TABLE babel5975_trig_case_test;
+GO
+
+-- Multibyte trigger name
+CREATE TABLE babel5975_trig_mb_test (id INT);
+GO
+CREATE TRIGGER トリガー_非常に長い名前_PostgreSQLの制限を超える場合のテスト_識別子処理
+ON babel5975_trig_mb_test FOR INSERT AS BEGIN SELECT 1 END;
+GO
+SELECT name FROM sys.triggers WHERE name LIKE 'トリガー%';
+GO
+~~START~~
+varchar
+????_???????_PostgreSQL?????????????_?????
+~~END~~
+
+DROP TRIGGER トリガー_非常に長い名前_PostgreSQLの制限を超える場合のテスト_識別子処理;
+GO
+DROP TABLE babel5975_trig_mb_test;
+GO
+
+-- ===========================================
+-- CLEANUP
+-- ===========================================
+DROP TRIGGER Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing;
+GO
+DROP FUNCTION Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing;
+GO
+DROP FUNCTION babel5975_multi_param_func;
+GO
+DROP FUNCTION [Very Long Function Name With Spaces That Exceeds PostgreSQL Limit Of Sixty Three Characters];
+GO
+DROP PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_For_Testing;
+GO
+DROP TABLE babel5975_func_trig_test;
+GO

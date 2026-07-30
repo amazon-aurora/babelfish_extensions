@@ -1,0 +1,45 @@
+-- tsql
+
+-- Long identifiers func-trigger vu-verify: Verify system objects show original names
+
+-- sys.procedures
+SELECT name FROM sys.procedures WHERE name LIKE 'Very_Long_Procedure%FT_VU';
+GO
+
+-- sys.triggers
+SELECT name FROM sys.triggers WHERE name LIKE 'Very_Long_Trigger%FT_VU';
+GO
+
+-- Trigger rename preserves orig_name
+EXEC sp_rename 'Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'Very_Long_Trigger_Renamed_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'OBJECT';
+GO
+SELECT orig_name FROM sys.babelfish_function_ext WHERE orig_name LIKE 'Very_Long_Trigger_Renamed%FT_VU';
+GO
+-- Rename back
+EXEC sp_rename 'Very_Long_Trigger_Renamed_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU', 'OBJECT';
+GO
+
+-- Short mixed-case trigger rename
+EXEC sp_rename 'MixedCase_Trig_FT_VU', 'MixedCase_Trig_FT_VU_Renamed', 'OBJECT';
+GO
+SELECT name FROM sys.triggers WHERE name LIKE '%MixedCase_Trig_FT_VU%';
+GO
+EXEC sp_rename 'MixedCase_Trig_FT_VU_Renamed', 'MixedCase_Trig_FT_VU', 'OBJECT';
+GO
+
+-- Error messages show original names
+-- Duplicate procedure
+CREATE PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU AS SELECT 1;
+GO
+
+-- Drop non-existent function
+DROP FUNCTION NonExist_Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU;
+GO
+
+-- sp_stored_procedures
+EXEC sp_stored_procedures @sp_name = 'Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU';
+GO
+
+-- sp_stored_procedures with mixed case short name
+EXEC sp_stored_procedures @sp_name = 'Mixed_Case_Proc_FT_VU';
+GO

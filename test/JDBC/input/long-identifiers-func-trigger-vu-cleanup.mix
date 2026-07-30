@@ -1,0 +1,16 @@
+-- tsql
+
+-- Long identifiers func-trigger vu-cleanup: Drop all objects
+
+DROP TRIGGER Very_Long_Trigger_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU;
+GO
+DROP TRIGGER MixedCase_Trig_FT_VU;
+GO
+DROP PROCEDURE Very_Long_Procedure_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Chars_FT_VU;
+GO
+DROP PROCEDURE Mixed_Case_Proc_FT_VU;
+GO
+DROP FUNCTION Very_Long_Function_Name_That_Exceeds_PostgreSQL_Limit_Of_Sixty_Three_Characters_FT_VU;
+GO
+DROP TABLE babel5975_func_trig_vu_table;
+GO
