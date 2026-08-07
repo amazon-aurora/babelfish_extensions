@@ -16,6 +16,7 @@
 
 #include "pltsql.h"
 #include "pltsql-2.h"
+#include "hooks.h"
 
 extern PLtsql_execstate *get_current_tsql_estate(void);
 extern void assign_text_var(PLtsql_execstate *estate, PLtsql_var *var, const char *str);
@@ -1149,6 +1150,42 @@ execute_sp_cursorunprepare(int stmt_handle)
 	return 0;
 }
 
+/*
+ * get_cursor_prepared_argtypes - retrieve declared parameter types from a
+ * prepared cursor handle's plan.  Returns palloc'd Oid array, or NULL if
+ * the handle is not found or has no parameters.  Sets *nargs to the count.
+ */
+Oid *
+get_cursor_prepared_argtypes(int stmt_handle, int *nargs)
+{
+	CursorPreparedHandleHashEnt *phentry;
+	SPIPlanPtr	plan;
+	int			n;
+	Oid		   *result;
+
+	*nargs = 0;
+
+	if (CursorPreparedHandleHashTable == NULL)
+		return NULL;
+
+	phentry = (CursorPreparedHandleHashEnt *) hash_search(CursorPreparedHandleHashTable,
+														  &stmt_handle, HASH_FIND, NULL);
+	if (phentry == NULL || phentry->plan == NULL)
+		return NULL;
+
+	plan = phentry->plan;
+	n = SPI_getargcount(plan);
+	if (n <= 0)
+		return NULL;
+
+	result = palloc(sizeof(Oid) * n);
+	for (int i = 0; i < n; i++)
+		result[i] = SPI_getargtypeid(plan, i);
+
+	*nargs = n;
+	return result;
+}
+
 int
 execute_sp_cursorfetch(int cursor_handle, int *pfetchtype, int *prownum, int *pnrows)
 {
@@ -1588,6 +1625,44 @@ execute_sp_cursoropen_common(int *stmt_handle, int *cursor_handle, const char *s
 				 */
 				PushActiveSnapshot(GetTransactionSnapshot());
 				snapshot_pushed = true;
+			}
+
+			/*
+			 * Coerce each parameter value to the type declared in the plan
+			 * when the wire-declared types are available.
+			 */
+			if (boundParamsOidList != NULL)
+			{
+				for (int i = 0; i < nparams; i++)
+				{
+					Oid		plan_type;
+					Oid		wire_type;
+
+					if (nulls && nulls[i] == 'n')
+						continue;
+
+					plan_type = SPI_getargtypeid(plan, i);
+					wire_type = (i < nBindParams) ? boundParamsOidList[i] : plan_type;
+
+					if (wire_type != plan_type && OidIsValid(plan_type))
+					{
+						bool	param_isnull = false;
+
+						values[i] = pltsql_exec_tsql_cast_value(values[i], &param_isnull,
+																wire_type, -1,
+																plan_type, -1);
+						if (param_isnull && nulls)
+						{
+							/*
+							 * Cast away const: callers always pass palloc'd
+							 * buffers; changing the interface signature would
+							 * cascade across the TDS layer.
+							 */
+							((char *) nulls)[i] = 'n';
+							values[i] = (Datum) 0;
+						}
+					}
+				}
 			}
 
 			portal = SPI_cursor_open(hentry->curname, plan, values, nulls, read_only);

@@ -54,6 +54,7 @@
 #include "parser/parser.h"
 #include "parser/parsetree.h"
 #include "parser/parse_clause.h"
+#include "parser/parse_coerce.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_relation.h"
@@ -7110,6 +7111,51 @@ pltsql_inline_handler(PG_FUNCTION_ARGS)
 		if (fake_fcinfo->nargs != func->fn_nargs)
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 							errmsg("The parameterized query expects %d number of parameters, but %d were supplied", func->fn_nargs, fake_fcinfo->nargs)));
+
+		/*
+		 * Validate and coerce parameter types when wire-declared argtypes
+		 * are available (sp_execute path via TDS).
+		 */
+		if (codeblock_args->argtypes != NULL && func->inline_args != NULL)
+		{
+			int			pno;
+
+			for (pno = 0; pno < func->fn_nargs; pno++)
+			{
+				Oid		wire_type = fake_fcinfo->args[pno].isnull ? InvalidOid :
+					codeblock_args->argtypes[pno];
+				Oid		decl_type = func->inline_args->argtypes[pno];
+
+				if (wire_type != InvalidOid && wire_type != decl_type)
+				{
+					if (!can_coerce_type(1, &wire_type, &decl_type, COERCION_IMPLICIT))
+						ereport(ERROR,
+								(errcode(ERRCODE_DATATYPE_MISMATCH),
+								 errmsg("parameter %d: execute-time type %s does not match prepare-time type %s",
+										pno + 1,
+										format_type_be(wire_type),
+										format_type_be(decl_type))));
+
+					/*
+					 * Types are coercible — perform the actual cast so the
+					 * Datum representation matches the declared type.
+					 */
+					{
+						bool	param_isnull = fake_fcinfo->args[pno].isnull;
+						int32	decl_typmod = (func->inline_args->argtypmods != NULL) ?
+							func->inline_args->argtypmods[pno] : -1;
+
+						fake_fcinfo->args[pno].value =
+							pltsql_exec_tsql_cast_value(fake_fcinfo->args[pno].value,
+														&param_isnull,
+														wire_type, -1,
+														decl_type, decl_typmod);
+						if (param_isnull)
+							fake_fcinfo->args[pno].isnull = true;
+					}
+				}
+			}
+		}
 
 		retval = pltsql_exec_function(func, fake_fcinfo, simple_eval_estate, codeblock->atomic);
 		fcinfo->isnull = false;

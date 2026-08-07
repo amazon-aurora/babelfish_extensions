@@ -2452,6 +2452,7 @@ int			execute_sp_cursorprepare(int *stmt_handle, const char *stmt, int options, 
 int			execute_sp_cursorexecute(int stmt_handle, int *cursor_handle, int *scrollopt, int *ccopt, int *rowcount, int nparams, Datum *values, const char *nulls);
 int			execute_sp_cursorprepexec(int *stmt_handle, int *cursor_handle, const char *stmt, int options, int *scrollopt, int *ccopt, int *row_count, int nparams, int nBindParams, Oid *boundParamsOidList, Datum *values, const char *nulls);
 int			execute_sp_cursorunprepare(int stmt_handle);
+Oid		   *get_cursor_prepared_argtypes(int stmt_handle, int *nargs);
 int			execute_sp_cursorfetch(int cursor_handle, int *fetchtype, int *rownum, int *nrows);
 int			execute_sp_cursoroption(int cursor_handle, int code, int value);
 int			execute_sp_cursoroption2(int cursor_handle, int code, const char *value);
