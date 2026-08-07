@@ -1,0 +1,23 @@
+prepst#!#SELECT @p AS result#!#varchar|-|p|-|test
+prepst#!#exec#!#bigint|-|p|-|12345
+
+prepst#!#SELECT @p AS result#!#int|-|p|-|1
+prepst#!#exec#!#float|-|p|-|3.14
+
+prepst#!#SELECT @p AS result#!#int|-|p|-|1
+prepst#!#exec#!#varchar|-|p|-|999
+
+prepst#!#SELECT @p AS result#!#varchar|-|p|-|test
+prepst#!#exec#!#int|-|p|-|42
+
+prepst#!#SELECT @p AS result#!#datetime|-|p|-|2024-01-01
+prepst#!#exec#!#varchar|-|p|-|2024-01-15
+
+prepst#!#SELECT @p AS result#!#uniqueidentifier|-|p|-|00000000-0000-0000-0000-000000000000
+prepst#!#exec#!#varchar|-|p|-|12345678-1234-1234-1234-123456789ABC
+
+prepst#!#SELECT @p AS result#!#bigint|-|p|-|1
+prepst#!#exec#!#smallint|-|p|-|100
+
+prepst#!#SELECT @p AS result#!#varchar|-|p|-|test
+prepst#!#exec#!#decimal|-|p|-|123.45|-|10|-|2

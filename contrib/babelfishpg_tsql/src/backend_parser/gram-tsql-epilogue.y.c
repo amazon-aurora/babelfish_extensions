@@ -60,6 +60,12 @@ construct_unique_index_name(char *index_name, char *relation_name)
 	index_len = strlen(index_name);
 	relation_len = strlen(relation_name);
 
+	/* Reject combined length that would overflow the stack buffer */
+	if (index_len + relation_len + MD5_HASH_LEN >= (int) sizeof(buf))
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("combined index and relation name too long for unique index name construction")));
+
 	/* Validate original index name against T-SQL 128-char limit */
 	if (pg_mbstrlen_with_len(index_name, index_len) > 128)
 	{

@@ -1724,7 +1724,7 @@ evaluate_sp_cursor_param_def(PLtsql_execstate *estate, PLtsql_expr *stmt_param_d
 }
 
 static void
-evaluate_sp_cursor_param_values(PLtsql_execstate *estate, int paramno, List *params, Datum **values, char **nulls)
+evaluate_sp_cursor_param_values(PLtsql_execstate *estate, int paramno, List *params, Datum **values, char **nulls, InlineCodeBlockArgs *args)
 {
 	Oid			rettype;
 	int32		rettypmod;
@@ -1756,6 +1756,19 @@ evaluate_sp_cursor_param_values(PLtsql_execstate *estate, int paramno, List *par
 		(*values)[i] = exec_eval_expr(estate, expr, &isnull, &rettype, &rettypmod);
 		if (isnull)
 			(*nulls)[i] = 'n';
+		else if (args != NULL && i < args->numargs && rettype != args->argtypes[i])
+		{
+			/* Coerce to declared parameter type */
+			(*values)[i] = exec_cast_value(estate, (*values)[i], &isnull,
+										   rettype, rettypmod,
+										   args->argtypes[i],
+										   args->argtypmods ? args->argtypmods[i] : -1);
+			if (isnull)
+			{
+				(*nulls)[i] = 'n';
+				(*values)[i] = (Datum) 0;
+			}
+		}
 		++i;
 	}
 	Assert(i == paramno);
@@ -1851,7 +1864,7 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 									errmsg("param definition mismatches with inputs")));
 
 				/* evaluate parameter values */
-				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls);
+				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls, args);
 
 				enable_sp_cursor_find_param_hook();
 				PG_TRY();
@@ -1940,11 +1953,39 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 				int			paramno = stmt->paramno;
 				Datum	   *values = NULL;
 				char	   *nulls = NULL;
+				InlineCodeBlockArgs prep_args;
+				InlineCodeBlockArgs *prep_args_ptr = NULL;
 
 				prepared_handle = exec_eval_int(estate, stmt->handle, &isnull);
 				if (isnull)
 					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 									errmsg("prepared_handle argument of sp_cursorexecute is null")));
+
+				/* Retrieve declared types from the prepared cursor plan */
+				{
+					int		nprep_args = 0;
+					Oid	   *prep_argtypes;
+
+					prep_argtypes = get_cursor_prepared_argtypes(prepared_handle, &nprep_args);
+					if (prep_argtypes != NULL)
+					{
+						memset(&prep_args, 0, sizeof(prep_args));
+						prep_args.numargs = nprep_args;
+						prep_args.argtypes = prep_argtypes;
+						prep_args_ptr = &prep_args;
+					}
+				}
+
+				/*
+				 * Fail closed: if we have parameters but could not retrieve
+				 * declared types from the prepared plan, refuse to proceed
+				 * without type coercion.
+				 */
+				if (paramno > 0 && prep_args_ptr == NULL)
+					ereport(ERROR,
+							(errcode(ERRCODE_INTERNAL_ERROR),
+							 errmsg("sp_cursorexecute: cannot retrieve parameter types from prepared handle %d",
+									prepared_handle)));
 
 				if (stmt->opt1 != NULL)
 					scrollopt = exec_eval_int(estate, stmt->opt1, &scrollopt_null);
@@ -1954,7 +1995,7 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 					rowcount = exec_eval_int(estate, stmt->opt3, &rowcount_null);
 
 				/* evaluate parameter values */
-				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls);
+				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls, prep_args_ptr);
 
 				ret = execute_sp_cursorexecute(prepared_handle,
 											   &cursor_handle,
@@ -2003,7 +2044,7 @@ exec_stmt_exec_sp(PLtsql_execstate *estate, PLtsql_stmt_exec_sp *stmt)
 									errmsg("param definition mismatches with inputs")));
 
 				/* evaluate parameter values */
-				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls);
+				evaluate_sp_cursor_param_values(estate, paramno, stmt->params, &values, &nulls, args);
 
 				enable_sp_cursor_find_param_hook();
 				PG_TRY();

@@ -1,0 +1,92 @@
+DECLARE @handle int;
+EXEC sp_prepare @handle OUTPUT, N'@p varchar(50)', N'SELECT @p AS result';
+EXEC sp_execute @handle, 12345;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+varchar
+~~END~~
+
+~~START~~
+varchar
+12345
+~~END~~
+
+
+DECLARE @handle int;
+DECLARE @val float = 3.14;
+EXEC sp_prepare @handle OUTPUT, N'@p int', N'SELECT @p AS result';
+EXEC sp_execute @handle, @val;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+int
+~~END~~
+
+~~START~~
+int
+3
+~~END~~
+
+
+DECLARE @handle int;
+DECLARE @val varchar(50) = '999';
+EXEC sp_prepare @handle OUTPUT, N'@p int', N'SELECT @p AS result';
+EXEC sp_execute @handle, @val;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+int
+~~END~~
+
+~~START~~
+int
+999
+~~END~~
+
+
+DECLARE @handle int;
+DECLARE @val bigint = 12345;
+EXEC sp_prepare @handle OUTPUT, N'@p uniqueidentifier', N'SELECT @p AS result';
+EXEC sp_execute @handle, @val;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+uniqueidentifier
+~~END~~
+
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invalid input syntax for type uuid: "12345")~~
+
+
+DECLARE @handle int;
+DECLARE @val varchar(50) = 'hello';
+EXEC sp_prepare @handle OUTPUT, N'@p bigint', N'SELECT @p AS result';
+EXEC sp_execute @handle, @val;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+bigint
+~~END~~
+
+~~ERROR (Code: 33557097)~~
+
+~~ERROR (Message: invalid input syntax for type bigint: "hello")~~
+
+
+DECLARE @handle int;
+DECLARE @val varchar(50) = '12345678-1234-1234-1234-123456789ABC';
+EXEC sp_prepare @handle OUTPUT, N'@p uniqueidentifier', N'SELECT @p AS result';
+EXEC sp_execute @handle, @val;
+EXEC sp_unprepare @handle;
+GO
+~~START~~
+uniqueidentifier
+~~END~~
+
+~~START~~
+uniqueidentifier
+12345678-1234-1234-1234-123456789ABC
+~~END~~
+

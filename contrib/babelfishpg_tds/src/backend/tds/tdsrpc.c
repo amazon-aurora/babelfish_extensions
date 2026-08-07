@@ -464,10 +464,14 @@ SetVariables(TDSRequestSP req, FunctionCallInfo *fcinfo)
 	codeblock_args->handle = (int) req->handle;
 	codeblock_args->options = (BATCH_OPTION_EXEC_CACHED_PLAN |
 							   BATCH_OPTION_NO_FREE);
+	codeblock_args->is_prepared_stmt = true;
 
 	/* Set variable if any. */
 	if (req->nTotalParams > 0)
 	{
+		/* Preserve wire-declared types so pl_handler can validate at execute time */
+		codeblock_args->argtypes = palloc(sizeof(Oid) * req->nTotalParams);
+
 		/*
 		 * For each token, we need to call pltsql_declare_var_block_handler
 		 * API to declare the corresponding variable.
@@ -487,6 +491,14 @@ SetVariables(TDSRequestSP req, FunctionCallInfo *fcinfo)
 				pval = tempFuncInfo->recvFuncPtr(req->messageData, token);
 			else
 				pval = (Datum) 0;
+
+			/* Store the wire-declared type OID for execute-time validation */
+			if (index >= req->nTotalParams)
+				ereport(ERROR,
+						(errcode(ERRCODE_PROTOCOL_VIOLATION),
+						 errmsg("parameter index %d exceeds declared parameter count %d",
+								index, req->nTotalParams)));
+			codeblock_args->argtypes[index] = token->paramMeta.pgTypeOid;
 
 			pltsql_plugin_handler_ptr->pltsql_declare_var_callback(token->paramMeta.pgTypeOid,	/* oid */
 																   GetTypModForToken(token),	/* typmod */

@@ -1,0 +1,47 @@
+#Q#SELECT @p AS result
+#D#varchar
+test
+#Q#SELECT @p AS result
+#D#varchar
+12345
+#Q#SELECT @p AS result
+#D#int
+1
+#Q#SELECT @p AS result
+#D#int
+3
+#Q#SELECT @p AS result
+#D#int
+1
+#Q#SELECT @p AS result
+#D#int
+999
+#Q#SELECT @p AS result
+#D#varchar
+test
+#Q#SELECT @p AS result
+#D#varchar
+42
+#Q#SELECT @p AS result
+#D#datetime
+01/01/2024 00:00:00
+#Q#SELECT @p AS result
+#D#datetime
+01/15/2024 00:00:00
+#Q#SELECT @p AS result
+#D#uniqueidentifier
+00000000-0000-0000-0000-000000000000
+#Q#SELECT @p AS result
+#E#Failed to convert parameter value from a String to a Guid.
+#Q#SELECT @p AS result
+#D#bigint
+1
+#Q#SELECT @p AS result
+#D#bigint
+100
+#Q#SELECT @p AS result
+#D#varchar
+test
+#Q#SELECT @p AS result
+#D#varchar
+123.45

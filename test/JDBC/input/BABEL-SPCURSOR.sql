@@ -242,3 +242,25 @@ DROP TABLE t1812
 DROP PROCEDURE p1
 GO
 
+
+# sp_cursoropen must coerce parameter values to declared types
+# Passing a bigint value where varchar is declared should produce the string
+# representation, not a type confusion.
+CREATE TABLE babel_6913_t1 (id int, val varchar(50))
+INSERT INTO babel_6913_t1 VALUES (1, '12345')
+GO
+
+DECLARE @c int, @val bigint = 12345;
+EXEC sp_cursoropen @c OUTPUT, N'SELECT * FROM babel_6913_t1 WHERE val = @p',
+     1, 1, NULL, N'@p varchar(50)', @val;
+EXEC sp_cursorfetch @c, 2, 0, 1;
+EXEC sp_cursorclose @c;
+GO
+
+DROP TABLE babel_6913_t1
+GO
+
+
+-- construct_unique_index_name should error when combined length overflows buffer
+SELECT sys.babelfish_construct_unique_index_name(REPLICATE('A', 128), REPLICATE('B', 128));
+GO
