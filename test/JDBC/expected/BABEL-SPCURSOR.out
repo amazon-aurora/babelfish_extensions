@@ -493,6 +493,7 @@ DROP TABLE t1812
 DROP PROCEDURE p1
 GO
 
+
 # sp_cursoropen must coerce parameter values to declared types
 # Passing a bigint value where varchar is declared should produce the string
 # representation, not a type confusion.
