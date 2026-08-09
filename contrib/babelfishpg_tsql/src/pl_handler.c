@@ -7116,7 +7116,7 @@ pltsql_inline_handler(PG_FUNCTION_ARGS)
 		 * Validate and coerce parameter types when wire-declared argtypes
 		 * are available (sp_execute path via TDS).
 		 */
-		if (codeblock_args->argtypes != NULL && func->inline_args != NULL)
+		if (codeblock_args != NULL && codeblock_args->argtypes != NULL && func->inline_args != NULL)
 		{
 			int			pno;
 
