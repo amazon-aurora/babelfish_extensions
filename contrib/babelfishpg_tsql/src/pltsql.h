@@ -1399,6 +1399,7 @@ typedef struct InlineCodeBlockArgs
 	int		   *varnos;
 	unsigned long options;
 	int			handle;
+	bool		is_prepared_stmt;
 } InlineCodeBlockArgs;
 
 #define OPTION_ENABLED(args, option) \
