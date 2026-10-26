@@ -1979,13 +1979,15 @@ get_original_relname(Oid relid, bool check_permission)
 
 				while (array_iterate(it, &val, &vnull))
 				{
+					text	   *val_text;
 					const char *s;
 					int			len;
 
 					if (vnull)
 						continue;
-					s = VARDATA_ANY(val);
-					len = VARSIZE_ANY_EXHDR(val);
+					val_text = DatumGetTextPP(val);
+					s = VARDATA_ANY(val_text);
+					len = VARSIZE_ANY_EXHDR(val_text);
 					if (len > prefix_len && memcmp(s, prefix, prefix_len) == 0)
 					{
 						result = pnstrdup(s + prefix_len, len - prefix_len);
