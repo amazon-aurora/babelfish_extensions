@@ -8185,10 +8185,10 @@ pltsql_ExecUpdateResultTypeTL(PlanState *planstate, TupleDesc desc)
 	 * sanity checks
 	 */
 	if (sql_dialect != SQL_DIALECT_TSQL ||
-		!PointerIsValid(desc) ||
-		!PointerIsValid(planstate) ||
-		!PointerIsValid(planstate->plan) ||
-		!PointerIsValid(planstate->plan->targetlist))
+		!desc ||
+		!planstate ||
+		!planstate->plan ||
+		!planstate->plan->targetlist)
 		return;
 
 	targetList = planstate->plan->targetlist;
