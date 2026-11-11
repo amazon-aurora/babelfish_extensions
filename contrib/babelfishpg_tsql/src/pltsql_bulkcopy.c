@@ -388,8 +388,9 @@ CopyMultiInsertBufferFlush(CopyMultiInsertInfo *miinfo,
 			cstate->cur_rowno = buffer->linenos[i];
 			recheckIndexes =
 				ExecInsertIndexTuples(resultRelInfo,
-									  buffer->slots[i], estate, false, false,
-									  NULL, NIL, false);
+									  estate, 0,
+									  buffer->slots[i],
+									  NIL, NULL);
 			list_free(recheckIndexes);
 		}
 
