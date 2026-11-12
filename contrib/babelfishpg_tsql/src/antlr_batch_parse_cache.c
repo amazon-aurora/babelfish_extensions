@@ -35,6 +35,7 @@
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+#include "utils/tuplestore.h"
 
 #include "pltsql.h"
 #include "guc.h"
