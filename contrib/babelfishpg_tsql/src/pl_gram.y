@@ -6745,7 +6745,7 @@ IncrementInstr(List *raw_parsetree_list)
 				metric = INSTR_TSQL_CALL_STMT;
 				break;
 
-			case T_ClusterStmt:
+			case T_RepackStmt:
 				metric = INSTR_TSQL_CLUSTER_STMT;
 				break;
 

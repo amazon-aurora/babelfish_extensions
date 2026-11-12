@@ -8,6 +8,7 @@
 #include "pgstat.h"
 #include "storage/proc.h"
 #include "utils/elog.h"
+#include "utils/wait_event.h"
 #include "utils/hsearch.h"
 #include "utils/palloc.h"		/* Needed for pstrdup() */
 
