@@ -499,7 +499,7 @@ bool  		called_for_tsql_itvf_func(void);
 
 
 bool
-called_for_tsql_itvf_func()
+called_for_tsql_itvf_func(void)
 {
 	if (sql_dialect != SQL_DIALECT_TSQL)
 		return false;

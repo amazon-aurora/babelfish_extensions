@@ -921,19 +921,19 @@ string_to_tsql_varchar(const char *input_str)
 }
 
 void *
-get_servername_internal()
+get_servername_internal(void)
 {
 	return string_to_tsql_varchar(bbf_servername);
 }
 
 void *
-get_servicename_internal()
+get_servicename_internal(void)
 {
 	return string_to_tsql_varchar(bbf_servicename);
 }
 
 void *
-get_language()
+get_language(void)
 {
 	return string_to_tsql_varchar(bbf_language);
 }

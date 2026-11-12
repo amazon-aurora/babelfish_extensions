@@ -168,7 +168,7 @@ init_xml_handles_htab(long long int nelem)
  * 		Destroys the hash table and frees associated memory.
  */
 static void
-destroy_xml_handles_htab()
+destroy_xml_handles_htab(void)
 {
 	if (ht_xmlNode2Id != NULL)
 	{
@@ -1012,7 +1012,7 @@ bbf_xml_split_magic_tag(const char *xml_text, char **context_node_path, char **b
  * Check QUOTED_IDENTIFIER is ON
  */
 static void
-bbf_xml_validate_quoted_identifier()
+bbf_xml_validate_quoted_identifier(void)
 {
 	if (!pltsql_quoted_identifier)
 		ereport(ERROR,

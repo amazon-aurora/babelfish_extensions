@@ -343,7 +343,7 @@ getPGLockMode(short applockmode)
 
 /* Initialize both local and global hashmaps */
 static void
-initApplockCache()
+initApplockCache(void)
 {
 	HASHCTL		ctl;
 

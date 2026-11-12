@@ -206,7 +206,7 @@ LoginRequest loginInfo = NULL;
 
 static const char *PreLoginTokenType(uint8_t token);
 static void DebugPrintPreLoginStructure(PreLoginOption *request);
-static int	ParsePreLoginRequest();
+static int	ParsePreLoginRequest(void);
 static int *ProcessVersionNumber(const char *inputString);
 static void SetPreLoginResponseVal(Port *port, uint8_t token,
 								   StringInfo val, StringInfo reqVal,
@@ -332,7 +332,7 @@ DebugPrintPreLoginStructure(PreLoginOption *request)
 
 
 static int
-ParsePreLoginRequest()
+ParsePreLoginRequest(void)
 {
 	uint16_t	data16;
 	PreLoginOption *temp;
@@ -1197,7 +1197,7 @@ ProcessLoginFlags(LoginRequest loginInfo)
  * Wrapper of ProcessLoginFlags, since we do not expose loginInfo.
  */
 void
-TdsResetLoginFlags()
+TdsResetLoginFlags(void)
 {
 	ProcessLoginFlags(loginInfo);
 }
@@ -2120,7 +2120,7 @@ TdsProcessLogin(Port *port, bool loadedSsl)
  *		have changed.
  */
 void
-TdsSetDbContext()
+TdsSetDbContext(void)
 {
 	char	   *dbname = NULL;
 	char	   *user = NULL;

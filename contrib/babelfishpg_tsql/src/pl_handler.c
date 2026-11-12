@@ -120,7 +120,7 @@ extern bool babelfish_dump_restore;
 extern bool pltsql_nocount;
 
 extern List *babelfishpg_tsql_raw_parser(const char *str, RawParseMode mode);
-extern bool install_backend_gram_hooks();
+extern bool install_backend_gram_hooks(void);
 
 static bool check_identity_insert(char **newal, void **extra, GucSource source);
 static void assign_identity_insert(const char *newval, void *extra);
@@ -135,7 +135,7 @@ extern PLtsql_execstate *get_outermost_tsql_estate(int *nestlevel);
 extern void pre_check_trigger_schema(List *object, bool missing_ok);
 static void get_language_procs(const char *langname, Oid *compiler, Oid *validator);
 static void get_func_language_oids(Oid *lang_handler, Oid *lang_validator);
-extern bool pltsql_suppress_string_truncation_error();
+extern bool pltsql_suppress_string_truncation_error(void);
 static Oid	bbf_table_var_lookup(const char *relname, Oid relnamespace);
 extern void assign_object_access_hook_drop_relation(void);
 extern void uninstall_object_access_hook_drop_relation(void);

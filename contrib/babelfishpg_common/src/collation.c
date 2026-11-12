@@ -1247,7 +1247,7 @@ get_database_or_server_collation_oid_internal(bool missingOk)
 }
 
 Oid
-BABELFISH_CLUSTER_COLLATION_OID()
+BABELFISH_CLUSTER_COLLATION_OID(void)
 {
 	if (sql_dialect == SQL_DIALECT_TSQL)
 	{

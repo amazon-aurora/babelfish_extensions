@@ -164,7 +164,7 @@ lookup_and_drop_triggers(ObjectAccessType access, Oid classId,
 }
 
 void
-assign_object_access_hook_drop_relation()
+assign_object_access_hook_drop_relation(void)
 {
 	if (object_access_hook)
 	{
@@ -174,7 +174,7 @@ assign_object_access_hook_drop_relation()
 }
 
 void
-uninstall_object_access_hook_drop_relation()
+uninstall_object_access_hook_drop_relation(void)
 {
 	if (prev_object_access_hook)
 		object_access_hook = prev_object_access_hook;

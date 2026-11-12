@@ -3608,7 +3608,7 @@ delete_cached_batch(int handle)
 }
 
 void
-reset_cached_batch()
+reset_cached_batch(void)
 {
 	while (cur_handle_id > 0)
 		delete_cached_batch(cur_handle_id--);

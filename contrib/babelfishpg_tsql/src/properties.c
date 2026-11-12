@@ -62,7 +62,7 @@ extern char *bbf_servername;
 
 static void *get_servername_helper(void);
 static VarChar *get_product_version_helper(int idx);
-static VarChar *get_product_level_helper();
+static VarChar *get_product_level_helper(void);
 
 Datum
 connectionproperty(PG_FUNCTION_ARGS)
@@ -149,7 +149,7 @@ connectionproperty(PG_FUNCTION_ARGS)
 }
 
 void *
-get_servername_helper()
+get_servername_helper(void)
 {
 	StringInfoData temp;
 	void	   *info;
@@ -216,7 +216,7 @@ get_product_version_helper(int idx)
 }
 
 static VarChar *
-get_product_level_helper()
+get_product_level_helper(void)
 {
 	StringInfoData temp;
 	void	   *info;

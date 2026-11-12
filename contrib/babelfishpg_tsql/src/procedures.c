@@ -4519,7 +4519,7 @@ sp_reset_connection_internal(PG_FUNCTION_ARGS)
  * Errors: Throws error when all possible handle counters are in use
  */
 int 
-get_next_xml_handle_counter()
+get_next_xml_handle_counter(void)
 {
 	int           old_handle_counter = current_xml_handle_counter;
 	bool          handle_valid = false;
@@ -4678,7 +4678,7 @@ generate_unique_table_name(const char *base_name)
  * to TSQL to ensure proper table creation semantics.
  */
 void 
-create_xml_handle_temp_table()  
+create_xml_handle_temp_table(void)  
 {
 	CreateStmt         *stmt = makeNode(CreateStmt);
 	RangeVar           *relation;
@@ -5002,7 +5002,7 @@ delete_xml_handle_entry(int document_id)
  *        This function should be called when a connection is reset or terminated.
  */
 void
-reset_cached_xml_handle()
+reset_cached_xml_handle(void)
 {
 	/* Reset active handles bitmap */
 	bms_free(active_xml_handles_counter);
