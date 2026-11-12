@@ -42,6 +42,7 @@
 #include "miscadmin.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
+#include "storage/waiteventset.h"
 #include "utils/timestamp.h"
 
 #include "access/printtup.h"
