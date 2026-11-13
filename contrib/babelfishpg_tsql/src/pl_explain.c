@@ -9,7 +9,7 @@
 
 
 extern PLtsql_execstate *get_outermost_tsql_estate(int *nestlevel);
-extern PLtsql_execstate *get_current_tsql_estate();
+extern PLtsql_execstate *get_current_tsql_estate(void);
 bool		pltsql_explain_only = false;
 bool		pltsql_explain_analyze = false;
 bool		pltsql_explain_verbose = false;
@@ -21,16 +21,16 @@ bool		pltsql_explain_timing = true;
 bool		pltsql_explain_summary = true;
 int			pltsql_explain_format = EXPLAIN_FORMAT_TEXT;
 
-static ExplainInfo *get_last_explain_info();
+static ExplainInfo *get_last_explain_info(void);
 
 bool
-is_explain_analyze_mode()
+is_explain_analyze_mode(void)
 {
 	return (pltsql_explain_analyze && !pltsql_explain_only);
 }
 
 static ExplainInfo *
-get_last_explain_info()
+get_last_explain_info(void)
 {
 	PLtsql_execstate *pltsql_estate;
 	int			nestlevel;
@@ -46,7 +46,7 @@ get_last_explain_info()
 }
 
 void
-increment_explain_indent()
+increment_explain_indent(void)
 {
 	ExplainInfo *einfo = get_last_explain_info();
 
@@ -55,7 +55,7 @@ increment_explain_indent()
 }
 
 void
-decrement_explain_indent()
+decrement_explain_indent(void)
 {
 	ExplainInfo *einfo = get_last_explain_info();
 

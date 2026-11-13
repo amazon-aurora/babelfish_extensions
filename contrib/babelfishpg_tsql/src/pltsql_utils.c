@@ -662,7 +662,7 @@ pltsql_read_composite_out_param(Datum comp_value, Datum **values, bool **nulls)
 }
 
 bool
-pltsql_suppress_string_truncation_error()
+pltsql_suppress_string_truncation_error(void)
 {
 	return suppress_string_truncation_error;
 }

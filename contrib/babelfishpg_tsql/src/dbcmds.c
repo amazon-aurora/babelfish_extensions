@@ -58,7 +58,7 @@ static void drop_related_bbf_namespace_entries(int16 dbid);
 
 
 static Oid
-get_sys_babelfish_db_seq_oid()
+get_sys_babelfish_db_seq_oid(void)
 {
 	if(!OidIsValid(sys_babelfish_db_seq_oid))
 	{

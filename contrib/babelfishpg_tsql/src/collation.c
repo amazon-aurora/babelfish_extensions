@@ -576,7 +576,7 @@ optimise_likenode(Node *node, OpExpr *op, like_ilike_info_t like_entry, coll_inf
  * the cache. Otherwise we fallback on the ICU function
  */
 static void
-get_remove_accents_internal_oid()
+get_remove_accents_internal_oid(void)
 {
 	const Oid funcargtypes[1] = {TEXTOID};
 	if (OidIsValid(remove_accents_internal_oid))

@@ -5,6 +5,10 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup.h"
+#include "access/attmap.h"
+#include "access/tupconvert.h"
+#include "access/table.h"
+#include "access/transam.h"
 #include "access/relation.h"
 #include "access/reloptions.h"
 #include "access/stratnum.h"
@@ -215,7 +219,7 @@ static void fill_missing_values_in_copyfrom(Relation rel, Datum *values, bool *n
  *****************************************/
 static void pltsql_report_proc_not_found_error(List *names, List *fargs, List *argnames, Oid *input_typeids, int nargs, ParseState *pstate, int location, bool proc_call);
 extern PLtsql_execstate *get_outermost_tsql_estate(int *nestlevel);
-extern PLtsql_execstate *get_current_tsql_estate();
+extern PLtsql_execstate *get_current_tsql_estate(void);
 static void pltsql_store_view_definition(const char *queryString, ObjectAddress address);
 static void pltsql_drop_view_definition(Oid objectId);
 static void preserve_view_constraints_from_base_table(ColumnDef *col, Oid tableOid, AttrNumber colId);
@@ -246,7 +250,7 @@ static void pltsql_ExecUpdateResultTypeTL(PlanState *planstate, TupleDesc desc);
 static bool plsql_TriggerRecursiveCheck(ResultRelInfo *resultRelInfo);
 static bool bbf_check_rowcount_hook(int es_processed);
 
-extern bool called_for_tsql_itvf_func();
+extern bool called_for_tsql_itvf_func(void);
 static void is_function_pg_stat_valid(FunctionCallInfo fcinfo,
 									  PgStat_FunctionCallUsage *fcu,
 									  char prokind, bool finalize);
@@ -843,7 +847,7 @@ pltsql_GetNewObjectId(VariableCache variableCache)
 }
 
 static Oid
-pltsql_GetNewTempObjectId()
+pltsql_GetNewTempObjectId(void)
 {
 	Oid			result;
 	Oid			tempOidStart;

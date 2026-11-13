@@ -1,6 +1,7 @@
 #include "postgres.h"
 #include "funcapi.h"
 #include "varatt.h"
+#include "utils/tuplestore.h"
 
 #include "foreign/foreign.h"
 #include "libpq/pqformat.h"

@@ -4463,7 +4463,7 @@ typedef struct
  *  targets as a list: @a = 3, b = 3
  */
 static List *
-read_query_targets2()
+read_query_targets2(void)
 {
 	List * result = NIL;
 	query_target *target;
@@ -4627,7 +4627,7 @@ read_query_targets2()
  *  lookup mode.
  */
 static List * 
-read_query_targets()
+read_query_targets(void)
 {
 	IdentifierLookup save = pltsql_IdentifierLookup;
 	List *result;
@@ -8306,7 +8306,7 @@ parse_sp_cursor_value(StringInfoData* pbuffer, int *pterm)
 }
 
 static PLtsql_expr *
-parse_select_stmt_for_decl_cursor()
+parse_select_stmt_for_decl_cursor(void)
 {
 	execsql_ctx ctx;
 	PLword firstword;

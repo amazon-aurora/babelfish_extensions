@@ -8,6 +8,7 @@
 #include "utils/memutils.h"
 #include "utils/elog.h"
 #include "utils/builtins.h"
+#include "utils/tuplestore.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"

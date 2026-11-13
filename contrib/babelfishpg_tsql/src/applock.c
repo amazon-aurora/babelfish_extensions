@@ -15,6 +15,9 @@
 #include "parser/parser.h"
 #include "pltsql.h"
 #include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "storage/lwlock.h"
+#include "utils/timestamp.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/timeout.h"
@@ -340,7 +343,7 @@ getPGLockMode(short applockmode)
 
 /* Initialize both local and global hashmaps */
 static void
-initApplockCache()
+initApplockCache(void)
 {
 	HASHCTL		ctl;
 

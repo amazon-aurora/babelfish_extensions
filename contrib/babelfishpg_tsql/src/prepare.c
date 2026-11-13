@@ -8,6 +8,7 @@
 #include "optimizer/optimizer.h"
 #include "parser/parse_func.h"
 #include "parser/parser.h"
+#include "storage/lock.h"
 
 #include "pltsql.h"
 #include "pltsql-2.h"

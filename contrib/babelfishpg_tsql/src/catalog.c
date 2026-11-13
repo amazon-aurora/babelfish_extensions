@@ -321,7 +321,7 @@ init_catalog(PG_FUNCTION_ARGS)
 }
 
 void
-initTsqlSyscache()
+initTsqlSyscache(void)
 {
 	Assert(my_cacheinfo[0].reloid != -1);
 	/* Initialize info for catcache */
@@ -926,7 +926,7 @@ get_login_default_db(char *login_name)
 }
 
 Oid
-get_authid_login_ext_oid()
+get_authid_login_ext_oid(void)
 {
 	if (!OidIsValid(bbf_authid_login_ext_oid))
 		bbf_authid_login_ext_oid = get_relname_relid(BBF_AUTHID_LOGIN_EXT_TABLE_NAME,
@@ -994,7 +994,7 @@ get_db_principal_kind(Oid role_oid, const char *db_name)
 }
 
 Oid
-get_authid_user_ext_oid()
+get_authid_user_ext_oid(void)
 {
 	if (!OidIsValid(bbf_authid_user_ext_oid))
 		bbf_authid_user_ext_oid = get_relname_relid(BBF_AUTHID_USER_EXT_TABLE_NAME,
@@ -1279,7 +1279,7 @@ get_user_for_database(const char *db_name)
  *****************************************/
 
 Oid
-get_bbf_view_def_oid()
+get_bbf_view_def_oid(void)
 {
 	if (!OidIsValid(bbf_view_def_oid))
 		bbf_view_def_oid = get_relname_relid(BBF_VIEW_DEF_TABLE_NAME,
@@ -1289,7 +1289,7 @@ get_bbf_view_def_oid()
 }
 
 Oid
-get_bbf_view_def_idx_oid()
+get_bbf_view_def_idx_oid(void)
 {
 	if (!OidIsValid(bbf_view_def_idx_oid))
 		bbf_view_def_idx_oid = get_relname_relid(BBF_VIEW_DEF_IDX_NAME,
@@ -1470,7 +1470,7 @@ clean_up_bbf_view_def(int16 dbid)
  *****************************************/
 
 Oid
-get_bbf_servers_def_oid()
+get_bbf_servers_def_oid(void)
 {
 	if (!OidIsValid(bbf_servers_def_oid))
 		bbf_servers_def_oid = get_relname_relid(BBF_SERVERS_DEF_TABLE_NAME,
@@ -1480,7 +1480,7 @@ get_bbf_servers_def_oid()
 }
 
 Oid
-get_bbf_servers_def_idx_oid()
+get_bbf_servers_def_idx_oid(void)
 {
 	if (!OidIsValid(bbf_servers_def_idx_oid))
 		bbf_servers_def_idx_oid = get_relname_relid(BBF_SERVERS_DEF_IDX_NAME,
@@ -1524,7 +1524,7 @@ get_timeout_from_server_name(char *servername, int attnum)
 }
 
 void
-clean_up_bbf_server_def()
+clean_up_bbf_server_def(void)
 {
 	/* Fetch the relation */
 	Relation bbf_servers_def_rel = table_open(get_bbf_servers_def_oid(), AccessExclusiveLock);
@@ -1538,7 +1538,7 @@ clean_up_bbf_server_def()
  *****************************************/
 
 Oid
-get_bbf_function_ext_oid()
+get_bbf_function_ext_oid(void)
 {
 	if (!OidIsValid(bbf_function_ext_oid))
 		bbf_function_ext_oid = get_relname_relid(BBF_FUNCTION_EXT_TABLE_NAME,
@@ -1548,7 +1548,7 @@ get_bbf_function_ext_oid()
 }
 
 Oid
-get_bbf_function_ext_idx_oid()
+get_bbf_function_ext_idx_oid(void)
 {
 	if (!OidIsValid(bbf_function_ext_idx_oid))
 		bbf_function_ext_idx_oid = get_relname_relid(BBF_FUNCTION_EXT_IDX_NAME,
@@ -1845,7 +1845,7 @@ is_classic_catalog(const char *name)
  *****************************************/
 
 Oid
-get_bbf_schema_perms_oid()
+get_bbf_schema_perms_oid(void)
 {
 	if (!OidIsValid(bbf_schema_perms_oid))
 		bbf_schema_perms_oid = get_relname_relid(BBF_SCHEMA_PERMS_TABLE_NAME,
@@ -1854,7 +1854,7 @@ get_bbf_schema_perms_oid()
 }
 
 static Oid
-get_bbf_schema_perms_idx_oid()
+get_bbf_schema_perms_idx_oid(void)
 {
 	if (!OidIsValid(bbf_schema_perms_idx_oid))
 		bbf_schema_perms_idx_oid = get_relname_relid(BBF_SCHEMA_PERMS_IDX_NAME,
@@ -1867,7 +1867,7 @@ get_bbf_schema_perms_idx_oid()
  *****************************************/
 
 Oid
-get_bbf_domain_mapping_oid()
+get_bbf_domain_mapping_oid(void)
 {
 	if (!OidIsValid(bbf_domain_mapping_oid))
 		bbf_domain_mapping_oid = get_relname_relid(BBF_DOMAIN_MAPPING_TABLE_NAME,
@@ -1877,7 +1877,7 @@ get_bbf_domain_mapping_oid()
 }
 
 Oid
-get_bbf_domain_mapping_idx_oid()
+get_bbf_domain_mapping_idx_oid(void)
 {
 	if (!OidIsValid(bbf_domain_mapping_idx_oid))
 		bbf_domain_mapping_idx_oid = get_relname_relid(BBF_DOMAIN_MAPPING_IDX_NAME,
@@ -1891,7 +1891,7 @@ get_bbf_domain_mapping_idx_oid()
  *****************************************/
 
 Oid
-get_bbf_extended_properties_oid()
+get_bbf_extended_properties_oid(void)
 {
 	if (!OidIsValid(bbf_extended_properties_oid))
 		bbf_extended_properties_oid = get_relname_relid(BBF_EXTENDED_PROPERTIES_TABLE_NAME,
@@ -1901,7 +1901,7 @@ get_bbf_extended_properties_oid()
 }
 
 Oid
-get_bbf_extended_properties_idx_oid()
+get_bbf_extended_properties_idx_oid(void)
 {
 	if (!OidIsValid(bbf_extended_properties_idx_oid))
 		bbf_extended_properties_idx_oid = get_relname_relid(BBF_EXTENDED_PROPERTIES_IDX_NAME,
@@ -1914,7 +1914,7 @@ get_bbf_extended_properties_idx_oid()
  *			PARTITION_FUNCTION
  *****************************************/
 Oid
-get_bbf_partition_function_oid()
+get_bbf_partition_function_oid(void)
 {
 	if (!OidIsValid(bbf_partition_function_oid))
 		bbf_partition_function_oid = get_relname_relid(BBF_PARTITION_FUNCTION_TABLE_NAME,
@@ -1924,7 +1924,7 @@ get_bbf_partition_function_oid()
 }
 
 Oid
-get_bbf_partition_function_seq_oid()
+get_bbf_partition_function_seq_oid(void)
 {
 	if (!OidIsValid(bbf_partition_function_seq_oid))
 	{
@@ -1936,7 +1936,7 @@ get_bbf_partition_function_seq_oid()
 }
 
 Oid
-get_bbf_partition_function_pk_idx_oid()
+get_bbf_partition_function_pk_idx_oid(void)
 {
 	if (!OidIsValid(bbf_partition_function_pk_idx_oid))
 		bbf_partition_function_pk_idx_oid = get_relname_relid(BBF_PARTITION_FUNCTION_PK_IDX_NAME,
@@ -1946,7 +1946,7 @@ get_bbf_partition_function_pk_idx_oid()
 }
 
 Oid
-get_bbf_partition_function_id_idx_oid()
+get_bbf_partition_function_id_idx_oid(void)
 {
 	if (!OidIsValid(bbf_partition_function_id_idx_oid))
 		bbf_partition_function_id_idx_oid = get_relname_relid(BBF_PARTITION_FUNCTION_ID_IDX_NAME,
@@ -1959,7 +1959,7 @@ get_bbf_partition_function_id_idx_oid()
  *			PARTITION_SCHEME
  *****************************************/
 Oid
-get_bbf_partition_scheme_oid()
+get_bbf_partition_scheme_oid(void)
 {
 	if (!OidIsValid(bbf_partition_scheme_oid))
 		bbf_partition_scheme_oid = get_relname_relid(BBF_PARTITION_SCHEME_TABLE_NAME,
@@ -1969,7 +1969,7 @@ get_bbf_partition_scheme_oid()
 }
 
 Oid
-get_bbf_partition_scheme_pk_idx_oid()
+get_bbf_partition_scheme_pk_idx_oid(void)
 {
 	if (!OidIsValid(bbf_partition_scheme_pk_idx_oid))
 		bbf_partition_scheme_pk_idx_oid = get_relname_relid(BBF_PARTITION_SCHEME_PK_IDX_NAME,
@@ -1979,7 +1979,7 @@ get_bbf_partition_scheme_pk_idx_oid()
 }
 
 Oid
-get_bbf_partition_scheme_id_idx_oid()
+get_bbf_partition_scheme_id_idx_oid(void)
 {
 	if (!OidIsValid(bbf_partition_scheme_id_idx_oid))
 		bbf_partition_scheme_id_idx_oid = get_relname_relid(BBF_PARTITION_SCHEME_ID_IDX_NAME,
@@ -1989,7 +1989,7 @@ get_bbf_partition_scheme_id_idx_oid()
 }
 
 Oid
-get_bbf_partition_scheme_seq_oid()
+get_bbf_partition_scheme_seq_oid(void)
 {
 	if (!OidIsValid(bbf_partition_scheme_seq_oid))
 	{
@@ -2005,7 +2005,7 @@ get_bbf_partition_scheme_seq_oid()
  *			PARTITION_DEPEND
  *****************************************/
 Oid
-get_bbf_partition_depend_oid()
+get_bbf_partition_depend_oid(void)
 {
 	if (!OidIsValid(bbf_partition_depend_oid))
 		bbf_partition_depend_oid = get_relname_relid(BBF_PARTITION_DEPEND_TABLE_NAME,
@@ -2015,7 +2015,7 @@ get_bbf_partition_depend_oid()
 }
 
 Oid
-get_bbf_partition_depend_idx_oid()
+get_bbf_partition_depend_idx_oid(void)
 {
 	if (!OidIsValid(bbf_partition_depend_idx_oid))
 		bbf_partition_depend_idx_oid = get_relname_relid(BBF_PARTITION_DEPEND_IDX_NAME,
