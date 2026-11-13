@@ -2815,7 +2815,7 @@ find_recursive_union(deparse_namespace *dpns, WorkTableScan *wtscan)
  * Returns a palloc'd string.
  */
 char *
-tsql_format_type_extended(Oid type_oid, int32 typemod, bits16 flags)
+tsql_format_type_extended(Oid type_oid, int32 typemod, uint16 flags)
 {
 	HeapTuple	tuple;
 	Form_pg_type typeform;

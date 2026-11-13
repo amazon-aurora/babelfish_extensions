@@ -7182,8 +7182,7 @@ terminate_batch(bool send_error, bool compile_error, int SPI_depth)
 	}
 }
 
-void
-static
+static void
 pltsql_non_tsql_proc_entry(int proc_count, int sys_func_count)
 {
 	elog(DEBUG4, "TSQL TXN PG procedure entry PG count : %d SYS count : %d", proc_count, sys_func_count);
